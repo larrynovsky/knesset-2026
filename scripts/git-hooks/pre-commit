@@ -1,0 +1,66 @@
+#!/bin/sh
+# knesset pre-commit — CLAUDE.md §19 (single writer), §9 (легаси-эндпоинт), §18 (секреты), §3 (порядок критериев)
+#
+# Установка на ОБЕИХ машинах:
+#   cp scripts/git-hooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+# Хуки не отслеживаются git — этот файл единственный источник правды, копия ставится руками.
+
+# ---- §19: пишет только MacBook -------------------------------------------
+HOST=$(hostname -s 2>/dev/null || hostname)
+case "$HOST" in
+  Studio*|studio*)
+    echo "ОТКАЗ (CLAUDE.md §19): коммит на Studio запрещён." >&2
+    echo "  Studio — canonical-исполнитель. Пишет только MacBook." >&2
+    echo "  Правь на MacBook -> git push studio main." >&2
+    exit 1
+    ;;
+esac
+
+# ---- §9: легаси-эндпоинт голосований --------------------------------------
+# Он отвечает 200 и отдаёт НОЛЬ записей для 25-го Кнессета. Молча.
+#
+# Ловим ВЫЗОВ, не упоминание. Первая редакция правила заблокировала коммит,
+# который её вводил: собственный комментарий с названием эндпоинта попал
+# под собственный grep (2026-07-27, §22 — догфудинг). Отсюда два исключения:
+# строки-комментарии и сами файлы хуков, где название неизбежно называется.
+if git diff --cached -U0 -- 'scripts/*' \
+     ':(exclude)scripts/git-hooks/*' ':(exclude)scripts/post-receive.template' \
+   | grep -v '^+[[:space:]]*#' \
+   | grep -qi '^+.*Votes\.svc'; then
+  echo "ОТКАЗ (CLAUDE.md §9): в scripts/ появилась ссылка на Odata/Votes.svc." >&2
+  echo "  Эндпоинт обрывается 13.07.2021 и не возвращает ошибки." >&2
+  echo "  Источник голосований — только OdataV4/ParliamentInfo." >&2
+  exit 1
+fi
+
+# ---- §18: грубый скан секретов --------------------------------------------
+# Репозиторий публичный с первого дня. Это НЕ gitleaks: ловит очевидное.
+LEAK=$(git diff --cached -U0 \
+  | grep -inE '^\+.*((api[_-]?key|secret[_-]?key|access[_-]?token|password)[[:space:]]*[:=][[:space:]]*.?[A-Za-z0-9/_+-]{16,}|BEGIN [A-Z ]*PRIVATE KEY)' \
+  | head -5)
+if [ -n "$LEAK" ]; then
+  echo "ОТКАЗ (CLAUDE.md §18): похоже на секрет в индексе." >&2
+  echo "$LEAK" >&2
+  echo "  Секреты живут в ~/.knesset_secrets/, не в репозитории." >&2
+  echo "  Ложное срабатывание -> --no-verify, но скажи Саше." >&2
+  exit 1
+fi
+
+# ---- §3: критерии раньше данных -------------------------------------------
+if [ -f scripts/check_criteria_order.py ]; then
+  PY=$(command -v python3 || echo /opt/homebrew/bin/python3.11)
+  "$PY" scripts/check_criteria_order.py || exit 1
+fi
+
+# ---- §4-§12: валидатор карточек -------------------------------------------
+# Ещё не построен. НЕ пропускаем молча (§20).
+if [ -f scripts/validate_cards.py ]; then
+  PY=$(command -v python3 || echo /opt/homebrew/bin/python3.11)
+  "$PY" scripts/validate_cards.py || exit 1
+elif [ -n "$(git diff --cached --name-only -- cards/)" ]; then
+  echo "ОТКАЗ: в индексе есть cards/, но scripts/validate_cards.py не построен." >&2
+  echo "  Карточка без валидатора не проверена ничем (CLAUDE.md §20)." >&2
+  exit 1
+fi
+
+exit 0

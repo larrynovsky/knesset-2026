@@ -1,0 +1,47 @@
+#!/bin/sh
+# knesset post-receive — Studio, /Users/larry/knesset.git/hooks/post-receive
+#
+# ЭТОТ ФАЙЛ — single source of truth. Живая копия на Studio ставится вручную:
+#   scp scripts/post-receive.template larry@studio:/tmp/pr
+#   ssh larry@studio 'cp /tmp/pr /Users/larry/knesset.git/hooks/post-receive && chmod +x $_'
+#
+# Паттерн заимствован у mm_crm. Отличие: сервисов нет, kickstart'ить нечего —
+# выход конвейера статический (CLAUDE.md, раздел C).
+
+set -e
+WORK=/Users/larry/knesset
+PY=/opt/homebrew/bin/python3.11   # в SSH PATH нет Homebrew
+
+echo "--- knesset post-receive ---"
+cd "$WORK"
+git fetch bare -q
+git reset --hard bare/main -q
+echo "рабочее дерево на $(git rev-parse --short HEAD)"
+
+# §3 — порядок критериев. Проверяется и на приёме: MacBook-хук можно обойти
+# через --no-verify, canonical обойти нельзя.
+if [ -f scripts/check_criteria_order.py ]; then
+  "$PY" scripts/check_criteria_order.py || {
+    echo "ОТКАЗ НА ПРИЁМЕ: §3 нарушен. Дерево обновлено, генерация не запущена." >&2
+    exit 1
+  }
+fi
+
+# §4-§12 — валидатор карточек.
+if [ -f scripts/validate_cards.py ]; then
+  "$PY" scripts/validate_cards.py || {
+    echo "ОТКАЗ НА ПРИЁМЕ: карточки не прошли валидацию." >&2
+    exit 1
+  }
+else
+  echo "валидатор карточек НЕ ПОСТРОЕН — карточки ничем не проверены (§20)"
+fi
+
+# Генерация отчёта.
+if [ -f scripts/build_report.py ]; then
+  "$PY" scripts/build_report.py && echo "отчёт пересобран"
+else
+  echo "генератор отчёта НЕ ПОСТРОЕН — публиковать нечего (§20)"
+fi
+
+echo "--- готово ---"
