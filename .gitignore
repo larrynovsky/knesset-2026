@@ -3,3 +3,4 @@ __pycache__/
 *.duckdb
 *.pyc
 .DS_Store
+logs/

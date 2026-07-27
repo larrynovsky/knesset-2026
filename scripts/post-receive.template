@@ -1,47 +1,61 @@
 #!/bin/sh
 # knesset post-receive — Studio, /Users/larry/knesset.git/hooks/post-receive
 #
-# ЭТОТ ФАЙЛ — single source of truth. Живая копия на Studio ставится вручную:
-#   scp scripts/post-receive.template larry@studio:/tmp/pr
-#   ssh larry@studio 'cp /tmp/pr /Users/larry/knesset.git/hooks/post-receive && chmod +x $_'
+# ЭТОТ ФАЙЛ — single source of truth. Живая копия ставится вручную:
+#   scp scripts/post-receive.template larry@studio:/tmp/knesset_pr
+#   ssh larry@studio 'cp /tmp/knesset_pr /Users/larry/knesset.git/hooks/post-receive && chmod +x $_'
 #
-# Паттерн заимствован у mm_crm. Отличие: сервисов нет, kickstart'ить нечего —
-# выход конвейера статический (CLAUDE.md, раздел C).
+# ⚠️ post-receive НЕ МОЖЕТ отклонить push — он выполняется ПОСЛЕ приёма.
+# Значит проверки здесь не блокируют доставку, они блокируют ГЕНЕРАЦИЮ
+# и обязаны быть громкими. Тихий отказ здесь = рабочее дерево молча отстало,
+# ровно та ловушка, что описана в ~/.infrastructure.md для health-os.
+# Поэтому: всё пишется и в stdout (виден как remote: у пушащего), и в лог.
 
-set -e
 WORK=/Users/larry/knesset
+LOG=/Users/larry/knesset/logs/deploy.log
 PY=/opt/homebrew/bin/python3.11   # в SSH PATH нет Homebrew
 
-echo "--- knesset post-receive ---"
-cd "$WORK"
-git fetch bare -q
-git reset --hard bare/main -q
-echo "рабочее дерево на $(git rev-parse --short HEAD)"
+# КРИТИЧНО: git выставляет GIT_DIR на bare-репозиторий, и без сброса
+# любая команда в рабочем дереве уйдёт не туда ("fatal: not a git repository").
+unset GIT_DIR GIT_WORK_TREE GIT_QUARANTINE_PATH GIT_INDEX_FILE
 
-# §3 — порядок критериев. Проверяется и на приёме: MacBook-хук можно обойти
+mkdir -p "$(dirname "$LOG")"
+say() { echo "$1"; echo "$(date '+%Y-%m-%d %H:%M:%S') $1" >> "$LOG"; }
+
+say "--- knesset post-receive ---"
+cd "$WORK" || { say "FATAL: нет $WORK"; exit 1; }
+
+git fetch -q bare && git reset -q --hard bare/main || {
+  say "FATAL: рабочее дерево НЕ обновлено — оно отстало от canonical"
+  exit 1
+}
+say "рабочее дерево на $(git rev-parse --short HEAD)"
+
+# §3 — порядок критериев. Проверяется и здесь: MacBook-хук обходится
 # через --no-verify, canonical обойти нельзя.
 if [ -f scripts/check_criteria_order.py ]; then
-  "$PY" scripts/check_criteria_order.py || {
-    echo "ОТКАЗ НА ПРИЁМЕ: §3 нарушен. Дерево обновлено, генерация не запущена." >&2
+  if ! "$PY" scripts/check_criteria_order.py 2>&1; then
+    say "СТОП: §3 нарушен. Дерево обновлено, генерация НЕ запущена."
     exit 1
-  }
+  fi
 fi
 
 # §4-§12 — валидатор карточек.
 if [ -f scripts/validate_cards.py ]; then
-  "$PY" scripts/validate_cards.py || {
-    echo "ОТКАЗ НА ПРИЁМЕ: карточки не прошли валидацию." >&2
+  if ! "$PY" scripts/validate_cards.py 2>&1; then
+    say "СТОП: карточки не прошли валидацию. Генерация НЕ запущена."
     exit 1
-  }
+  fi
 else
-  echo "валидатор карточек НЕ ПОСТРОЕН — карточки ничем не проверены (§20)"
+  say "валидатор карточек НЕ ПОСТРОЕН — карточки ничем не проверены (§20)"
 fi
 
 # Генерация отчёта.
 if [ -f scripts/build_report.py ]; then
-  "$PY" scripts/build_report.py && echo "отчёт пересобран"
+  "$PY" scripts/build_report.py 2>&1 && say "отчёт пересобран"
 else
-  echo "генератор отчёта НЕ ПОСТРОЕН — публиковать нечего (§20)"
+  say "генератор отчёта НЕ ПОСТРОЕН — публиковать нечего (§20)"
 fi
 
-echo "--- готово ---"
+say "--- готово ---"
+exit 0
