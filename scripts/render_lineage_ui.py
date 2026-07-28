@@ -18,6 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "criteria" / "ballot_lineage_draft.json"
+NAMES = ROOT / "criteria" / "faction_names_ru.yaml"
 OUT = ROOT / "report" / "lineage_ui.html"
 
 CSS = """
@@ -42,6 +43,9 @@ list-style:none;font-weight:600}
 .card>summary::before{content:"▸";color:var(--mut);transition:.15s}
 .card[open]>summary::before{transform:rotate(90deg)}
 .he{direction:rtl;unicode-bidi:isolate;font-size:15px}
+.he.sm{font-size:12px;color:var(--mut);margin-inline-start:8px}
+.nm{display:inline-flex;align-items:baseline;gap:2px;flex-wrap:wrap}
+.ru{font-weight:inherit}
 .tag{margin-inline-start:auto;font-size:12px;padding:3px 9px;border-radius:99px;font-weight:500}
 .tag.done{background:var(--okbg);color:var(--ok)} .tag.q{background:var(--warnbg);color:var(--warn)}
 .body{padding:4px 18px 18px;border-top:1px solid var(--line)}
@@ -65,6 +69,10 @@ const el = (t,c,txt)=>{const e=document.createElement(t); if(c)e.className=c;
   if(txt!==undefined) e.textContent = txt; return e;};
 
 function heb(s){const e=el('span','he'); e.textContent=s; return e;}
+function nm(ruS, heS){const w=el('span','nm');
+  w.appendChild(el('span','ru',ruS));
+  if(heS && heS!==ruS){const h=heb(heS); h.className='he sm'; w.appendChild(h);}
+  return w;}
 
 function render(){
   const root = document.getElementById('list'); root.innerHTML='';
@@ -74,7 +82,7 @@ function render(){
     if(onlyQ && !qs.length) return;
     const d = el('details','card'); if(qs.length) d.open = false;
     const s = el('summary');
-    s.appendChild(heb(c.anchor));
+    s.appendChild(nm(c.anchor_ru||c.anchor, c.anchor));
     const tag = el('span', 'tag ' + (qs.length?'q':'done'),
       qs.length ? qs.length+' вопр.' : 'решено машиной');
     s.appendChild(tag); d.appendChild(s);
@@ -87,8 +95,8 @@ function render(){
           const l = el('label','opt');
           const r = el('input'); r.type='radio'; r.name='q'+ci+'_'+si; r.value=a.id;
           r.onchange=()=>{dec[ci+'_'+si]={anchor:c.anchor,knesset:st.knesset,
-            choice_id:a.id,choice:a.name}; upd();};
-          l.appendChild(r); l.appendChild(heb(a.name));
+            choice_id:a.id,choice:a.name,choice_ru:a.ru||a.name}; upd();};
+          l.appendChild(r); l.appendChild(nm(a.ru||a.name, a.name));
           l.appendChild(el('span','meta','перешло '+a.shared+' · всего '+a.mks+' · ov '+a.overlap));
           q.appendChild(l);
         });
@@ -102,7 +110,7 @@ function render(){
       } else {
         const row = el('div','step');
         row.appendChild(el('span','k','к'+st.knesset));
-        if(st.name) row.appendChild(heb(st.name));
+        if(st.name) row.appendChild(nm(st.ru||st.name, st.name));
         const bits=[]; if(st.mks!==undefined) bits.push(st.mks+' деп.');
         if(st.overlap!==undefined) bits.push('ov '+st.overlap);
         bits.push(st.step);
@@ -126,6 +134,7 @@ function upd(){
     lines.push('    at_knesset: '+d.knesset);
     lines.push('    choice_id: '+d.choice_id);
     lines.push('    choice: "'+String(d.choice).replace(/"/g,'\\\\"')+'"');
+    if(d.choice_ru) lines.push('    choice_ru: "'+String(d.choice_ru).replace(/"/g,'\\\\"')+'"');
   });
   document.getElementById('out').value = lines.join('\\n');
 }
@@ -141,11 +150,46 @@ render();
 """
 
 
+def load_names() -> dict[str, str]:
+    """Плоский he: ru из criteria/faction_names_ru.yaml. Без pyyaml — формат
+    свой и простой, зависимость ради двоеточия не нужна."""
+    out: dict[str, str] = {}
+    if not NAMES.exists():
+        return out
+    for line in NAMES.read_text(encoding="utf-8").splitlines():
+        if not line.startswith("  ") or line.strip().startswith("#") or ": " not in line:
+            continue
+        he, ru = line.strip().split(": ", 1)
+        out[he.strip()] = ru.strip()
+    return out
+
+
 def main() -> int:
     if not SRC.exists():
         print(f"нет {SRC} — сначала build_ballot_lineage.py", file=sys.stderr)
         return 1
     data = json.loads(SRC.read_text(encoding="utf-8"))
+    ru = load_names()
+    miss = set()
+
+    def label(n: str) -> str:
+        n = (n or "").strip()
+        if n in ru:
+            return ru[n]
+        miss.add(n)
+        return n
+
+    for c in data["chains"]:
+        c["anchor_ru"] = label(c["anchor"])
+        for s in c["chain"]:
+            if s.get("name"):
+                s["ru"] = label(s["name"])
+            for a in s.get("alternatives", []):
+                a["ru"] = label(a["name"])
+    if miss:
+        print(f"  ⚠ без перевода: {len(miss)}")
+        for m in sorted(miss)[:10]:
+            print(f"    {m}")
     total_q = sum(1 for c in data["chains"] for s in c["chain"] if s["step"] == "ВОПРОС")
     # Данные уезжают одним куском JSON, не интерполяцией в разметку (R-B).
     blob = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
