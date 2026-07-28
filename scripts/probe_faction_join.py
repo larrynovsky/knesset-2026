@@ -77,7 +77,8 @@ allp = g("KNS_PersonToPosition", filter="PositionID eq 43 and FactionID ne null"
          select="FactionID,FactionName,KnessetNum")["value"]
 print(f"   первая страница: {len(allp)} строк, уникальных FactionID: "
       f"{len({x['FactionID'] for x in allp})}")
-print(f"   диапазон FactionID: {min(x['FactionID'] for x in allp)}..{max(x['FactionID'] for x in allp)}")
+ids = [x["FactionID"] for x in allp]
+print(f"   диапазон FactionID: {min(ids)}..{max(ids)}" if ids else "   FactionID не заполнен нигде")
 
 print("\n=== 7. у КАКИХ должностей FactionID вообще заполнен ===")
 pos = {p["Id"]: p["Description"] for p in g("KNS_Position", select="Id,Description")["value"]}
