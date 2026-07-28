@@ -12,7 +12,7 @@
 |---|---|---|---|
 | §1 | Единица наблюдения — партия в период участия в правительстве. | MANUAL | check_artifacts.py |
 | §2 | Партия и её фигуры считаются раздельно. | MANUAL | — |
-| §3 | Критерии отбора фиксируются ДО первого взгляда на результаты. | LIVE | build_lineage_candidates.py, check_criteria_order.py, post-receive.template, pre-commit |
+| §3 | Критерии отбора фиксируются ДО первого взгляда на результаты. | LIVE | build_lineage_candidates.py, check_criteria_order.py, post-receive.template, pre-commit, scan_bills.py |
 | §4 | Карточка обязана нести отчёт о поиске опровержения. | MANUAL | check_artifacts.py, post-receive.template, pre-commit |
 | §5 | Минимум два прочтения, и не все ослабляющие. | MANUAL | — |
 | §6 | Уровень уверенности обязателен и несёт названную причину. | MANUAL | — |

@@ -83,9 +83,11 @@ def main() -> int:
     print("законопроекты 25-го Кнессета…")
     bills = fetch_all("KNS_Bill", flt="KnessetNum eq 25",
                       select="Id,Name,KnessetNum,TypeDesc,SubTypeDesc,StatusID,PublicationDate")
-    print("законы (KNS_IsraelLaw)…")
-    laws = fetch_all("KNS_IsraelLaw", flt=f"PublicationDate ge {K25_START}T00:00:00Z",
-                     select="Id,Name,PublicationDate,LawTypeDesc")
+    # KNS_IsraelLaw убран осознанно, а не из-за ошибки фильтра (она была: 400,
+    # поле датировки называется иначе). Единица голосования — ЗАКОНОПРОЕКТ;
+    # KNS_IsraelLaw это уже результат, и всякий закон начинался законопроектом.
+    # Значит корпус KNS_Bill полон для нашей задачи, а не урезан.
+    laws: list = []
 
     matched = []
     for b in bills:
@@ -94,20 +96,14 @@ def main() -> int:
             matched.append({"kind": "bill", "id": b["Id"], "name": b.get("Name", "").strip(),
                             "type": b.get("SubTypeDesc"), "status": b.get("StatusID"),
                             "date": (b.get("PublicationDate") or "")[:10], "groups": h})
-    for l in laws:
-        h = hits(l.get("Name", ""))
-        if h:
-            matched.append({"kind": "law", "id": l["Id"], "name": l.get("Name", "").strip(),
-                            "type": l.get("LawTypeDesc"),
-                            "date": (l.get("PublicationDate") or "")[:10], "groups": h})
 
     by_grp: dict[str, int] = {}
     for m in matched:
         for g in m["groups"]:
             by_grp[g] = by_grp.get(g, 0) + 1
 
-    print(f"\nзаконопроектов всего: {len(bills)} · законов: {len(laws)}")
-    print(f"совпало с чек-листом: {len(matched)}  ({len(matched) * 100 // max(len(bills) + len(laws), 1)}%)")
+    print(f"\nзаконопроектов 25-го Кнессета: {len(bills)}")
+    print(f"совпало с чек-листом: {len(matched)}  ({len(matched) * 100 // max(len(bills), 1)}%)")
     for g, n in sorted(by_grp.items(), key=lambda x: -x[1]):
         print(f"   {g:<18} {n}")
 
@@ -126,7 +122,7 @@ def main() -> int:
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps({"matched": matched, "counts": by_grp,
-                               "bills_total": len(bills), "laws_total": len(laws),
+                               "bills_total": len(bills),
                                "oracle_misses": misses},
                               ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"\n{OUT.relative_to(ROOT)}")
