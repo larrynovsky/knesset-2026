@@ -144,6 +144,17 @@ def main() -> int:
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text("\n".join(out) + "\n", encoding="utf-8")
 
+    # Машиночитаемый близнец для рендера UI. Узкий контракт: builder считает,
+    # renderer рисует, парсер YAML между ними не нужен.
+    OUT.with_suffix(".json").write_text(
+        json.dumps({"meta": {"anchor_knesset": ANCHOR_KNESSET,
+                             "first_knesset": FIRST_KNESSET,
+                             "auto_merge": AUTO_MERGE, "strong": STRONG,
+                             "fork_low": FORK_LOW,
+                             "questions": len(questions)},
+                    "chains": chains}, ensure_ascii=False, indent=1),
+        encoding="utf-8")
+
     print(f"якорей (фракции {ANCHOR_KNESSET}-го Кнессета): {len(anchors)}")
     print(f"ВОПРОСОВ ЧЕЛОВЕКУ: {len(questions)}\n")
     for c in chains:
