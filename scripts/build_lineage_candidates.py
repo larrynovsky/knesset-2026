@@ -28,6 +28,18 @@ from guarded_fetch import fetch_all, require_join  # noqa: E402
 # --- пороги, объявленные до прогона ------------------------------------------
 AUTO_MERGE = 0.60   # пересечение состава >= -> одна линия без вопросов
 FORK_LOW = 0.15     # ниже -> считаем разными, не спрашиваем
+
+# ОХВАТ. Первая рабочая редакция дала 674 развилки на всей истории с 1949 г.
+# Это не проблема порогов — пороги не тронуты. Это неверный охват:
+#   * голосований до Кнессета 16 (2003) НЕТ ВООБЩЕ (проверено в фазе 0),
+#     значит lineage для более ранних партий не окупается ничем;
+#   * решать нужно про ЛИНИЮ, а не про каждую пару записей;
+#   * фракция из 1-2 человек — это, как правило, персональный раскол,
+#     а не преемственность партии; отдельная категория, не развилка.
+# Менять пороги, увидев результат, было бы подгоном (§3 по духу).
+# Менять охват по названной внешней причине — нет.
+FIRST_KNESSET = 16      # горизонт канала А
+SPLINTER_MAX = 2        # фракция такого размера -> раскол, не линия
 # 'חבר/ת סיעה' — ЧЛЕНСТВО ВО ФРАКЦИИ. Не 43 ('חבר הכנסת'): 43 — это мандат
 # депутата, и FactionID у него пуст ВСЕГДА (проверено: PositionID eq 43 and
 # FactionID ne null -> 0 строк глобально). Заполнен только у 48 (יו"ר סיעה, 146)
@@ -51,6 +63,7 @@ def main() -> int:
                             flt=f"PositionID eq {MK_POSITION}",
                             select="PersonID,FactionID,KnessetNum")
 
+    factions = [f for f in factions if f["KnessetNum"] >= FIRST_KNESSET]
     fac = {f["Id"]: f for f in factions}
     require_join(set(fac),
                  {m["FactionID"] for m in members_raw if m.get("FactionID")},
@@ -103,6 +116,20 @@ def main() -> int:
     for i in fac:
         lines[find(i)].append(i)
 
+    # --- отделяем персональные расколы от настоящих развилок -----------------
+    splinters = [f for f in forks
+                 if min(len(members.get(f["a"], set())), len(members.get(f["b"], set()))) <= SPLINTER_MAX]
+    forks = [f for f in forks if f not in splinters]
+
+    # --- агрегация: человек решает про ЛИНИЮ, а не про пару записей ----------
+    agg: dict[tuple, dict] = {}
+    for f in forks:
+        key = (find(f["a"]), find(f["b"]))
+        cur = agg.get(key)
+        if cur is None or f["ov"] > cur["ov"]:
+            agg[key] = f
+    forks = list(agg.values())
+
     # --- цена развилки: сколько записей и каденций зависит -------------------
     for f in forks:
         la, lb = lines[find(f["a"])], lines[find(f["b"])]
@@ -129,6 +156,9 @@ def main() -> int:
            f"  factions_without_members: {len(no_members)}",
            f"  lines_total: {len(lines)}",
            f"  lines_multi_knesset: {len(multi)}",
+           f"  first_knesset: {FIRST_KNESSET}",
+           f"  splinter_max: {SPLINTER_MAX}",
+           f"  splinters_excluded: {len(splinters)}",
            f"  forks_for_human: {len(forks)}",
            "", "auto_resolved_lines:"]
     for r, v in sorted(multi.items(), key=lambda x: -len(x[1])):
@@ -158,6 +188,7 @@ def main() -> int:
 
     print(f"фракций: {len(fac)}  без состава: {len(no_members)}")
     print(f"линий: {len(lines)}  из них многокаденционных: {len(multi)}")
+    print(f"расколов (фракция <= {SPLINTER_MAX} чел.) отделено: {len(splinters)}")
     print(f"РАЗВИЛОК ДЛЯ ЧЕЛОВЕКА: {len(forks)}")
     print(f"\n{OUT.relative_to(OUT.parent.parent)}")
     print("\nтоп-10 развилок по цене:")
