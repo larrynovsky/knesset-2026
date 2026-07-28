@@ -121,24 +121,55 @@ def main() -> int:
                  if min(len(members.get(f["a"], set())), len(members.get(f["b"], set()))) <= SPLINTER_MAX]
     forks = [f for f in forks if f not in splinters]
 
-    # --- агрегация: человек решает про ЛИНИЮ, а не про пару записей ----------
-    agg: dict[tuple, dict] = {}
+    # --- агрегация: КЛАСТЕР, а не пара -------------------------------------
+    # Попарная агрегация давала 197 развилок, из них первая десятка — один
+    # и тот же клубок (Яадут ха-Тора / Агудат Исраэль / Дегель ха-Тора то
+    # сливаются в общий список, то расходятся). Человек решает про клубок
+    # один раз: «это одна линия, две или три?» — а не про каждое ребро.
+    fp: dict[int, int] = {i: i for i in fac}
+
+    def ffind(x: int) -> int:
+        while fp[x] != x:
+            fp[x] = fp[fp[x]]
+            x = fp[x]
+        return x
+
     for f in forks:
-        key = (find(f["a"]), find(f["b"]))
-        cur = agg.get(key)
-        if cur is None or f["ov"] > cur["ov"]:
-            agg[key] = f
-    forks = list(agg.values())
+        ra, rb = ffind(f["a"]), ffind(f["b"])
+        if ra != rb:
+            fp[rb] = ra
+
+    clusters: dict[int, list[int]] = defaultdict(list)
+    for f in forks:
+        for side in ("a", "b"):
+            r = ffind(f[side])
+            if f[side] not in clusters[r]:
+                clusters[r].append(f[side])
+
+    edges_by_cluster: dict[int, list[dict]] = defaultdict(list)
+    for f in forks:
+        edges_by_cluster[ffind(f["a"])].append(f)
+    forks = []
+    for root, ids in clusters.items():
+        kns = sorted({fac[i]["KnessetNum"] for i in ids})
+        edges = sorted(edges_by_cluster[root], key=lambda x: -x["ov"])
+        forks.append({
+            "cluster": sorted(ids),
+            "knessets": kns,
+            "reaches_ballot": max(kns) >= 24,
+            "names": sorted({fac[i]["Name"].strip() for i in ids}),
+            "edges": [{"a": e["a"], "b": e["b"], "ov": round(e["ov"], 2), "kind": e["kind"]}
+                      for e in edges[:12]],
+            "ov": edges[0]["ov"] if edges else 0.0,
+            "a": ids[0], "b": ids[-1], "kind": "кластер",
+        })
 
     # --- цена развилки: сколько записей и каденций зависит -------------------
     for f in forks:
-        la, lb = lines[find(f["a"])], lines[find(f["b"])]
-        f["cost_records"] = len(la) + len(lb)
-        f["cost_knessets"] = len({fac[i]["KnessetNum"] for i in la + lb})
-        f["a_name"], f["b_name"] = fac[f["a"]]["Name"], fac[f["b"]]["Name"]
-        f["a_kn"], f["b_kn"] = fac[f["a"]]["KnessetNum"], fac[f["b"]]["KnessetNum"]
-        f["a_size"], f["b_size"] = len(members.get(f["a"], set())), len(members.get(f["b"], set()))
-    forks.sort(key=lambda x: (-x["cost_records"], -x["ov"]))
+        f["cost_records"] = len(f["cluster"])
+        f["cost_knessets"] = len(f["knessets"])
+    # Сначала то, что доходит до бюллетеня 2026 — там цена решения реальна.
+    forks.sort(key=lambda x: (not x["reaches_ballot"], -x["cost_records"], -x["ov"]))
 
     multi = {r: v for r, v in lines.items() if len(v) > 1}
 
@@ -168,18 +199,23 @@ def main() -> int:
         out.append(f"    knessets: {kns}")
         out.append(f"    names: {json.dumps(names, ensure_ascii=False)}")
 
-    out += ["", "forks:  # развилки — ТРЕБУЮТ РЕШЕНИЯ ЧЕЛОВЕКА"]
+    out += ["", "forks:  # развилки — ТРЕБУЮТ РЕШЕНИЯ ЧЕЛОВЕКА (кластерами)"]
     for n, f in enumerate(forks, 1):
         out += [f"  - id: F{n}",
-                f"    kind: {f['kind']}",
-                f"    overlap: {f['ov']:.2f}",
-                f"    cost_records: {f['cost_records']}   # записей фракций в затронутых линиях",
-                f"    cost_knessets: {f['cost_knessets']}",
-                f"    a: {{id: {f['a']}, knesset: {f['a_kn']}, mks: {f['a_size']}, "
-                f"name: {json.dumps(f['a_name'].strip(), ensure_ascii=False)}}}",
-                f"    b: {{id: {f['b']}, knesset: {f['b_kn']}, mks: {f['b_size']}, "
-                f"name: {json.dumps(f['b_name'].strip(), ensure_ascii=False)}}}",
-                "    decision: null   # one_line | two_lines",
+                f"    reaches_ballot_2026: {str(f['reaches_ballot']).lower()}",
+                f"    knessets: {f['knessets']}",
+                f"    faction_ids: {f['cluster']}",
+                f"    names: {json.dumps(f['names'], ensure_ascii=False)}",
+                "    members:"]
+        for i in f["cluster"]:
+            out.append(f"      - {{id: {i}, knesset: {fac[i]['KnessetNum']}, "
+                       f"mks: {len(members.get(i, set()))}, "
+                       f"name: {json.dumps(fac[i]['Name'].strip(), ensure_ascii=False)}}}")
+        out.append("    edges:")
+        for e in f["edges"]:
+            out.append(f"      - {{a: {e['a']}, b: {e['b']}, overlap: {e['ov']}, "
+                       f"kind: {json.dumps(e['kind'], ensure_ascii=False)}}}")
+        out += ["    decision: null   # one_line | separate_lines | split_as:[...]",
                 "    rationale: null",
                 "    decided_at: null"]
 
@@ -191,10 +227,14 @@ def main() -> int:
     print(f"расколов (фракция <= {SPLINTER_MAX} чел.) отделено: {len(splinters)}")
     print(f"РАЗВИЛОК ДЛЯ ЧЕЛОВЕКА: {len(forks)}")
     print(f"\n{OUT.relative_to(OUT.parent.parent)}")
-    print("\nтоп-10 развилок по цене:")
-    for n, f in enumerate(forks[:10], 1):
-        print(f"  F{n:<3} ov={f['ov']:.2f} цена={f['cost_records']:>3}зап/{f['cost_knessets']}кад  "
-              f"{f['kind']:<28} к{f['a_kn']} {f['a_name'].strip()[:22]} → к{f['b_kn']} {f['b_name'].strip()[:22]}")
+    ballot = [f for f in forks if f["reaches_ballot"]]
+    print(f"   из них доходят до бюллетеня 2026: {len(ballot)}")
+    print("\nразвилки, доходящие до бюллетеня:")
+    for n, f in enumerate(forks, 1):
+        if not f["reaches_ballot"]:
+            continue
+        print(f"  F{n:<3} каденции {str(f['knessets']):<28} фракций {f['cost_records']:>2}  "
+              f"{' | '.join(x[:26] for x in f['names'][:3])}")
     return 0
 
 
