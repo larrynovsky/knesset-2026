@@ -5,3 +5,5 @@ __pycache__/
 .DS_Store
 logs/
 !data/MANIFEST.json
+report/*
+!report/.gitkeep
