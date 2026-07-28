@@ -32,7 +32,7 @@
 | §20 | Не называть сделанным то, у чего нет краснеющего механизма. | MANUAL | post-receive.template, pre-commit, verify_names_wikidata.py |
 | §21 | Риск → исполняемая проверка, а не строка в плане. | MANUAL | — |
 | §22 | Правило прогоняется по изменению, которое его вводит, и сверяется со с | MANUAL | pre-commit |
-| §23 | Ожидаемый объём получается ДРУГИМ путём и сверяется до использования д | LIVE | check_artifacts.py, check_knesset_120.py, guarded_fetch.py, probe_faction_join.py, probe_odata_shapes.py, probe_phase0.py, probe_phase0_odata.py, verify_names_wikidata.py |
+| §23 | Ожидаемый объём получается ДРУГИМ путём и сверяется до использования д | LIVE | check_artifacts.py, check_knesset_120.py, guarded_fetch.py, probe_faction_join.py, probe_odata_shapes.py, probe_phase0.py, probe_phase0_odata.py, scan_bills.py, verify_names_wikidata.py |
 | §24 | У каждого правила есть артефакт, отсутствие которого само является нар | LIVE | check_artifacts.py, post-receive.template, pre-commit |
 
 Всего правил: 24 · заявлено LIVE: 3 · упомянуто в коде: 15
