@@ -23,12 +23,17 @@ from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from guarded_fetch import fetch_all  # noqa: E402
+from guarded_fetch import fetch_all, require_join  # noqa: E402
 
 # --- пороги, объявленные до прогона ------------------------------------------
 AUTO_MERGE = 0.60   # пересечение состава >= -> одна линия без вопросов
 FORK_LOW = 0.15     # ниже -> считаем разными, не спрашиваем
-MK_POSITION = 43    # 'חבר הכנסת'
+# 'חבר/ת סיעה' — ЧЛЕНСТВО ВО ФРАКЦИИ. Не 43 ('חבר הכנסת'): 43 — это мандат
+# депутата, и FactionID у него пуст ВСЕГДА (проверено: PositionID eq 43 and
+# FactionID ne null -> 0 строк глобально). Заполнен только у 48 (יו"ר סיעה, 146)
+# и 54 (4515). Первая редакция брала 43, соединение дало пустоту, скрипт
+# отчитался «0 развилок, решать нечего» — ложный зелёный (см. require_join).
+MK_POSITION = 54
 OUT = Path(__file__).resolve().parent.parent / "criteria" / "lineage_draft.yaml"
 
 
@@ -47,6 +52,9 @@ def main() -> int:
                             select="PersonID,FactionID,KnessetNum")
 
     fac = {f["Id"]: f for f in factions}
+    require_join(set(fac),
+                 {m["FactionID"] for m in members_raw if m.get("FactionID")},
+                 "KNS_Faction.Id <-> P2P.FactionID", min_overlap=100)
     members: dict[int, set] = defaultdict(set)
     for m in members_raw:
         if m.get("FactionID"):

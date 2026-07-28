@@ -104,6 +104,28 @@ def fetch_all(
     return out
 
 
+def require_join(left: set, right: set, name: str, min_overlap: int = 1) -> int:
+    """§23, пункт 4: соединение объявляет ожидание и падает на пустоте.
+
+    Повод (2026-07-28): build_lineage_candidates соединял KNS_Faction.Id с
+    KNS_PersonToPosition.FactionID, поле оказалось пустым для PositionID=43,
+    пересечение вышло нулевым — и скрипт отчитался «545 фракций, 0 развилок,
+    решать нечего». Ноль связей прочитался как «всё авторазрешилось».
+
+    Тот же класс, что тихий недобор, только по другой оси: не «данных пришло
+    меньше», а «данные не соединились». Отчёт об успехе в обоих случаях.
+    """
+    inter = left & right
+    if len(inter) < min_overlap:
+        raise ShortRead(
+            f"§23 ПУСТОЕ СОЕДИНЕНИЕ [{name}]: слева {len(left)} ключей, "
+            f"справа {len(right)}, пересечение {len(inter)} < {min_overlap}. "
+            "Ноль связей — это отказ, а не результат «связывать нечего». "
+            f"Примеры слева: {sorted(left)[:5]}; справа: {sorted(right)[:5]}"
+        )
+    return len(inter)
+
+
 def _record(entity: str, flt: str, expected: int, got: int, pages: int) -> None:
     """Манифест выгрузки: обе цифры рядом, чтобы расхождение было видно глазом."""
     MANIFEST.parent.mkdir(parents=True, exist_ok=True)
