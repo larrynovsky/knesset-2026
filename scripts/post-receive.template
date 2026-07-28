@@ -40,6 +40,14 @@ if [ -f scripts/check_criteria_order.py ]; then
   fi
 fi
 
+# §24 — артефакты. Ловит обход guarded_fetch и ложь свода о себе.
+if [ -f scripts/check_artifacts.py ]; then
+  if ! "$PY" scripts/check_artifacts.py 2>&1; then
+    say "СТОП: §24 нарушен. Генерация НЕ запущена."
+    exit 1
+  fi
+fi
+
 # §4-§12 — валидатор карточек.
 if [ -f scripts/validate_cards.py ]; then
   if ! "$PY" scripts/validate_cards.py 2>&1; then

@@ -18,7 +18,6 @@ import urllib.request
 
 UA = {"User-Agent": "knesset-research/0.1 (personal research; contact via repo)"}
 CTX = ssl.create_default_context()
-ODATA = "https://knesset.gov.il/OdataV4/ParliamentInfo"
 BUDGET = "https://next.obudget.org/api/query"
 
 
@@ -131,66 +130,13 @@ def p0_2() -> None:
         print("   (эвристика: Font>0 и Image~0 -> текстовый; Image>>Font -> скан)")
 
 
-# ---------------------------------------------------------------- P0-3 OData
-def p0_3() -> None:
-    rule("P0-3  OData: горизонты сущностей и сшиваются ли фракции")
-
-    print("\n-- список entity sets --")
-    st, body, _ = get(f"{ODATA}?$format=json")
-    if st == 200:
-        try:
-            names = sorted(x["name"] for x in json.loads(body).get("value", []))
-            print(f"   всего {len(names)}")
-            for i in range(0, len(names), 3):
-                print("   " + "  ".join(f"{x:<34}" for x in names[i:i + 3]))
-        except Exception as e:  # noqa: BLE001
-            print("   !! parse:", e)
-    else:
-        print(f"   !! HTTP {st}: {body[:200]!r}")
-
-    def count(entity: str, flt: str | None = None) -> str:
-        url = f"{ODATA}/{entity}/$count"
-        if flt:
-            url += "?$filter=" + urllib.parse.quote(flt)
-        st, body, _ = get(url)
-        return body.decode("utf-8", "replace").strip() if st == 200 else f"HTTP {st}"
-
-    print("\n-- объёмы по кнессетам --")
-    print(f"   {'кнессет':<10}{'PlenumVote':>14}{'VoteResult':>14}{'Bill':>10}{'Faction':>10}")
-    for k in range(16, 27):
-        pv = count("KNS_PlenumVote", f"KnessetNum eq {k}")
-        vr = count("KNS_PlenumVoteResult", f"KnessetNum eq {k}")
-        bl = count("KNS_Bill", f"KnessetNum eq {k}")
-        fc = count("KNS_Faction", f"KnessetNum eq {k}")
-        print(f"   {k:<10}{pv:>14}{vr:>14}{bl:>10}{fc:>10}")
-        time.sleep(0.4)
-
-    print("\n-- сшиваются ли FactionID между кнессетами --")
-    for k in (24, 25):
-        url = (f"{ODATA}/KNS_Faction?$filter=" + urllib.parse.quote(f"KnessetNum eq {k}")
-               + "&$select=FactionID,Name,KnessetNum&$top=100")
-        st, body, _ = get(url)
-        if st != 200:
-            print(f"   кнессет {k}: HTTP {st}")
-            continue
-        try:
-            vals = json.loads(body).get("value", [])
-            print(f"   кнессет {k}: {len(vals)} фракций")
-            for v in vals[:12]:
-                print(f"      {v.get('FactionID'):>8}  {v.get('Name')}")
-        except Exception as e:  # noqa: BLE001
-            print("   !! parse:", e)
-        time.sleep(0.4)
-
-    print("\n-- сущности правительств/должностей (для periods.yaml) --")
-    for ent in ("KNS_Government", "KNS_Position", "KNS_PersonToPosition"):
-        print(f"   {ent:<24} {count(ent)}")
-        time.sleep(0.3)
+# P0-3 вытеснен scripts/probe_phase0_odata.py (выгрузка через guarded_fetch, §23).
+# Здесь остались только бюджет и PDF соглашений — OData этот файл больше не трогает.
 
 
 if __name__ == "__main__":
     print(f"probe_phase0 — {time.strftime('%Y-%m-%d %H:%M:%S')}")
-    for fn in (p0_1, p0_2, p0_3):
+    for fn in (p0_1, p0_2):
         try:
             fn()
         except Exception as exc:  # noqa: BLE001
