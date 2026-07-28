@@ -19,6 +19,13 @@
       очевидно та же партия, спрашивать нечего);
   A2. пересечение >= STRONG и кандидат единственный выше FORK_LOW.
 Всё остальное — вопрос человеку.
+
+РАНЖИРОВАНИЕ КАНДИДАТОВ — по АБСОЛЮТНОМУ числу перешедших депутатов, а не по
+доле. Первая редакция ранжировала по доле и увела цепочку Ликуда в однодневную
+фракцию одного депутата: intersection/min(size) даёт 1.0 любому одиночке, чей
+единственный член сидел в Ликуде, и цепочка тут же обрывалась. Доля отвечает
+на вопрос «это подмножество?» — она нужна как ПОРОГ включения. Вопрос «кто
+главный предшественник» — это сколько людей реально перешло.
 """
 from __future__ import annotations
 
@@ -79,25 +86,30 @@ def main() -> int:
         while k > FIRST_KNESSET:
             cands = []
             for c in by_k[k - 1]:
+                shared = len(members.get(cur, set()) & members.get(c, set()))
                 ov = overlap(members.get(cur, set()), members.get(c, set()))
                 if ov >= FORK_LOW:
-                    cands.append((ov, c))
-            cands.sort(reverse=True)
+                    cands.append((shared, ov, c))
+            cands.sort(reverse=True)          # сначала по числу перешедших
             if not cands:
                 chain.append({"knesset": k - 1, "step": "обрыв — предшественник не найден"})
                 break
-            ov, best = cands[0]
+            _, ov, best = cands[0]
             na, nb = norm(fac[cur]["Name"]), norm(fac[best]["Name"])
             contained = na and nb and (na in nb or nb in na)
-            auto = (ov >= AUTO_MERGE and contained) or (ov >= STRONG and len(cands) == 1)
+            shared_best = cands[0][0]
+            second = cands[1][0] if len(cands) > 1 else 0
+            auto = ((ov >= AUTO_MERGE and contained)
+                    or (ov >= STRONG and len(cands) == 1)
+                    or (shared_best >= 3 * max(second, 1) and shared_best >= 5))
             entry = {"knesset": k - 1, "id": best, "name": fac[best]["Name"].strip(),
                      "mks": len(members.get(best, set())), "overlap": round(ov, 2),
                      "step": "авто" if auto else "ВОПРОС"}
             if not auto:
                 entry["alternatives"] = [
                     {"id": c, "name": fac[c]["Name"].strip(), "overlap": round(o, 2),
-                     "mks": len(members.get(c, set()))}
-                    for o, c in cands[:3]]
+                     "shared": sh, "mks": len(members.get(c, set()))}
+                    for sh, o, c in cands[:3]]
                 questions.append({"anchor": fac[a]["Name"].strip(), "anchor_id": a,
                                   "at_knesset": k - 1, "from": fac[cur]["Name"].strip(),
                                   "cands": entry["alternatives"]})
@@ -125,7 +137,7 @@ def main() -> int:
             out.append(base)
             for alt in s.get("alternatives", []):
                 out.append(f"        # альт: ov={alt['overlap']} "
-                           f"{alt['name']} ({alt['mks']} деп.)")
+                           f"перешло {alt['shared']} — {alt['name']} ({alt['mks']} деп.)")
         out += ["    decision: null   # continue_to:<knesset> | cut_at:<knesset>",
                 "    rationale: null", "    decided_at: null"]
 
