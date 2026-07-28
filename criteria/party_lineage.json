@@ -1,0 +1,2598 @@
+{
+ "rule": "больше половины состава каждой фракции — одни и те же люди",
+ "majority": 0.5,
+ "first_knesset": 16,
+ "lines": [
+  {
+   "line_id": "L882",
+   "faction_ids": [
+    882,
+    931,
+    933,
+    942,
+    962,
+    1096
+   ],
+   "knessets": [
+    20,
+    21,
+    22,
+    23,
+    24,
+    25
+   ],
+   "names": [
+    "הליכוד",
+    "הליכוד בהנהגת בנימין נתניהו לראשות הממשלה"
+   ],
+   "reaches_ballot": true,
+   "size_max": 43
+  },
+  {
+   "line_id": "L955",
+   "faction_ids": [
+    955,
+    967,
+    1102
+   ],
+   "knessets": [
+    23,
+    24,
+    25
+   ],
+   "names": [
+    "יש עתיד - תל\"ם",
+    "יש עתיד"
+   ],
+   "reaches_ballot": true,
+   "size_max": 29
+  },
+  {
+   "line_id": "L44",
+   "faction_ids": [
+    44,
+    628,
+    753,
+    811,
+    910,
+    918,
+    932,
+    947,
+    971,
+    1095
+   ],
+   "knessets": [
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25
+   ],
+   "names": [
+    "התאחדות הספרדים העולמית שומרי תורה",
+    "ש\"ס-התאחדות הספרדים העולמית שומרי תורה",
+    "שס התאחדות הספרדים העולמית שומרי תורה",
+    "ש\"ס",
+    "התאחדות הספרדים שומרי תורה תנועתו של מרן הרב עובדיה יוסף זצ\"ל"
+   ],
+   "reaches_ballot": true,
+   "size_max": 14
+  },
+  {
+   "line_id": "L969",
+   "faction_ids": [
+    969,
+    1098,
+    1110
+   ],
+   "knessets": [
+    24,
+    25,
+    25
+   ],
+   "names": [
+    "כחול לבן",
+    "המחנה הממלכתי",
+    "כחול לבן - המחנה הממלכתי"
+   ],
+   "reaches_ballot": true,
+   "size_max": 14
+  },
+  {
+   "line_id": "L1097",
+   "faction_ids": [
+    1097
+   ],
+   "knessets": [
+    25
+   ],
+   "names": [
+    "הציונות הדתית"
+   ],
+   "reaches_ballot": true,
+   "size_max": 14
+  },
+  {
+   "line_id": "L1063",
+   "faction_ids": [
+    48,
+    632,
+    746,
+    807,
+    908,
+    928,
+    1063,
+    936,
+    1065,
+    944,
+    1071,
+    965,
+    1083,
+    1101
+   ],
+   "knessets": [
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    21,
+    22,
+    22,
+    23,
+    23,
+    24,
+    24,
+    25
+   ],
+   "names": [
+    "יהדות התורה והשבת אגודת ישראל - דגל התורה",
+    "יהדות התורה והשבת אגודת ישראל-דגל התורה",
+    "יהדות התורה והשבת, אגודת ישראל - דגל התורה",
+    "יהדות התורה",
+    "אגודת ישראל",
+    "יהדות התורה והשבת - אגודת ישראל דגל התורה"
+   ],
+   "reaches_ballot": true,
+   "size_max": 10
+  },
+  {
+   "line_id": "L961",
+   "faction_ids": [
+    961,
+    1105
+   ],
+   "knessets": [
+    24,
+    25
+   ],
+   "names": [
+    "הציונות הדתית",
+    "הציונות הדתית בראשות בצלאל סמוטריץ'"
+   ],
+   "reaches_ballot": true,
+   "size_max": 8
+  },
+  {
+   "line_id": "L1106",
+   "faction_ids": [
+    1106
+   ],
+   "knessets": [
+    25
+   ],
+   "names": [
+    "עוצמה יהודית בראשות איתמר בן גביר"
+   ],
+   "reaches_ballot": true,
+   "size_max": 7
+  },
+  {
+   "line_id": "L964",
+   "faction_ids": [
+    964,
+    1103
+   ],
+   "knessets": [
+    24,
+    25
+   ],
+   "names": [
+    "הרשימה המשותפת (חד\"ש, תע\"ל, בל\"ד)",
+    "חד\"ש-תע\"ל"
+   ],
+   "reaches_ballot": true,
+   "size_max": 6
+  },
+  {
+   "line_id": "L1104",
+   "faction_ids": [
+    1104
+   ],
+   "knessets": [
+    25
+   ],
+   "names": [
+    "ישראל ביתנו"
+   ],
+   "reaches_ballot": true,
+   "size_max": 6
+  },
+  {
+   "line_id": "L1108",
+   "faction_ids": [
+    1108
+   ],
+   "knessets": [
+    25
+   ],
+   "names": [
+    "הימין הממלכתי"
+   ],
+   "reaches_ballot": true,
+   "size_max": 6
+  },
+  {
+   "line_id": "L1069",
+   "faction_ids": [
+    1069,
+    1075,
+    973,
+    1099
+   ],
+   "knessets": [
+    22,
+    23,
+    24,
+    25
+   ],
+   "names": [
+    "רע\"מ - רשימת האיחוד הערבי",
+    "רע\"מ – רשימת האיחוד הערבי",
+    "הרשימה הערבית המאוחדת",
+    "רע\"ם"
+   ],
+   "reaches_ballot": true,
+   "size_max": 5
+  },
+  {
+   "line_id": "L1100",
+   "faction_ids": [
+    1100
+   ],
+   "knessets": [
+    25
+   ],
+   "names": [
+    "העבודה"
+   ],
+   "reaches_ballot": true,
+   "size_max": 4
+  },
+  {
+   "line_id": "L1084",
+   "faction_ids": [
+    1084,
+    1107
+   ],
+   "knessets": [
+    24,
+    25
+   ],
+   "names": [
+    "נעם - בראשות חה\"כ אבי מעוז",
+    "נעם - בראשות אבי מעוז"
+   ],
+   "reaches_ballot": true,
+   "size_max": 1
+  },
+  {
+   "line_id": "L1109",
+   "faction_ids": [
+    1109
+   ],
+   "knessets": [
+    25
+   ],
+   "names": [
+    "חה\"כ עידן רול"
+   ],
+   "reaches_ballot": true,
+   "size_max": 1
+  },
+  {
+   "line_id": "L24",
+   "faction_ids": [
+    24
+   ],
+   "knessets": [
+    16
+   ],
+   "names": [
+    "הליכוד"
+   ],
+   "reaches_ballot": false,
+   "size_max": 42
+  },
+  {
+   "line_id": "L622",
+   "faction_ids": [
+    622,
+    751
+   ],
+   "knessets": [
+    17,
+    18
+   ],
+   "names": [
+    "קדימה-עם אהוד אולמרט לראשות הממשלה",
+    "קדימה - עם ציפי לבני לראשות הממשלה"
+   ],
+   "reaches_ballot": false,
+   "size_max": 35
+  },
+  {
+   "line_id": "L917",
+   "faction_ids": [
+    917,
+    938,
+    1079
+   ],
+   "knessets": [
+    21,
+    22,
+    23
+   ],
+   "names": [
+    "כחול לבן",
+    "כחול לבן בראשות בנימין גנץ"
+   ],
+   "reaches_ballot": false,
+   "size_max": 35
+  },
+  {
+   "line_id": "L748",
+   "faction_ids": [
+    748,
+    804,
+    842
+   ],
+   "knessets": [
+    18,
+    19,
+    19
+   ],
+   "names": [
+    "הליכוד - אח\"י בהנהגת בנימין נתניהו לראשות הממשלה",
+    "הליכוד - ישראל ביתנו",
+    "הליכוד - תנועה לאומית ליברלית"
+   ],
+   "reaches_ballot": false,
+   "size_max": 32
+  },
+  {
+   "line_id": "L502",
+   "faction_ids": [
+    502
+   ],
+   "knessets": [
+    16
+   ],
+   "names": [
+    "העבודה - מימד - עם אחד"
+   ],
+   "reaches_ballot": false,
+   "size_max": 31
+  },
+  {
+   "line_id": "L902",
+   "faction_ids": [
+    902
+   ],
+   "knessets": [
+    20
+   ],
+   "names": [
+    "המחנה הציוני"
+   ],
+   "reaches_ballot": false,
+   "size_max": 29
+  },
+  {
+   "line_id": "L946",
+   "faction_ids": [
+    946
+   ],
+   "knessets": [
+    23
+   ],
+   "names": [
+    "כחול לבן"
+   ],
+   "reaches_ballot": false,
+   "size_max": 22
+  },
+  {
+   "line_id": "L1044",
+   "faction_ids": [
+    42,
+    624,
+    1044,
+    1047
+   ],
+   "knessets": [
+    16,
+    17,
+    17,
+    18
+   ],
+   "names": [
+    "העבודה-מימד בראשות מצנע",
+    "העבודה-מימד בראשות עמיר פרץ",
+    "העבודה בראשות אהוד ברק"
+   ],
+   "reaches_ballot": false,
+   "size_max": 21
+  },
+  {
+   "line_id": "L812",
+   "faction_ids": [
+    812,
+    904
+   ],
+   "knessets": [
+    19,
+    20
+   ],
+   "names": [
+    "יש עתיד בראשות יאיר לפיד",
+    "יש עתיד"
+   ],
+   "reaches_ballot": false,
+   "size_max": 19
+  },
+  {
+   "line_id": "L903",
+   "faction_ids": [
+    903
+   ],
+   "knessets": [
+    20
+   ],
+   "names": [
+    "הרשימה המשותפת (חד\"ש, רע\"ם, בל\"ד ותע\"ל)"
+   ],
+   "reaches_ballot": false,
+   "size_max": 19
+  },
+  {
+   "line_id": "L805",
+   "faction_ids": [
+    805,
+    914
+   ],
+   "knessets": [
+    19,
+    20
+   ],
+   "names": [
+    "העבודה בראשות שלי יחימוביץ'",
+    "העבודה הישראלית"
+   ],
+   "reaches_ballot": false,
+   "size_max": 18
+  },
+  {
+   "line_id": "L43",
+   "faction_ids": [
+    43
+   ],
+   "knessets": [
+    16
+   ],
+   "names": [
+    "שינוי התנועה החילונית"
+   ],
+   "reaches_ballot": false,
+   "size_max": 16
+  },
+  {
+   "line_id": "L542",
+   "faction_ids": [
+    542
+   ],
+   "knessets": [
+    16
+   ],
+   "names": [
+    "אחריות לאומית"
+   ],
+   "reaches_ballot": false,
+   "size_max": 15
+  },
+  {
+   "line_id": "L638",
+   "faction_ids": [
+    638,
+    747,
+    843
+   ],
+   "knessets": [
+    17,
+    18,
+    19
+   ],
+   "names": [
+    "ישראל ביתנו בראשות אביגדור ליברמן",
+    "ישראל ביתנו"
+   ],
+   "reaches_ballot": false,
+   "size_max": 15
+  },
+  {
+   "line_id": "L1061",
+   "faction_ids": [
+    924,
+    1061,
+    940,
+    1067,
+    943,
+    1074
+   ],
+   "knessets": [
+    21,
+    21,
+    22,
+    22,
+    23,
+    23
+   ],
+   "names": [
+    "חד\"ש תע\"ל בראשות איימן עודה ואחמד טיבי",
+    "חד\"ש",
+    "הרשימה המשותפת חד\"ש, רע\"ם, תע\"ל, בל\"ד",
+    "חד\"ש - חזית דמוקרטית לשלום ושוויון",
+    "הרשימה המשותפת חד\"ש, רע\"מ, תע\"ל, בל\"ד",
+    "הרשימה המשותפת"
+   ],
+   "reaches_ballot": false,
+   "size_max": 15
+  },
+  {
+   "line_id": "L562",
+   "faction_ids": [
+    562
+   ],
+   "knessets": [
+    16
+   ],
+   "names": [
+    "קדימה"
+   ],
+   "reaches_ballot": false,
+   "size_max": 14
+  },
+  {
+   "line_id": "L690",
+   "faction_ids": [
+    690
+   ],
+   "knessets": [
+    17
+   ],
+   "names": [
+    "הליכוד עם בנימין נתניהו לראשות הממשלה"
+   ],
+   "reaches_ballot": false,
+   "size_max": 14
+  },
+  {
+   "line_id": "L950",
+   "faction_ids": [
+    950
+   ],
+   "knessets": [
+    23
+   ],
+   "names": [
+    "יש עתיד"
+   ],
+   "reaches_ballot": false,
+   "size_max": 14
+  },
+  {
+   "line_id": "L1038",
+   "faction_ids": [
+    1038
+   ],
+   "knessets": [
+    16
+   ],
+   "names": [
+    "שינוי מפלגת החילונים ומעמד הביניים"
+   ],
+   "reaches_ballot": false,
+   "size_max": 14
+  },
+  {
+   "line_id": "L803",
+   "faction_ids": [
+    803,
+    907
+   ],
+   "knessets": [
+    19,
+    20
+   ],
+   "names": [
+    "הבית היהודי מייסודם של האיחוד הלאומי והמפד\"ל החדשה",
+    "הבית היהודי בראשות נפתלי בנט"
+   ],
+   "reaches_ballot": false,
+   "size_max": 13
+  },
+  {
+   "line_id": "L906",
+   "faction_ids": [
+    906
+   ],
+   "knessets": [
+    20
+   ],
+   "names": [
+    "כולנו בראשות משה כחלון"
+   ],
+   "reaches_ballot": false,
+   "size_max": 12
+  },
+  {
+   "line_id": "L564",
+   "faction_ids": [
+    564
+   ],
+   "knessets": [
+    16
+   ],
+   "names": [
+    "הסיעה החילונית"
+   ],
+   "reaches_ballot": false,
+   "size_max": 11
+  },
+  {
+   "line_id": "L929",
+   "faction_ids": [
+    929,
+    937,
+    945,
+    968
+   ],
+   "knessets": [
+    21,
+    22,
+    23,
+    24
+   ],
+   "names": [
+    "ישראל ביתנו בראשות אביגדור ליברמן",
+    "ישראל ביתנו"
+   ],
+   "reaches_ballot": false,
+   "size_max": 11
+  },
+  {
+   "line_id": "L972",
+   "faction_ids": [
+    972
+   ],
+   "knessets": [
+    24
+   ],
+   "names": [
+    "תקווה חדשה"
+   ],
+   "reaches_ballot": false,
+   "size_max": 10
+  },
+  {
+   "line_id": "L45",
+   "faction_ids": [
+    45
+   ],
+   "knessets": [
+    16
+   ],
+   "names": [
+    "האיחוד הלאומי - ישראל ביתנו - מולדת - תקומה"
+   ],
+   "reaches_ballot": false,
+   "size_max": 9
+  },
+  {
+   "line_id": "L642",
+   "faction_ids": [
+    642
+   ],
+   "knessets": [
+    17
+   ],
+   "names": [
+    "איחוד לאומי-מפד\"ל רשימה יהודית לאומית מאוחדת"
+   ],
+   "reaches_ballot": false,
+   "size_max": 9
+  },
+  {
+   "line_id": "L750",
+   "faction_ids": [
+    750
+   ],
+   "knessets": [
+    18
+   ],
+   "names": [
+    "העבודה"
+   ],
+   "reaches_ballot": false,
+   "size_max": 9
+  },
+  {
+   "line_id": "L966",
+   "faction_ids": [
+    966
+   ],
+   "knessets": [
+    24
+   ],
+   "names": [
+    "ימינה בראשות נפתלי בנט"
+   ],
+   "reaches_ballot": false,
+   "size_max": 9
+  },
+  {
+   "line_id": "L970",
+   "faction_ids": [
+    970
+   ],
+   "knessets": [
+    24
+   ],
+   "names": [
+    "מרצ"
+   ],
+   "reaches_ballot": false,
+   "size_max": 9
+  },
+  {
+   "line_id": "L1043",
+   "faction_ids": [
+    1043
+   ],
+   "knessets": [
+    17
+   ],
+   "names": [
+    "הבית היהודי מיסודם של המפד\"ל והאיחוד הלאומי"
+   ],
+   "reaches_ballot": false,
+   "size_max": 9
+  },
+  {
+   "line_id": "L905",
+   "faction_ids": [
+    905
+   ],
+   "knessets": [
+    20
+   ],
+   "names": [
+    "ישראל ביתנו"
+   ],
+   "reaches_ballot": false,
+   "size_max": 8
+  },
+  {
+   "line_id": "L963",
+   "faction_ids": [
+    963
+   ],
+   "knessets": [
+    24
+   ],
+   "names": [
+    "העבודה"
+   ],
+   "reaches_ballot": false,
+   "size_max": 8
+  },
+  {
+   "line_id": "L634",
+   "faction_ids": [
+    634
+   ],
+   "knessets": [
+    17
+   ],
+   "names": [
+    "גיל-גימלאי ישראל לכנסת"
+   ],
+   "reaches_ballot": false,
+   "size_max": 7
+  },
+  {
+   "line_id": "L923",
+   "faction_ids": [
+    923,
+    935,
+    1077,
+    948
+   ],
+   "knessets": [
+    21,
+    22,
+    22,
+    23
+   ],
+   "names": [
+    "הבית היהודי - האיחוד הלאומי",
+    "ימינה בראשות איילת שקד הבית היהודי – האיחוד הלאומי – הימין החדש",
+    "ימינה"
+   ],
+   "reaches_ballot": false,
+   "size_max": 7
+  },
+  {
+   "line_id": "L925",
+   "faction_ids": [
+    925
+   ],
+   "knessets": [
+    21
+   ],
+   "names": [
+    "העבודה"
+   ],
+   "reaches_ballot": false,
+   "size_max": 7
+  },
+  {
+   "line_id": "L934",
+   "faction_ids": [
+    934,
+    949
+   ],
+   "knessets": [
+    22,
+    23
+   ],
+   "names": [
+    "העבודה - גשר",
+    "העבודה - גשר - מרצ"
+   ],
+   "reaches_ballot": false,
+   "size_max": 7
+  },
+  {
+   "line_id": "L1048",
+   "faction_ids": [
+    1048
+   ],
+   "knessets": [
+    18
+   ],
+   "names": [
+    "התנועה בראשות ציפי לבני"
+   ],
+   "reaches_ballot": false,
+   "size_max": 7
+  },
+  {
+   "line_id": "L522",
+   "faction_ids": [
+    46,
+    62,
+    522,
+    640
+   ],
+   "knessets": [
+    16,
+    16,
+    16,
+    17
+   ],
+   "names": [
+    "מרצ - הבחירה הדמוקרטית - שחר",
+    "יחד והבחירה הדמוקרטית",
+    "מרצ - יחד והבחירה הדמוקרטית",
+    "מרצ-ישראל חברתית דמוקרטית"
+   ],
+   "reaches_ballot": false,
+   "size_max": 6
+  },
+  {
+   "line_id": "L49",
+   "faction_ids": [
+    49
+   ],
+   "knessets": [
+    16
+   ],
+   "names": [
+    "מפלגה דתית לאומית"
+   ],
+   "reaches_ballot": false,
+   "size_max": 6
+  },
+  {
+   "line_id": "L762",
+   "faction_ids": [
+    762
+   ],
+   "knessets": [
+    18
+   ],
+   "names": [
+    "העצמאות"
+   ],
+   "reaches_ballot": false,
+   "size_max": 6
+  },
+  {
+   "line_id": "L808",
+   "faction_ids": [
+    808,
+    909,
+    926
+   ],
+   "knessets": [
+    19,
+    20,
+    21
+   ],
+   "names": [
+    "מרצ - השמאל של ישראל",
+    "מרצ"
+   ],
+   "reaches_ballot": false,
+   "size_max": 6
+  },
+  {
+   "line_id": "L813",
+   "faction_ids": [
+    813
+   ],
+   "knessets": [
+    19
+   ],
+   "names": [
+    "התנועה בראשות ציפי לבני"
+   ],
+   "reaches_ballot": false,
+   "size_max": 6
+  },
+  {
+   "line_id": "L915",
+   "faction_ids": [
+    915
+   ],
+   "knessets": [
+    20
+   ],
+   "names": [
+    "התנועה"
+   ],
+   "reaches_ballot": false,
+   "size_max": 6
+  },
+  {
+   "line_id": "L956",
+   "faction_ids": [
+    956
+   ],
+   "knessets": [
+    23
+   ],
+   "names": [
+    "העבודה - מרצ"
+   ],
+   "reaches_ballot": false,
+   "size_max": 6
+  },
+  {
+   "line_id": "L939",
+   "faction_ids": [
+    939,
+    959
+   ],
+   "knessets": [
+    22,
+    23
+   ],
+   "names": [
+    "המחנה הדמוקרטי",
+    "מרצ"
+   ],
+   "reaches_ballot": false,
+   "size_max": 5
+  },
+  {
+   "line_id": "L951",
+   "faction_ids": [
+    951
+   ],
+   "knessets": [
+    23
+   ],
+   "names": [
+    "תל\"ם - תנועה לאומית ממלכתית"
+   ],
+   "reaches_ballot": false,
+   "size_max": 5
+  },
+  {
+   "line_id": "L1042",
+   "faction_ids": [
+    1042
+   ],
+   "knessets": [
+    17
+   ],
+   "names": [
+    "הבית היהודי מיסודם של המפד\"ל"
+   ],
+   "reaches_ballot": false,
+   "size_max": 5
+  },
+  {
+   "line_id": "L1088",
+   "faction_ids": [
+    1088
+   ],
+   "knessets": [
+    24
+   ],
+   "names": [
+    "תקווה חדשה - אחדות לישראל"
+   ],
+   "reaches_ballot": false,
+   "size_max": 5
+  },
+  {
+   "line_id": "L1091",
+   "faction_ids": [
+    1091
+   ],
+   "knessets": [
+    24
+   ],
+   "names": [
+    "ימינה"
+   ],
+   "reaches_ballot": false,
+   "size_max": 5
+  },
+  {
+   "line_id": "L51",
+   "faction_ids": [
+    51,
+    626
+   ],
+   "knessets": [
+    16,
+    17
+   ],
+   "names": [
+    "בל\"ד (ברית לאומית דמוקרטית)",
+    "אלתג'מוע אלווטני אל דימוקרטי-בל\"ד"
+   ],
+   "reaches_ballot": false,
+   "size_max": 4
+  },
+  {
+   "line_id": "L424",
+   "faction_ids": [
+    424,
+    1039
+   ],
+   "knessets": [
+    16,
+    17
+   ],
+   "names": [
+    "אגודת ישראל"
+   ],
+   "reaches_ballot": false,
+   "size_max": 4
+  },
+  {
+   "line_id": "L584",
+   "faction_ids": [
+    584
+   ],
+   "knessets": [
+    16
+   ],
+   "names": [
+    "האיחוד הלאומי - מולדת - תקומה"
+   ],
+   "reaches_ballot": false,
+   "size_max": 4
+  },
+  {
+   "line_id": "L590",
+   "faction_ids": [
+    590
+   ],
+   "knessets": [
+    16
+   ],
+   "names": [
+    "ישראל ביתנו"
+   ],
+   "reaches_ballot": false,
+   "size_max": 4
+  },
+  {
+   "line_id": "L630",
+   "faction_ids": [
+    630,
+    745,
+    806
+   ],
+   "knessets": [
+    17,
+    18,
+    19
+   ],
+   "names": [
+    "חזית דמוקרטית לשלום ושוויון",
+    "חד\"ש - החזית הדמוקרטית לשלום ושוויון"
+   ],
+   "reaches_ballot": false,
+   "size_max": 4
+  },
+  {
+   "line_id": "L636",
+   "faction_ids": [
+    636,
+    752,
+    810,
+    1052
+   ],
+   "knessets": [
+    17,
+    18,
+    19,
+    19
+   ],
+   "names": [
+    "הרשימה הערבית המאוחדת התנועה הערבית להתחדשות",
+    "הרשימה הערבית המאוחדת - התנועה הערבית להתחדשות",
+    "רע\"מ-תע\"ל-מד\"ע",
+    "רע\"מ-תע\"ל"
+   ],
+   "reaches_ballot": false,
+   "size_max": 4
+  },
+  {
+   "line_id": "L742",
+   "faction_ids": [
+    742
+   ],
+   "knessets": [
+    18
+   ],
+   "names": [
+    "איחוד לאומי"
+   ],
+   "reaches_ballot": false,
+   "size_max": 4
+  },
+  {
+   "line_id": "L749",
+   "faction_ids": [
+    749
+   ],
+   "knessets": [
+    18
+   ],
+   "names": [
+    "התנועה החדשה מרצ"
+   ],
+   "reaches_ballot": false,
+   "size_max": 4
+  },
+  {
+   "line_id": "L922",
+   "faction_ids": [
+    922
+   ],
+   "knessets": [
+    21
+   ],
+   "names": [
+    "רע\"ם - בל\"ד - הרשימה הערבית המאוחדת ברית לאומית דמוקרטית"
+   ],
+   "reaches_ballot": false,
+   "size_max": 4
+  },
+  {
+   "line_id": "L930",
+   "faction_ids": [
+    930
+   ],
+   "knessets": [
+    21
+   ],
+   "names": [
+    "כולנו בראשות משה כחלון"
+   ],
+   "reaches_ballot": false,
+   "size_max": 4
+  },
+  {
+   "line_id": "L1055",
+   "faction_ids": [
+    1055,
+    1064,
+    1066
+   ],
+   "knessets": [
+    20,
+    21,
+    22
+   ],
+   "names": [
+    "דגל התורה"
+   ],
+   "reaches_ballot": false,
+   "size_max": 4
+  },
+  {
+   "line_id": "L1072",
+   "faction_ids": [
+    1072,
+    1082
+   ],
+   "knessets": [
+    23,
+    24
+   ],
+   "names": [
+    "דגל התורה"
+   ],
+   "reaches_ballot": false,
+   "size_max": 4
+  },
+  {
+   "line_id": "L1089",
+   "faction_ids": [
+    1089
+   ],
+   "knessets": [
+    24
+   ],
+   "names": [
+    "הרשימה המשותפת (חד\"ש, בל\"ד)"
+   ],
+   "reaches_ballot": false,
+   "size_max": 4
+  },
+  {
+   "line_id": "L47",
+   "faction_ids": [
+    47
+   ],
+   "knessets": [
+    16
+   ],
+   "names": [
+    "עם אחד בראשות עמיר פרץ"
+   ],
+   "reaches_ballot": false,
+   "size_max": 3
+  },
+  {
+   "line_id": "L50",
+   "faction_ids": [
+    50
+   ],
+   "knessets": [
+    16
+   ],
+   "names": [
+    "חד\"ש - תע\"ל"
+   ],
+   "reaches_ballot": false,
+   "size_max": 3
+  },
+  {
+   "line_id": "L422",
+   "faction_ids": [
+    422,
+    1041
+   ],
+   "knessets": [
+    16,
+    17
+   ],
+   "names": [
+    "דגל התורה"
+   ],
+   "reaches_ballot": false,
+   "size_max": 3
+  },
+  {
+   "line_id": "L702",
+   "faction_ids": [
+    702
+   ],
+   "knessets": [
+    17
+   ],
+   "names": [
+    "צדק לזקן"
+   ],
+   "reaches_ballot": false,
+   "size_max": 3
+  },
+  {
+   "line_id": "L743",
+   "faction_ids": [
+    743
+   ],
+   "knessets": [
+    18
+   ],
+   "names": [
+    "הבית היהודי - מפד\"ל החדשה"
+   ],
+   "reaches_ballot": false,
+   "size_max": 3
+  },
+  {
+   "line_id": "L744",
+   "faction_ids": [
+    744,
+    802
+   ],
+   "knessets": [
+    18,
+    19
+   ],
+   "names": [
+    "אלתג'מוע אלווטני אלדמוקרטי - בל\"ד",
+    "בל\"ד - אלתג'מוע אלווטני אלדמוקרטי"
+   ],
+   "reaches_ballot": false,
+   "size_max": 3
+  },
+  {
+   "line_id": "L809",
+   "faction_ids": [
+    809
+   ],
+   "knessets": [
+    19
+   ],
+   "names": [
+    "קדימה בראשות שאול מופז"
+   ],
+   "reaches_ballot": false,
+   "size_max": 3
+  },
+  {
+   "line_id": "L916",
+   "faction_ids": [
+    916
+   ],
+   "knessets": [
+    20
+   ],
+   "names": [
+    "הימין החדש"
+   ],
+   "reaches_ballot": false,
+   "size_max": 3
+  },
+  {
+   "line_id": "L941",
+   "faction_ids": [
+    941
+   ],
+   "knessets": [
+    22
+   ],
+   "names": [
+    "הימין החדש"
+   ],
+   "reaches_ballot": false,
+   "size_max": 3
+  },
+  {
+   "line_id": "L958",
+   "faction_ids": [
+    958
+   ],
+   "knessets": [
+    23
+   ],
+   "names": [
+    "העבודה הישראלית"
+   ],
+   "reaches_ballot": false,
+   "size_max": 3
+  },
+  {
+   "line_id": "L1053",
+   "faction_ids": [
+    1053
+   ],
+   "knessets": [
+    19
+   ],
+   "names": [
+    "רע\"מ - רשימת האיחוד הערבי"
+   ],
+   "reaches_ballot": false,
+   "size_max": 3
+  },
+  {
+   "line_id": "L1056",
+   "faction_ids": [
+    1056
+   ],
+   "knessets": [
+    20
+   ],
+   "names": [
+    "אגודת ישראל"
+   ],
+   "reaches_ballot": false,
+   "size_max": 3
+  },
+  {
+   "line_id": "L1060",
+   "faction_ids": [
+    1060,
+    1068
+   ],
+   "knessets": [
+    21,
+    22
+   ],
+   "names": [
+    "בל\"ד – ברית לאומית דמוקרטית",
+    "בל\"ד - ברית לאומית דמוקרטית"
+   ],
+   "reaches_ballot": false,
+   "size_max": 3
+  },
+  {
+   "line_id": "L1062",
+   "faction_ids": [
+    1062,
+    1070,
+    1076,
+    1090
+   ],
+   "knessets": [
+    21,
+    22,
+    23,
+    24
+   ],
+   "names": [
+    "תע\"ל",
+    "תע\"ל - התנועה הערבית לשינוי",
+    "תע\"ל – התנועה הערבית להתחדשות",
+    "התנועה הערבית להתחדשות (תע\"ל)"
+   ],
+   "reaches_ballot": false,
+   "size_max": 3
+  },
+  {
+   "line_id": "L1078",
+   "faction_ids": [
+    1078
+   ],
+   "knessets": [
+    16
+   ],
+   "names": [
+    "שינוי"
+   ],
+   "reaches_ballot": false,
+   "size_max": 3
+  },
+  {
+   "line_id": "L1085",
+   "faction_ids": [
+    1085
+   ],
+   "knessets": [
+    24
+   ],
+   "names": [
+    "המחנה הממלכתי"
+   ],
+   "reaches_ballot": false,
+   "size_max": 3
+  },
+  {
+   "line_id": "L52",
+   "faction_ids": [
+    52
+   ],
+   "knessets": [
+    16
+   ],
+   "names": [
+    "הרשימה הערבית המאוחדת"
+   ],
+   "reaches_ballot": false,
+   "size_max": 2
+  },
+  {
+   "line_id": "L53",
+   "faction_ids": [
+    53
+   ],
+   "knessets": [
+    16
+   ],
+   "names": [
+    "ישראל בעלייה בראשות נתן שרנסקי"
+   ],
+   "reaches_ballot": false,
+   "size_max": 2
+  },
+  {
+   "line_id": "L444",
+   "faction_ids": [
+    442,
+    444,
+    1040
+   ],
+   "knessets": [
+    16,
+    16,
+    17
+   ],
+   "names": [
+    "התחברות",
+    "ציונות לאומית דתית מתחדשת",
+    "אח\"י - ארץ, חברה, יהדות"
+   ],
+   "reaches_ballot": false,
+   "size_max": 2
+  },
+  {
+   "line_id": "L586",
+   "faction_ids": [
+    586
+   ],
+   "knessets": [
+    16
+   ],
+   "names": [
+    "הבית הלאומי"
+   ],
+   "reaches_ballot": false,
+   "size_max": 2
+  },
+  {
+   "line_id": "L604",
+   "faction_ids": [
+    604
+   ],
+   "knessets": [
+    16
+   ],
+   "names": [
+    "החזית הדמוקרטית לשלום ולשוויון"
+   ],
+   "reaches_ballot": false,
+   "size_max": 2
+  },
+  {
+   "line_id": "L954",
+   "faction_ids": [
+    954
+   ],
+   "knessets": [
+    23
+   ],
+   "names": [
+    "דרך ארץ"
+   ],
+   "reaches_ballot": false,
+   "size_max": 2
+  },
+  {
+   "line_id": "L1045",
+   "faction_ids": [
+    1045
+   ],
+   "knessets": [
+    17
+   ],
+   "names": [
+    "מולדת האיחוד הלאומי"
+   ],
+   "reaches_ballot": false,
+   "size_max": 2
+  },
+  {
+   "line_id": "L1051",
+   "faction_ids": [
+    1051
+   ],
+   "knessets": [
+    18
+   ],
+   "names": [
+    "עוצמה לישראל"
+   ],
+   "reaches_ballot": false,
+   "size_max": 2
+  },
+  {
+   "line_id": "L1059",
+   "faction_ids": [
+    1059
+   ],
+   "knessets": [
+    21
+   ],
+   "names": [
+    "רע\"ם – רשימת האיחוד הערבי"
+   ],
+   "reaches_ballot": false,
+   "size_max": 2
+  },
+  {
+   "line_id": "L1073",
+   "faction_ids": [
+    1073
+   ],
+   "knessets": [
+    23
+   ],
+   "names": [
+    "האיחוד הלאומי"
+   ],
+   "reaches_ballot": false,
+   "size_max": 2
+  },
+  {
+   "line_id": "L462",
+   "faction_ids": [
+    462
+   ],
+   "knessets": [
+    16
+   ],
+   "names": [
+    "צל\"ש - ציונות ליברליות שוויון"
+   ],
+   "reaches_ballot": false,
+   "size_max": 1
+  },
+  {
+   "line_id": "L482",
+   "faction_ids": [
+    482
+   ],
+   "knessets": [
+    16
+   ],
+   "names": [
+    "נוי"
+   ],
+   "reaches_ballot": false,
+   "size_max": 1
+  },
+  {
+   "line_id": "L582",
+   "faction_ids": [
+    582
+   ],
+   "knessets": [
+    16
+   ],
+   "names": [
+    "חה\"כ מיכאל נודלמן"
+   ],
+   "reaches_ballot": false,
+   "size_max": 1
+  },
+  {
+   "line_id": "L588",
+   "faction_ids": [
+    588
+   ],
+   "knessets": [
+    16
+   ],
+   "names": [
+    "העולים"
+   ],
+   "reaches_ballot": false,
+   "size_max": 1
+  },
+  {
+   "line_id": "L602",
+   "faction_ids": [
+    602
+   ],
+   "knessets": [
+    16
+   ],
+   "names": [
+    "תנועה ערבית להתחדשות"
+   ],
+   "reaches_ballot": false,
+   "size_max": 1
+  },
+  {
+   "line_id": "L722",
+   "faction_ids": [
+    722
+   ],
+   "knessets": [
+    17
+   ],
+   "names": [
+    "הדרך הטובה"
+   ],
+   "reaches_ballot": false,
+   "size_max": 1
+  },
+  {
+   "line_id": "L913",
+   "faction_ids": [
+    913
+   ],
+   "knessets": [
+    20
+   ],
+   "names": [
+    "חה\"כ אורלי לוי-אבקסיס"
+   ],
+   "reaches_ballot": false,
+   "size_max": 1
+  },
+  {
+   "line_id": "L952",
+   "faction_ids": [
+    952
+   ],
+   "knessets": [
+    23
+   ],
+   "names": [
+    "חה\"כ ע'דיר כמאל מריח"
+   ],
+   "reaches_ballot": false,
+   "size_max": 1
+  },
+  {
+   "line_id": "L953",
+   "faction_ids": [
+    953
+   ],
+   "knessets": [
+    23
+   ],
+   "names": [
+    "חה\"כ פנינה תמנו"
+   ],
+   "reaches_ballot": false,
+   "size_max": 1
+  },
+  {
+   "line_id": "L957",
+   "faction_ids": [
+    957
+   ],
+   "knessets": [
+    23
+   ],
+   "names": [
+    "גשר"
+   ],
+   "reaches_ballot": false,
+   "size_max": 1
+  },
+  {
+   "line_id": "L960",
+   "faction_ids": [
+    960
+   ],
+   "knessets": [
+    23
+   ],
+   "names": [
+    "הבית היהודי"
+   ],
+   "reaches_ballot": false,
+   "size_max": 1
+  },
+  {
+   "line_id": "L974",
+   "faction_ids": [
+    974
+   ],
+   "knessets": [
+    24
+   ],
+   "names": [
+    "עתיד אחד"
+   ],
+   "reaches_ballot": false,
+   "size_max": 1
+  },
+  {
+   "line_id": "L1046",
+   "faction_ids": [
+    1046
+   ],
+   "knessets": [
+    17
+   ],
+   "names": [
+    "מימד"
+   ],
+   "reaches_ballot": false,
+   "size_max": 1
+  },
+  {
+   "line_id": "L1049",
+   "faction_ids": [
+    1049
+   ],
+   "knessets": [
+    18
+   ],
+   "names": [
+    "חה\"כ חיים אמסלם"
+   ],
+   "reaches_ballot": false,
+   "size_max": 1
+  },
+  {
+   "line_id": "L1050",
+   "faction_ids": [
+    1050
+   ],
+   "knessets": [
+    18
+   ],
+   "names": [
+    "מד\"ע - מפלגה דמוקרטית ערבית"
+   ],
+   "reaches_ballot": false,
+   "size_max": 1
+  },
+  {
+   "line_id": "L1054",
+   "faction_ids": [
+    1054,
+    1057
+   ],
+   "knessets": [
+    19,
+    20
+   ],
+   "names": [
+    "תע\"ל - התנועה הערבית להתחדשות",
+    "תע\"ל – בראשות אחמד טיבי"
+   ],
+   "reaches_ballot": false,
+   "size_max": 1
+  },
+  {
+   "line_id": "L1058",
+   "faction_ids": [
+    1058
+   ],
+   "knessets": [
+    21
+   ],
+   "names": [
+    "אח\"י - ארץ, חברה, יהדות"
+   ],
+   "reaches_ballot": false,
+   "size_max": 1
+  },
+  {
+   "line_id": "L1080",
+   "faction_ids": [
+    1080
+   ],
+   "knessets": [
+    24
+   ],
+   "names": [
+    "חה\"כ עמיחי שיקלי"
+   ],
+   "reaches_ballot": false,
+   "size_max": 1
+  },
+  {
+   "line_id": "L1081",
+   "faction_ids": [
+    1081
+   ],
+   "knessets": [
+    24
+   ],
+   "names": [
+    "עוצמה יהודית"
+   ],
+   "reaches_ballot": false,
+   "size_max": 1
+  },
+  {
+   "line_id": "L1086",
+   "faction_ids": [
+    1086
+   ],
+   "knessets": [
+    24
+   ],
+   "names": [
+    "ביחד"
+   ],
+   "reaches_ballot": false,
+   "size_max": 1
+  },
+  {
+   "line_id": "L1087",
+   "faction_ids": [
+    1087
+   ],
+   "knessets": [
+    24
+   ],
+   "names": [
+    "דרך ארץ"
+   ],
+   "reaches_ballot": false,
+   "size_max": 1
+  },
+  {
+   "line_id": "L1092",
+   "faction_ids": [
+    1092
+   ],
+   "knessets": [
+    24
+   ],
+   "names": [
+    "חופש כלכלי"
+   ],
+   "reaches_ballot": false,
+   "size_max": 1
+  }
+ ],
+ "links": [
+  {
+   "a": 42,
+   "b": 624,
+   "shared": 13,
+   "of_a": 0.65,
+   "of_b": 0.62
+  },
+  {
+   "a": 44,
+   "b": 628,
+   "shared": 9,
+   "of_a": 0.75,
+   "of_b": 0.69
+  },
+  {
+   "a": 46,
+   "b": 640,
+   "shared": 4,
+   "of_a": 0.67,
+   "of_b": 0.67
+  },
+  {
+   "a": 48,
+   "b": 632,
+   "shared": 4,
+   "of_a": 0.8,
+   "of_b": 0.57
+  },
+  {
+   "a": 51,
+   "b": 626,
+   "shared": 3,
+   "of_a": 1.0,
+   "of_b": 0.75
+  },
+  {
+   "a": 62,
+   "b": 640,
+   "shared": 4,
+   "of_a": 0.67,
+   "of_b": 0.67
+  },
+  {
+   "a": 422,
+   "b": 1041,
+   "shared": 2,
+   "of_a": 1.0,
+   "of_b": 0.67
+  },
+  {
+   "a": 424,
+   "b": 1039,
+   "shared": 3,
+   "of_a": 0.75,
+   "of_b": 0.75
+  },
+  {
+   "a": 442,
+   "b": 1040,
+   "shared": 2,
+   "of_a": 1.0,
+   "of_b": 1.0
+  },
+  {
+   "a": 444,
+   "b": 1040,
+   "shared": 2,
+   "of_a": 1.0,
+   "of_b": 1.0
+  },
+  {
+   "a": 522,
+   "b": 640,
+   "shared": 4,
+   "of_a": 0.67,
+   "of_b": 0.67
+  },
+  {
+   "a": 622,
+   "b": 751,
+   "shared": 21,
+   "of_a": 0.64,
+   "of_b": 0.6
+  },
+  {
+   "a": 624,
+   "b": 1047,
+   "shared": 12,
+   "of_a": 0.57,
+   "of_b": 0.8
+  },
+  {
+   "a": 628,
+   "b": 753,
+   "shared": 11,
+   "of_a": 0.85,
+   "of_b": 1.0
+  },
+  {
+   "a": 630,
+   "b": 745,
+   "shared": 3,
+   "of_a": 1.0,
+   "of_b": 0.75
+  },
+  {
+   "a": 632,
+   "b": 746,
+   "shared": 4,
+   "of_a": 0.57,
+   "of_b": 0.67
+  },
+  {
+   "a": 636,
+   "b": 752,
+   "shared": 3,
+   "of_a": 0.75,
+   "of_b": 0.75
+  },
+  {
+   "a": 638,
+   "b": 747,
+   "shared": 8,
+   "of_a": 0.67,
+   "of_b": 0.53
+  },
+  {
+   "a": 1044,
+   "b": 1047,
+   "shared": 12,
+   "of_a": 0.67,
+   "of_b": 0.8
+  },
+  {
+   "a": 744,
+   "b": 802,
+   "shared": 2,
+   "of_a": 0.67,
+   "of_b": 0.67
+  },
+  {
+   "a": 745,
+   "b": 806,
+   "shared": 4,
+   "of_a": 1.0,
+   "of_b": 1.0
+  },
+  {
+   "a": 746,
+   "b": 807,
+   "shared": 6,
+   "of_a": 1.0,
+   "of_b": 0.86
+  },
+  {
+   "a": 747,
+   "b": 843,
+   "shared": 10,
+   "of_a": 0.67,
+   "of_b": 0.77
+  },
+  {
+   "a": 748,
+   "b": 804,
+   "shared": 19,
+   "of_a": 0.68,
+   "of_b": 0.59
+  },
+  {
+   "a": 748,
+   "b": 842,
+   "shared": 18,
+   "of_a": 0.64,
+   "of_b": 0.9
+  },
+  {
+   "a": 752,
+   "b": 810,
+   "shared": 3,
+   "of_a": 0.75,
+   "of_b": 0.75
+  },
+  {
+   "a": 752,
+   "b": 1052,
+   "shared": 3,
+   "of_a": 0.75,
+   "of_b": 0.75
+  },
+  {
+   "a": 753,
+   "b": 811,
+   "shared": 10,
+   "of_a": 0.91,
+   "of_b": 0.77
+  },
+  {
+   "a": 803,
+   "b": 907,
+   "shared": 8,
+   "of_a": 0.62,
+   "of_b": 0.8
+  },
+  {
+   "a": 805,
+   "b": 914,
+   "shared": 11,
+   "of_a": 0.69,
+   "of_b": 0.61
+  },
+  {
+   "a": 807,
+   "b": 908,
+   "shared": 7,
+   "of_a": 1.0,
+   "of_b": 1.0
+  },
+  {
+   "a": 808,
+   "b": 909,
+   "shared": 5,
+   "of_a": 0.83,
+   "of_b": 0.83
+  },
+  {
+   "a": 811,
+   "b": 910,
+   "shared": 7,
+   "of_a": 0.54,
+   "of_b": 0.64
+  },
+  {
+   "a": 812,
+   "b": 904,
+   "shared": 11,
+   "of_a": 0.58,
+   "of_b": 0.85
+  },
+  {
+   "a": 1054,
+   "b": 1057,
+   "shared": 1,
+   "of_a": 1.0,
+   "of_b": 1.0
+  },
+  {
+   "a": 882,
+   "b": 931,
+   "shared": 21,
+   "of_a": 0.62,
+   "of_b": 0.6
+  },
+  {
+   "a": 908,
+   "b": 928,
+   "shared": 6,
+   "of_a": 0.86,
+   "of_b": 0.75
+  },
+  {
+   "a": 909,
+   "b": 926,
+   "shared": 4,
+   "of_a": 0.67,
+   "of_b": 1.0
+  },
+  {
+   "a": 910,
+   "b": 918,
+   "shared": 7,
+   "of_a": 0.64,
+   "of_b": 0.88
+  },
+  {
+   "a": 1055,
+   "b": 1064,
+   "shared": 3,
+   "of_a": 1.0,
+   "of_b": 0.75
+  },
+  {
+   "a": 917,
+   "b": 938,
+   "shared": 34,
+   "of_a": 0.97,
+   "of_b": 1.0
+  },
+  {
+   "a": 918,
+   "b": 932,
+   "shared": 8,
+   "of_a": 1.0,
+   "of_b": 0.89
+  },
+  {
+   "a": 923,
+   "b": 935,
+   "shared": 4,
+   "of_a": 0.67,
+   "of_b": 1.0
+  },
+  {
+   "a": 923,
+   "b": 1077,
+   "shared": 4,
+   "of_a": 0.67,
+   "of_b": 0.57
+  },
+  {
+   "a": 924,
+   "b": 1067,
+   "shared": 4,
+   "of_a": 0.67,
+   "of_b": 0.8
+  },
+  {
+   "a": 928,
+   "b": 936,
+   "shared": 7,
+   "of_a": 0.88,
+   "of_b": 1.0
+  },
+  {
+   "a": 929,
+   "b": 937,
+   "shared": 5,
+   "of_a": 1.0,
+   "of_b": 0.62
+  },
+  {
+   "a": 931,
+   "b": 933,
+   "shared": 29,
+   "of_a": 0.83,
+   "of_b": 0.91
+  },
+  {
+   "a": 1060,
+   "b": 1068,
+   "shared": 2,
+   "of_a": 1.0,
+   "of_b": 0.67
+  },
+  {
+   "a": 1061,
+   "b": 1067,
+   "shared": 4,
+   "of_a": 1.0,
+   "of_b": 0.8
+  },
+  {
+   "a": 1062,
+   "b": 1070,
+   "shared": 2,
+   "of_a": 1.0,
+   "of_b": 1.0
+  },
+  {
+   "a": 1063,
+   "b": 936,
+   "shared": 4,
+   "of_a": 1.0,
+   "of_b": 0.57
+  },
+  {
+   "a": 1063,
+   "b": 1065,
+   "shared": 4,
+   "of_a": 1.0,
+   "of_b": 1.0
+  },
+  {
+   "a": 1064,
+   "b": 1066,
+   "shared": 3,
+   "of_a": 0.75,
+   "of_b": 1.0
+  },
+  {
+   "a": 932,
+   "b": 947,
+   "shared": 9,
+   "of_a": 1.0,
+   "of_b": 0.82
+  },
+  {
+   "a": 933,
+   "b": 942,
+   "shared": 31,
+   "of_a": 0.97,
+   "of_b": 0.72
+  },
+  {
+   "a": 934,
+   "b": 949,
+   "shared": 4,
+   "of_a": 0.67,
+   "of_b": 0.57
+  },
+  {
+   "a": 936,
+   "b": 944,
+   "shared": 7,
+   "of_a": 1.0,
+   "of_b": 0.7
+  },
+  {
+   "a": 937,
+   "b": 945,
+   "shared": 7,
+   "of_a": 0.88,
+   "of_b": 1.0
+  },
+  {
+   "a": 938,
+   "b": 1079,
+   "shared": 31,
+   "of_a": 0.91,
+   "of_b": 0.94
+  },
+  {
+   "a": 939,
+   "b": 959,
+   "shared": 4,
+   "of_a": 0.8,
+   "of_b": 1.0
+  },
+  {
+   "a": 940,
+   "b": 943,
+   "shared": 13,
+   "of_a": 1.0,
+   "of_b": 0.87
+  },
+  {
+   "a": 940,
+   "b": 1074,
+   "shared": 8,
+   "of_a": 0.62,
+   "of_b": 1.0
+  },
+  {
+   "a": 1065,
+   "b": 1071,
+   "shared": 3,
+   "of_a": 0.75,
+   "of_b": 1.0
+  },
+  {
+   "a": 1067,
+   "b": 1074,
+   "shared": 5,
+   "of_a": 1.0,
+   "of_b": 0.62
+  },
+  {
+   "a": 1069,
+   "b": 1075,
+   "shared": 3,
+   "of_a": 1.0,
+   "of_b": 0.75
+  },
+  {
+   "a": 1070,
+   "b": 1076,
+   "shared": 2,
+   "of_a": 1.0,
+   "of_b": 0.67
+  },
+  {
+   "a": 1077,
+   "b": 948,
+   "shared": 6,
+   "of_a": 0.86,
+   "of_b": 1.0
+  },
+  {
+   "a": 942,
+   "b": 962,
+   "shared": 28,
+   "of_a": 0.65,
+   "of_b": 0.9
+  },
+  {
+   "a": 944,
+   "b": 965,
+   "shared": 9,
+   "of_a": 0.9,
+   "of_b": 1.0
+  },
+  {
+   "a": 945,
+   "b": 968,
+   "shared": 7,
+   "of_a": 1.0,
+   "of_b": 0.64
+  },
+  {
+   "a": 947,
+   "b": 971,
+   "shared": 9,
+   "of_a": 0.82,
+   "of_b": 0.9
+  },
+  {
+   "a": 955,
+   "b": 967,
+   "shared": 14,
+   "of_a": 0.7,
+   "of_b": 0.64
+  },
+  {
+   "a": 1071,
+   "b": 1083,
+   "shared": 2,
+   "of_a": 0.67,
+   "of_b": 0.67
+  },
+  {
+   "a": 1072,
+   "b": 1082,
+   "shared": 3,
+   "of_a": 0.75,
+   "of_b": 0.75
+  },
+  {
+   "a": 1075,
+   "b": 973,
+   "shared": 4,
+   "of_a": 1.0,
+   "of_b": 0.8
+  },
+  {
+   "a": 1076,
+   "b": 1090,
+   "shared": 2,
+   "of_a": 0.67,
+   "of_b": 1.0
+  },
+  {
+   "a": 961,
+   "b": 1105,
+   "shared": 5,
+   "of_a": 0.71,
+   "of_b": 0.62
+  },
+  {
+   "a": 962,
+   "b": 1096,
+   "shared": 23,
+   "of_a": 0.74,
+   "of_b": 0.53
+  },
+  {
+   "a": 964,
+   "b": 1103,
+   "shared": 4,
+   "of_a": 0.67,
+   "of_b": 0.67
+  },
+  {
+   "a": 965,
+   "b": 1101,
+   "shared": 8,
+   "of_a": 0.89,
+   "of_b": 0.8
+  },
+  {
+   "a": 967,
+   "b": 1102,
+   "shared": 20,
+   "of_a": 0.91,
+   "of_b": 0.69
+  },
+  {
+   "a": 969,
+   "b": 1098,
+   "shared": 8,
+   "of_a": 0.73,
+   "of_b": 0.57
+  },
+  {
+   "a": 969,
+   "b": 1110,
+   "shared": 8,
+   "of_a": 0.73,
+   "of_b": 1.0
+  },
+  {
+   "a": 971,
+   "b": 1095,
+   "shared": 10,
+   "of_a": 1.0,
+   "of_b": 0.71
+  },
+  {
+   "a": 973,
+   "b": 1099,
+   "shared": 3,
+   "of_a": 0.6,
+   "of_b": 0.6
+  },
+  {
+   "a": 1084,
+   "b": 1107,
+   "shared": 1,
+   "of_a": 1.0,
+   "of_b": 1.0
+  }
+ ]
+}

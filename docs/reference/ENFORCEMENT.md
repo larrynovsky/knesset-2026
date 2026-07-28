@@ -22,7 +22,7 @@
 | §10 | Смысл «за» не предполагается, а читается. | MANUAL | — |
 | §11 | Единый срез. | MANUAL | probe_phase0.py |
 | §12 | Ивритский оригинал хранится рядом с переводом. | MANUAL | post-receive.template, pre-commit |
-| §13 | В публикации нет суммарного балла, рейтинга и оценочных ярлыков. | MANUAL | — |
+| §13 | В публикации нет суммарного балла, рейтинга и оценочных ярлыков. | MANUAL | build_lineage_rule.py |
 | §14 | Всё опубликованное воспроизводимо из репозитория. | MANUAL | — |
 | §15 | Исправление публикуется, а не заменяет тихо. | MANUAL | check_artifacts.py |
 | §16 | Доступно, но не продвигается. Массовость — триггер, а не разрешённое с | MANUAL | — |
@@ -35,4 +35,4 @@
 | §23 | Ожидаемый объём получается ДРУГИМ путём и сверяется до использования д | LIVE | check_artifacts.py, check_knesset_120.py, guarded_fetch.py, probe_faction_join.py, probe_odata_shapes.py, probe_phase0.py, probe_phase0_odata.py, verify_names_wikidata.py |
 | §24 | У каждого правила есть артефакт, отсутствие которого само является нар | LIVE | check_artifacts.py, post-receive.template, pre-commit |
 
-Всего правил: 24 · заявлено LIVE: 3 · упомянуто в коде: 14
+Всего правил: 24 · заявлено LIVE: 3 · упомянуто в коде: 15

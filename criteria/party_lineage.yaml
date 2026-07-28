@@ -1,0 +1,649 @@
+# party_lineage — преемственность партий. v1.0, 2026-07-28.
+#
+# ПРАВИЛО (применено механически, вопросов человеку нет):
+#   Фракции разных каденций принадлежат одной линии, если больше
+#   половины состава КАЖДОЙ из них — одни и те же люди.
+#
+# Принято заранее: расколы не сливаются с материнской партией; раскол
+# пополам даёт две линии; смена названия при тех же людях — одна линия;
+# смена всех людей при том же названии — две линии (случай Аводы к21/к23,
+# юридически неверно, по объявленному правилу честно).
+#
+# Глубина: с 16-го Кнессета (17.02.2003) — предел задан данными,
+# поимённых голосований раньше нет. Бюджетный канал режется той же датой.
+#
+# Файл СГЕНЕРИРОВАН scripts/build_lineage_rule.py. Правки — через правило.
+version: "1.0"
+rule: "больше половины состава каждой фракции — одни и те же люди"
+majority: 0.5
+first_knesset: 16
+factions: 212
+lines: 125
+lines_reaching_ballot: 15
+
+lines:
+  - line_id: L882
+    reaches_ballot_2026: true
+    knessets: [20, 21, 22, 23, 24, 25]
+    faction_ids: [882, 931, 933, 942, 962, 1096]
+    names: ["הליכוד", "הליכוד בהנהגת בנימין נתניהו לראשות הממשלה"]
+  - line_id: L955
+    reaches_ballot_2026: true
+    knessets: [23, 24, 25]
+    faction_ids: [955, 967, 1102]
+    names: ["יש עתיד - תל\"ם", "יש עתיד"]
+  - line_id: L44
+    reaches_ballot_2026: true
+    knessets: [16, 17, 18, 19, 20, 21, 22, 23, 24, 25]
+    faction_ids: [44, 628, 753, 811, 910, 918, 932, 947, 971, 1095]
+    names: ["התאחדות הספרדים העולמית שומרי תורה", "ש\"ס-התאחדות הספרדים העולמית שומרי תורה", "שס התאחדות הספרדים העולמית שומרי תורה", "ש\"ס", "התאחדות הספרדים שומרי תורה תנועתו של מרן הרב עובדיה יוסף זצ\"ל"]
+  - line_id: L969
+    reaches_ballot_2026: true
+    knessets: [24, 25, 25]
+    faction_ids: [969, 1098, 1110]
+    names: ["כחול לבן", "המחנה הממלכתי", "כחול לבן - המחנה הממלכתי"]
+  - line_id: L1097
+    reaches_ballot_2026: true
+    knessets: [25]
+    faction_ids: [1097]
+    names: ["הציונות הדתית"]
+  - line_id: L1063
+    reaches_ballot_2026: true
+    knessets: [16, 17, 18, 19, 20, 21, 21, 22, 22, 23, 23, 24, 24, 25]
+    faction_ids: [48, 632, 746, 807, 908, 928, 1063, 936, 1065, 944, 1071, 965, 1083, 1101]
+    names: ["יהדות התורה והשבת אגודת ישראל - דגל התורה", "יהדות התורה והשבת אגודת ישראל-דגל התורה", "יהדות התורה והשבת, אגודת ישראל - דגל התורה", "יהדות התורה", "אגודת ישראל", "יהדות התורה והשבת - אגודת ישראל דגל התורה"]
+  - line_id: L961
+    reaches_ballot_2026: true
+    knessets: [24, 25]
+    faction_ids: [961, 1105]
+    names: ["הציונות הדתית", "הציונות הדתית בראשות בצלאל סמוטריץ'"]
+  - line_id: L1106
+    reaches_ballot_2026: true
+    knessets: [25]
+    faction_ids: [1106]
+    names: ["עוצמה יהודית בראשות איתמר בן גביר"]
+  - line_id: L964
+    reaches_ballot_2026: true
+    knessets: [24, 25]
+    faction_ids: [964, 1103]
+    names: ["הרשימה המשותפת (חד\"ש, תע\"ל, בל\"ד)", "חד\"ש-תע\"ל"]
+  - line_id: L1104
+    reaches_ballot_2026: true
+    knessets: [25]
+    faction_ids: [1104]
+    names: ["ישראל ביתנו"]
+  - line_id: L1108
+    reaches_ballot_2026: true
+    knessets: [25]
+    faction_ids: [1108]
+    names: ["הימין הממלכתי"]
+  - line_id: L1069
+    reaches_ballot_2026: true
+    knessets: [22, 23, 24, 25]
+    faction_ids: [1069, 1075, 973, 1099]
+    names: ["רע\"מ - רשימת האיחוד הערבי", "רע\"מ – רשימת האיחוד הערבי", "הרשימה הערבית המאוחדת", "רע\"ם"]
+  - line_id: L1100
+    reaches_ballot_2026: true
+    knessets: [25]
+    faction_ids: [1100]
+    names: ["העבודה"]
+  - line_id: L1084
+    reaches_ballot_2026: true
+    knessets: [24, 25]
+    faction_ids: [1084, 1107]
+    names: ["נעם - בראשות חה\"כ אבי מעוז", "נעם - בראשות אבי מעוז"]
+  - line_id: L1109
+    reaches_ballot_2026: true
+    knessets: [25]
+    faction_ids: [1109]
+    names: ["חה\"כ עידן רול"]
+  - line_id: L24
+    reaches_ballot_2026: false
+    knessets: [16]
+    faction_ids: [24]
+    names: ["הליכוד"]
+  - line_id: L622
+    reaches_ballot_2026: false
+    knessets: [17, 18]
+    faction_ids: [622, 751]
+    names: ["קדימה-עם אהוד אולמרט לראשות הממשלה", "קדימה - עם ציפי לבני לראשות הממשלה"]
+  - line_id: L917
+    reaches_ballot_2026: false
+    knessets: [21, 22, 23]
+    faction_ids: [917, 938, 1079]
+    names: ["כחול לבן", "כחול לבן בראשות בנימין גנץ"]
+  - line_id: L748
+    reaches_ballot_2026: false
+    knessets: [18, 19, 19]
+    faction_ids: [748, 804, 842]
+    names: ["הליכוד - אח\"י בהנהגת בנימין נתניהו לראשות הממשלה", "הליכוד - ישראל ביתנו", "הליכוד - תנועה לאומית ליברלית"]
+  - line_id: L502
+    reaches_ballot_2026: false
+    knessets: [16]
+    faction_ids: [502]
+    names: ["העבודה - מימד - עם אחד"]
+  - line_id: L902
+    reaches_ballot_2026: false
+    knessets: [20]
+    faction_ids: [902]
+    names: ["המחנה הציוני"]
+  - line_id: L946
+    reaches_ballot_2026: false
+    knessets: [23]
+    faction_ids: [946]
+    names: ["כחול לבן"]
+  - line_id: L1044
+    reaches_ballot_2026: false
+    knessets: [16, 17, 17, 18]
+    faction_ids: [42, 624, 1044, 1047]
+    names: ["העבודה-מימד בראשות מצנע", "העבודה-מימד בראשות עמיר פרץ", "העבודה בראשות אהוד ברק"]
+  - line_id: L812
+    reaches_ballot_2026: false
+    knessets: [19, 20]
+    faction_ids: [812, 904]
+    names: ["יש עתיד בראשות יאיר לפיד", "יש עתיד"]
+  - line_id: L903
+    reaches_ballot_2026: false
+    knessets: [20]
+    faction_ids: [903]
+    names: ["הרשימה המשותפת (חד\"ש, רע\"ם, בל\"ד ותע\"ל)"]
+  - line_id: L805
+    reaches_ballot_2026: false
+    knessets: [19, 20]
+    faction_ids: [805, 914]
+    names: ["העבודה בראשות שלי יחימוביץ'", "העבודה הישראלית"]
+  - line_id: L43
+    reaches_ballot_2026: false
+    knessets: [16]
+    faction_ids: [43]
+    names: ["שינוי התנועה החילונית"]
+  - line_id: L542
+    reaches_ballot_2026: false
+    knessets: [16]
+    faction_ids: [542]
+    names: ["אחריות לאומית"]
+  - line_id: L638
+    reaches_ballot_2026: false
+    knessets: [17, 18, 19]
+    faction_ids: [638, 747, 843]
+    names: ["ישראל ביתנו בראשות אביגדור ליברמן", "ישראל ביתנו"]
+  - line_id: L1061
+    reaches_ballot_2026: false
+    knessets: [21, 21, 22, 22, 23, 23]
+    faction_ids: [924, 1061, 940, 1067, 943, 1074]
+    names: ["חד\"ש תע\"ל בראשות איימן עודה ואחמד טיבי", "חד\"ש", "הרשימה המשותפת חד\"ש, רע\"ם, תע\"ל, בל\"ד", "חד\"ש - חזית דמוקרטית לשלום ושוויון", "הרשימה המשותפת חד\"ש, רע\"מ, תע\"ל, בל\"ד", "הרשימה המשותפת"]
+  - line_id: L562
+    reaches_ballot_2026: false
+    knessets: [16]
+    faction_ids: [562]
+    names: ["קדימה"]
+  - line_id: L690
+    reaches_ballot_2026: false
+    knessets: [17]
+    faction_ids: [690]
+    names: ["הליכוד עם בנימין נתניהו לראשות הממשלה"]
+  - line_id: L950
+    reaches_ballot_2026: false
+    knessets: [23]
+    faction_ids: [950]
+    names: ["יש עתיד"]
+  - line_id: L1038
+    reaches_ballot_2026: false
+    knessets: [16]
+    faction_ids: [1038]
+    names: ["שינוי מפלגת החילונים ומעמד הביניים"]
+  - line_id: L803
+    reaches_ballot_2026: false
+    knessets: [19, 20]
+    faction_ids: [803, 907]
+    names: ["הבית היהודי מייסודם של האיחוד הלאומי והמפד\"ל החדשה", "הבית היהודי בראשות נפתלי בנט"]
+  - line_id: L906
+    reaches_ballot_2026: false
+    knessets: [20]
+    faction_ids: [906]
+    names: ["כולנו בראשות משה כחלון"]
+  - line_id: L564
+    reaches_ballot_2026: false
+    knessets: [16]
+    faction_ids: [564]
+    names: ["הסיעה החילונית"]
+  - line_id: L929
+    reaches_ballot_2026: false
+    knessets: [21, 22, 23, 24]
+    faction_ids: [929, 937, 945, 968]
+    names: ["ישראל ביתנו בראשות אביגדור ליברמן", "ישראל ביתנו"]
+  - line_id: L972
+    reaches_ballot_2026: false
+    knessets: [24]
+    faction_ids: [972]
+    names: ["תקווה חדשה"]
+  - line_id: L45
+    reaches_ballot_2026: false
+    knessets: [16]
+    faction_ids: [45]
+    names: ["האיחוד הלאומי - ישראל ביתנו - מולדת - תקומה"]
+  - line_id: L642
+    reaches_ballot_2026: false
+    knessets: [17]
+    faction_ids: [642]
+    names: ["איחוד לאומי-מפד\"ל רשימה יהודית לאומית מאוחדת"]
+  - line_id: L750
+    reaches_ballot_2026: false
+    knessets: [18]
+    faction_ids: [750]
+    names: ["העבודה"]
+  - line_id: L966
+    reaches_ballot_2026: false
+    knessets: [24]
+    faction_ids: [966]
+    names: ["ימינה בראשות נפתלי בנט"]
+  - line_id: L970
+    reaches_ballot_2026: false
+    knessets: [24]
+    faction_ids: [970]
+    names: ["מרצ"]
+  - line_id: L1043
+    reaches_ballot_2026: false
+    knessets: [17]
+    faction_ids: [1043]
+    names: ["הבית היהודי מיסודם של המפד\"ל והאיחוד הלאומי"]
+  - line_id: L905
+    reaches_ballot_2026: false
+    knessets: [20]
+    faction_ids: [905]
+    names: ["ישראל ביתנו"]
+  - line_id: L963
+    reaches_ballot_2026: false
+    knessets: [24]
+    faction_ids: [963]
+    names: ["העבודה"]
+  - line_id: L634
+    reaches_ballot_2026: false
+    knessets: [17]
+    faction_ids: [634]
+    names: ["גיל-גימלאי ישראל לכנסת"]
+  - line_id: L923
+    reaches_ballot_2026: false
+    knessets: [21, 22, 22, 23]
+    faction_ids: [923, 935, 1077, 948]
+    names: ["הבית היהודי - האיחוד הלאומי", "ימינה בראשות איילת שקד הבית היהודי – האיחוד הלאומי – הימין החדש", "ימינה"]
+  - line_id: L925
+    reaches_ballot_2026: false
+    knessets: [21]
+    faction_ids: [925]
+    names: ["העבודה"]
+  - line_id: L934
+    reaches_ballot_2026: false
+    knessets: [22, 23]
+    faction_ids: [934, 949]
+    names: ["העבודה - גשר", "העבודה - גשר - מרצ"]
+  - line_id: L1048
+    reaches_ballot_2026: false
+    knessets: [18]
+    faction_ids: [1048]
+    names: ["התנועה בראשות ציפי לבני"]
+  - line_id: L522
+    reaches_ballot_2026: false
+    knessets: [16, 16, 16, 17]
+    faction_ids: [46, 62, 522, 640]
+    names: ["מרצ - הבחירה הדמוקרטית - שחר", "יחד והבחירה הדמוקרטית", "מרצ - יחד והבחירה הדמוקרטית", "מרצ-ישראל חברתית דמוקרטית"]
+  - line_id: L49
+    reaches_ballot_2026: false
+    knessets: [16]
+    faction_ids: [49]
+    names: ["מפלגה דתית לאומית"]
+  - line_id: L762
+    reaches_ballot_2026: false
+    knessets: [18]
+    faction_ids: [762]
+    names: ["העצמאות"]
+  - line_id: L808
+    reaches_ballot_2026: false
+    knessets: [19, 20, 21]
+    faction_ids: [808, 909, 926]
+    names: ["מרצ - השמאל של ישראל", "מרצ"]
+  - line_id: L813
+    reaches_ballot_2026: false
+    knessets: [19]
+    faction_ids: [813]
+    names: ["התנועה בראשות ציפי לבני"]
+  - line_id: L915
+    reaches_ballot_2026: false
+    knessets: [20]
+    faction_ids: [915]
+    names: ["התנועה"]
+  - line_id: L956
+    reaches_ballot_2026: false
+    knessets: [23]
+    faction_ids: [956]
+    names: ["העבודה - מרצ"]
+  - line_id: L939
+    reaches_ballot_2026: false
+    knessets: [22, 23]
+    faction_ids: [939, 959]
+    names: ["המחנה הדמוקרטי", "מרצ"]
+  - line_id: L951
+    reaches_ballot_2026: false
+    knessets: [23]
+    faction_ids: [951]
+    names: ["תל\"ם - תנועה לאומית ממלכתית"]
+  - line_id: L1042
+    reaches_ballot_2026: false
+    knessets: [17]
+    faction_ids: [1042]
+    names: ["הבית היהודי מיסודם של המפד\"ל"]
+  - line_id: L1088
+    reaches_ballot_2026: false
+    knessets: [24]
+    faction_ids: [1088]
+    names: ["תקווה חדשה - אחדות לישראל"]
+  - line_id: L1091
+    reaches_ballot_2026: false
+    knessets: [24]
+    faction_ids: [1091]
+    names: ["ימינה"]
+  - line_id: L51
+    reaches_ballot_2026: false
+    knessets: [16, 17]
+    faction_ids: [51, 626]
+    names: ["בל\"ד (ברית לאומית דמוקרטית)", "אלתג'מוע אלווטני אל דימוקרטי-בל\"ד"]
+  - line_id: L424
+    reaches_ballot_2026: false
+    knessets: [16, 17]
+    faction_ids: [424, 1039]
+    names: ["אגודת ישראל"]
+  - line_id: L584
+    reaches_ballot_2026: false
+    knessets: [16]
+    faction_ids: [584]
+    names: ["האיחוד הלאומי - מולדת - תקומה"]
+  - line_id: L590
+    reaches_ballot_2026: false
+    knessets: [16]
+    faction_ids: [590]
+    names: ["ישראל ביתנו"]
+  - line_id: L630
+    reaches_ballot_2026: false
+    knessets: [17, 18, 19]
+    faction_ids: [630, 745, 806]
+    names: ["חזית דמוקרטית לשלום ושוויון", "חד\"ש - החזית הדמוקרטית לשלום ושוויון"]
+  - line_id: L636
+    reaches_ballot_2026: false
+    knessets: [17, 18, 19, 19]
+    faction_ids: [636, 752, 810, 1052]
+    names: ["הרשימה הערבית המאוחדת התנועה הערבית להתחדשות", "הרשימה הערבית המאוחדת - התנועה הערבית להתחדשות", "רע\"מ-תע\"ל-מד\"ע", "רע\"מ-תע\"ל"]
+  - line_id: L742
+    reaches_ballot_2026: false
+    knessets: [18]
+    faction_ids: [742]
+    names: ["איחוד לאומי"]
+  - line_id: L749
+    reaches_ballot_2026: false
+    knessets: [18]
+    faction_ids: [749]
+    names: ["התנועה החדשה מרצ"]
+  - line_id: L922
+    reaches_ballot_2026: false
+    knessets: [21]
+    faction_ids: [922]
+    names: ["רע\"ם - בל\"ד - הרשימה הערבית המאוחדת ברית לאומית דמוקרטית"]
+  - line_id: L930
+    reaches_ballot_2026: false
+    knessets: [21]
+    faction_ids: [930]
+    names: ["כולנו בראשות משה כחלון"]
+  - line_id: L1055
+    reaches_ballot_2026: false
+    knessets: [20, 21, 22]
+    faction_ids: [1055, 1064, 1066]
+    names: ["דגל התורה"]
+  - line_id: L1072
+    reaches_ballot_2026: false
+    knessets: [23, 24]
+    faction_ids: [1072, 1082]
+    names: ["דגל התורה"]
+  - line_id: L1089
+    reaches_ballot_2026: false
+    knessets: [24]
+    faction_ids: [1089]
+    names: ["הרשימה המשותפת (חד\"ש, בל\"ד)"]
+  - line_id: L47
+    reaches_ballot_2026: false
+    knessets: [16]
+    faction_ids: [47]
+    names: ["עם אחד בראשות עמיר פרץ"]
+  - line_id: L50
+    reaches_ballot_2026: false
+    knessets: [16]
+    faction_ids: [50]
+    names: ["חד\"ש - תע\"ל"]
+  - line_id: L422
+    reaches_ballot_2026: false
+    knessets: [16, 17]
+    faction_ids: [422, 1041]
+    names: ["דגל התורה"]
+  - line_id: L702
+    reaches_ballot_2026: false
+    knessets: [17]
+    faction_ids: [702]
+    names: ["צדק לזקן"]
+  - line_id: L743
+    reaches_ballot_2026: false
+    knessets: [18]
+    faction_ids: [743]
+    names: ["הבית היהודי - מפד\"ל החדשה"]
+  - line_id: L744
+    reaches_ballot_2026: false
+    knessets: [18, 19]
+    faction_ids: [744, 802]
+    names: ["אלתג'מוע אלווטני אלדמוקרטי - בל\"ד", "בל\"ד - אלתג'מוע אלווטני אלדמוקרטי"]
+  - line_id: L809
+    reaches_ballot_2026: false
+    knessets: [19]
+    faction_ids: [809]
+    names: ["קדימה בראשות שאול מופז"]
+  - line_id: L916
+    reaches_ballot_2026: false
+    knessets: [20]
+    faction_ids: [916]
+    names: ["הימין החדש"]
+  - line_id: L941
+    reaches_ballot_2026: false
+    knessets: [22]
+    faction_ids: [941]
+    names: ["הימין החדש"]
+  - line_id: L958
+    reaches_ballot_2026: false
+    knessets: [23]
+    faction_ids: [958]
+    names: ["העבודה הישראלית"]
+  - line_id: L1053
+    reaches_ballot_2026: false
+    knessets: [19]
+    faction_ids: [1053]
+    names: ["רע\"מ - רשימת האיחוד הערבי"]
+  - line_id: L1056
+    reaches_ballot_2026: false
+    knessets: [20]
+    faction_ids: [1056]
+    names: ["אגודת ישראל"]
+  - line_id: L1060
+    reaches_ballot_2026: false
+    knessets: [21, 22]
+    faction_ids: [1060, 1068]
+    names: ["בל\"ד – ברית לאומית דמוקרטית", "בל\"ד - ברית לאומית דמוקרטית"]
+  - line_id: L1062
+    reaches_ballot_2026: false
+    knessets: [21, 22, 23, 24]
+    faction_ids: [1062, 1070, 1076, 1090]
+    names: ["תע\"ל", "תע\"ל - התנועה הערבית לשינוי", "תע\"ל – התנועה הערבית להתחדשות", "התנועה הערבית להתחדשות (תע\"ל)"]
+  - line_id: L1078
+    reaches_ballot_2026: false
+    knessets: [16]
+    faction_ids: [1078]
+    names: ["שינוי"]
+  - line_id: L1085
+    reaches_ballot_2026: false
+    knessets: [24]
+    faction_ids: [1085]
+    names: ["המחנה הממלכתי"]
+  - line_id: L52
+    reaches_ballot_2026: false
+    knessets: [16]
+    faction_ids: [52]
+    names: ["הרשימה הערבית המאוחדת"]
+  - line_id: L53
+    reaches_ballot_2026: false
+    knessets: [16]
+    faction_ids: [53]
+    names: ["ישראל בעלייה בראשות נתן שרנסקי"]
+  - line_id: L444
+    reaches_ballot_2026: false
+    knessets: [16, 16, 17]
+    faction_ids: [442, 444, 1040]
+    names: ["התחברות", "ציונות לאומית דתית מתחדשת", "אח\"י - ארץ, חברה, יהדות"]
+  - line_id: L586
+    reaches_ballot_2026: false
+    knessets: [16]
+    faction_ids: [586]
+    names: ["הבית הלאומי"]
+  - line_id: L604
+    reaches_ballot_2026: false
+    knessets: [16]
+    faction_ids: [604]
+    names: ["החזית הדמוקרטית לשלום ולשוויון"]
+  - line_id: L954
+    reaches_ballot_2026: false
+    knessets: [23]
+    faction_ids: [954]
+    names: ["דרך ארץ"]
+  - line_id: L1045
+    reaches_ballot_2026: false
+    knessets: [17]
+    faction_ids: [1045]
+    names: ["מולדת האיחוד הלאומי"]
+  - line_id: L1051
+    reaches_ballot_2026: false
+    knessets: [18]
+    faction_ids: [1051]
+    names: ["עוצמה לישראל"]
+  - line_id: L1059
+    reaches_ballot_2026: false
+    knessets: [21]
+    faction_ids: [1059]
+    names: ["רע\"ם – רשימת האיחוד הערבי"]
+  - line_id: L1073
+    reaches_ballot_2026: false
+    knessets: [23]
+    faction_ids: [1073]
+    names: ["האיחוד הלאומי"]
+  - line_id: L462
+    reaches_ballot_2026: false
+    knessets: [16]
+    faction_ids: [462]
+    names: ["צל\"ש - ציונות ליברליות שוויון"]
+  - line_id: L482
+    reaches_ballot_2026: false
+    knessets: [16]
+    faction_ids: [482]
+    names: ["נוי"]
+  - line_id: L582
+    reaches_ballot_2026: false
+    knessets: [16]
+    faction_ids: [582]
+    names: ["חה\"כ מיכאל נודלמן"]
+  - line_id: L588
+    reaches_ballot_2026: false
+    knessets: [16]
+    faction_ids: [588]
+    names: ["העולים"]
+  - line_id: L602
+    reaches_ballot_2026: false
+    knessets: [16]
+    faction_ids: [602]
+    names: ["תנועה ערבית להתחדשות"]
+  - line_id: L722
+    reaches_ballot_2026: false
+    knessets: [17]
+    faction_ids: [722]
+    names: ["הדרך הטובה"]
+  - line_id: L913
+    reaches_ballot_2026: false
+    knessets: [20]
+    faction_ids: [913]
+    names: ["חה\"כ אורלי לוי-אבקסיס"]
+  - line_id: L952
+    reaches_ballot_2026: false
+    knessets: [23]
+    faction_ids: [952]
+    names: ["חה\"כ ע'דיר כמאל מריח"]
+  - line_id: L953
+    reaches_ballot_2026: false
+    knessets: [23]
+    faction_ids: [953]
+    names: ["חה\"כ פנינה תמנו"]
+  - line_id: L957
+    reaches_ballot_2026: false
+    knessets: [23]
+    faction_ids: [957]
+    names: ["גשר"]
+  - line_id: L960
+    reaches_ballot_2026: false
+    knessets: [23]
+    faction_ids: [960]
+    names: ["הבית היהודי"]
+  - line_id: L974
+    reaches_ballot_2026: false
+    knessets: [24]
+    faction_ids: [974]
+    names: ["עתיד אחד"]
+  - line_id: L1046
+    reaches_ballot_2026: false
+    knessets: [17]
+    faction_ids: [1046]
+    names: ["מימד"]
+  - line_id: L1049
+    reaches_ballot_2026: false
+    knessets: [18]
+    faction_ids: [1049]
+    names: ["חה\"כ חיים אמסלם"]
+  - line_id: L1050
+    reaches_ballot_2026: false
+    knessets: [18]
+    faction_ids: [1050]
+    names: ["מד\"ע - מפלגה דמוקרטית ערבית"]
+  - line_id: L1054
+    reaches_ballot_2026: false
+    knessets: [19, 20]
+    faction_ids: [1054, 1057]
+    names: ["תע\"ל - התנועה הערבית להתחדשות", "תע\"ל – בראשות אחמד טיבי"]
+  - line_id: L1058
+    reaches_ballot_2026: false
+    knessets: [21]
+    faction_ids: [1058]
+    names: ["אח\"י - ארץ, חברה, יהדות"]
+  - line_id: L1080
+    reaches_ballot_2026: false
+    knessets: [24]
+    faction_ids: [1080]
+    names: ["חה\"כ עמיחי שיקלי"]
+  - line_id: L1081
+    reaches_ballot_2026: false
+    knessets: [24]
+    faction_ids: [1081]
+    names: ["עוצמה יהודית"]
+  - line_id: L1086
+    reaches_ballot_2026: false
+    knessets: [24]
+    faction_ids: [1086]
+    names: ["ביחד"]
+  - line_id: L1087
+    reaches_ballot_2026: false
+    knessets: [24]
+    faction_ids: [1087]
+    names: ["דרך ארץ"]
+  - line_id: L1092
+    reaches_ballot_2026: false
+    knessets: [24]
+    faction_ids: [1092]
+    names: ["חופש כלכלי"]
