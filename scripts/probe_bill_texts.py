@@ -72,6 +72,20 @@ def probe_file(url: str, timeout: int = 45) -> dict:
         return {"ok": False, "err": f"{type(e).__name__}: {e}"[:160]}
 
 
+# Классы документов. Норму несут только «הצעת חוק …» (законопроект к чтению)
+# и «חוק - …» (принятый закон, официальная либо неофициальная редакция).
+# «חומר רקע» и материалы исследовательского центра — справка ОБ объекте,
+# а не сам объект. Список — префиксы, а не полные названия: у Кнессета
+# существуют варианты («- הנחה מחדש», «- לוח תיקונים»), и перечислять их
+# поимённо значит промахнуться на следующем варианте.
+BILL_TEXT_PREFIXES = ("הצעת חוק", "חוק -", "חוק-")
+
+
+def is_bill_text(d: dict) -> bool:
+    k = (d.get("GroupTypeDesc") or "").strip()
+    return any(k.startswith(p) for p in BILL_TEXT_PREFIXES)
+
+
 def sniff(head: bytes) -> str:
     if head.startswith(b"%PDF"):
         return "pdf"
@@ -104,11 +118,26 @@ def main() -> int:
 
     core_with = core & set(by_bill)
     matched_with = matched & set(by_bill)
-    print(f"\nПОКРЫТИЕ МЕТАДАННЫМИ")
+    print(f"\nПОКРЫТИЕ МЕТАДАННЫМИ — «есть хоть какой-то документ»")
     print(f"   ядро:          {len(core_with)}/{len(core)}"
           f"  = {len(core_with) * 100 // max(len(core), 1)}%")
     print(f"   весь чек-лист: {len(matched_with)}/{len(matched)}"
           f"  = {len(matched_with) * 100 // max(len(matched), 1)}%")
+
+    # Первая редакция этого скрипта останавливалась на числе выше и объявляла
+    # его покрытием. Оно правдоподобно и не о том: 555 документов ядра — это
+    # `חומר רקע`, справочный материал, а не норма. Классифицировать направление
+    # по справке нельзя. Ровно класс отказа §23, допущенный внутри проверки,
+    # написанной против §23. Отсюда разбивка ниже — она и есть ответ на Р1.
+    core_bt = {b for b in core_with if any(is_bill_text(d) for d in by_bill[b])}
+    matched_bt = {b for b in matched_with if any(is_bill_text(d) for d in by_bill[b])}
+    print(f"\nПОКРЫТИЕ ТЕКСТОМ ЗАКОНОПРОЕКТА — это и есть ответ на Р1")
+    print(f"   ядро:          {len(core_bt)}/{len(core)}"
+          f"  = {len(core_bt) * 100 // max(len(core), 1)}%")
+    print(f"   весь чек-лист: {len(matched_bt)}/{len(matched)}"
+          f"  = {len(matched_bt) * 100 // max(len(matched), 1)}%")
+    only_bg = core_with - core_bt
+    print(f"   только справочный материал, нормы нет: {len(only_bg)}")
 
     kinds = collections.Counter()
     apps = collections.Counter()
@@ -124,11 +153,17 @@ def main() -> int:
     # --- (B) достижимость. Выборка детерминирована: первые SAMPLE по возрастанию
     #     BillID. Не случайная — случайность сделала бы прогон невоспроизводимым,
     #     а §14 требует воспроизводимости.
-    print(f"\nДОСТИЖИМОСТЬ — выборка {SAMPLE} файлов (детерминированная)")
-    sample_ids = sorted(core_with)[:SAMPLE]
+    #     Первая редакция брала первые 12 по возрастанию BillID — то есть три
+    #     старых и девять свежих подряд. 12/12 при такой выборке не говорит
+    #     ничего о 672: она смещена по времени, а формат файлов от времени
+    #     как раз и зависит. Теперь равномерный шаг по всему диапазону.
+    print(f"\nДОСТИЖИМОСТЬ — выборка {SAMPLE} файлов (равномерный шаг, детерминированно)")
+    pool = sorted(core_bt)
+    step = max(len(pool) // SAMPLE, 1)
+    sample_ids = pool[::step][:SAMPLE]
     sample_out = []
     for bid in sample_ids:
-        d = by_bill[bid][0]
+        d = next(x for x in by_bill[bid] if is_bill_text(x))
         url = norm(d["FilePath"])
         r = probe_file(url)
         sample_out.append({"bill": bid, "url": url, **r})
@@ -148,9 +183,14 @@ def main() -> int:
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps({
         "core_total": len(core), "core_with_doc": len(core_with),
+        "core_with_bill_text": len(core_bt),
+        "core_background_only": len(only_bg),
         "matched_total": len(matched), "matched_with_doc": len(matched_with),
+        "matched_with_bill_text": len(matched_bt),
         "kinds": dict(kinds), "apps": dict(apps),
         "billid_floor": BILLID_FLOOR,
+        "bill_text_prefixes": list(BILL_TEXT_PREFIXES),
+        "core_bill_text_ids": sorted(core_bt),
         "sample": sample_out,
     }, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"\n{OUT.relative_to(ROOT)}")
