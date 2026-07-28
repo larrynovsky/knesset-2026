@@ -78,3 +78,44 @@ allp = g("KNS_PersonToPosition", filter="PositionID eq 43 and FactionID ne null"
 print(f"   первая страница: {len(allp)} строк, уникальных FactionID: "
       f"{len({x['FactionID'] for x in allp})}")
 print(f"   диапазон FactionID: {min(x['FactionID'] for x in allp)}..{max(x['FactionID'] for x in allp)}")
+
+print("\n=== 7. у КАКИХ должностей FactionID вообще заполнен ===")
+pos = {p["Id"]: p["Description"] for p in g("KNS_Position", select="Id,Description")["value"]}
+for pid, desc in sorted(pos.items()):
+    try:
+        n = g("KNS_PersonToPosition", top=0, count="true",
+              filter=f"PositionID eq {pid} and FactionID ne null")["@odata.count"]
+    except Exception as e:  # noqa: BLE001
+        n = f"err {str(e)[:20]}"
+    tot = g("KNS_PersonToPosition", top=0, count="true",
+            filter=f"PositionID eq {pid}")["@odata.count"]
+    if n:
+        print(f"   pos {pid:<4} {desc[:28]:<30} с FactionID: {n} из {tot}")
+
+print("\n=== 8. что предлагает Open Knesset ===")
+import urllib.error  # noqa: E402
+LIST = ("https://storage.googleapis.com/storage/v1/b/knesset-data-pipelines/o"
+        "?prefix=data/members/&delimiter=/")
+try:
+    req = urllib.request.Request(LIST, headers={"User-Agent": "knesset-research/0.1"})
+    with urllib.request.urlopen(req, timeout=60, context=CTX) as r:
+        d = json.loads(r.read())
+    for p in d.get("prefixes", []):
+        print(f"   {p}")
+except Exception as e:  # noqa: BLE001
+    print(f"   не удалось: {str(e)[:120]}")
+
+for name in ("data/members/mk_individual/faction_memberships.csv",
+             "data/members/mk_individual/factions.csv",
+             "data/members/mk_individual/mk_individual.csv"):
+    u = "https://storage.googleapis.com/knesset-data-pipelines/" + name
+    try:
+        req = urllib.request.Request(u, headers={"User-Agent": "knesset-research/0.1",
+                                                 "Range": "bytes=0-600"})
+        with urllib.request.urlopen(req, timeout=60, context=CTX) as r:
+            head = r.read().decode("utf-8", "replace").splitlines()[:3]
+        print(f"\n   ✓ {name}")
+        for line in head:
+            print(f"       {line[:150]}")
+    except Exception as e:  # noqa: BLE001
+        print(f"\n   ✗ {name}: {str(e)[:80]}")
