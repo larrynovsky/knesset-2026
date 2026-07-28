@@ -55,21 +55,26 @@ def fetch_all(
     flt: str = "",
     select: str = "",
     expected: int | None = None,
-    reason_if_unchecked: str = "",
+    unchecked_reason: str = "",
     pause: float = 0.35,
 ) -> list[dict]:
-    """Полная выгрузка с обязательной сверкой объёма.
+    """Полная выгрузка со сверкой объёма.
 
-    expected=None разрешён ТОЛЬКО вместе с reason_if_unchecked — то есть
-    отказ от проверки должен быть произнесён вслух, а не получиться сам собой.
+    Семантика (первая редакция была неверна — см. ниже):
+      expected=int  — сверять с этим числом;
+      expected=None — ДЕФОЛТ: взять ожидание независимым путём через count();
+      unchecked_reason="..." — единственный способ обойти сверку, и он громкий.
+
+    Первая редакция требовала unchecked_reason при expected=None, из-за чего
+    безопасный путь (авто-count) был недостижим: корректный вызов падал.
+    Защита, блокирующая правильное использование, — не защита, а поломка;
+    это зеркало слишком широкого grep'а в §9-правиле (2026-07-27).
     """
-    if expected is None and not reason_if_unchecked:
-        raise ShortRead(
-            f"{entity}: §23 — ожидание объёма не задано. Либо expected=count(...), "
-            "либо reason_if_unchecked='почему второго пути к величине нет'."
-        )
-    if expected is None:
-        expected = count(entity, flt)  # дешевле, чем кажется; берём всегда, когда можем
+    if unchecked_reason:
+        print(f"   §23 СВЕРКА ПРОПУЩЕНА для {entity}: {unchecked_reason}")
+        expected = None
+    elif expected is None:
+        expected = count(entity, flt)
 
     params = ["$format=json"]
     if flt:
@@ -88,7 +93,7 @@ def fetch_all(
         if url:
             time.sleep(pause)
 
-    if len(out) != expected:
+    if expected is not None and len(out) != expected:
         raise ShortRead(
             f"§23 ТИХИЙ НЕДОБОР: {entity} — ожидалось {expected}, получено {len(out)} "
             f"за {pages} стр. Данные НЕ отдаются наверх. "
@@ -133,12 +138,13 @@ if __name__ == "__main__":
     except ShortRead as e:
         print(f"  OK, поймано: {str(e)[:90]}...")
 
-    print("  провокация: выгрузка без объявленного ожидания...")
-    try:
-        fetch_all("KNS_Position", expected=None)
-        print("  ПРОВАЛ САМОПРОВЕРКИ: прошло без ожидания")
+    print("  обход сверки обязан быть громким и попадать в манифест...")
+    fetch_all("KNS_Position", unchecked_reason="проверка громкости обхода")
+    rec = json.loads(MANIFEST.read_text()).get("KNS_Position|")
+    if rec and rec.get("expected") is None:
+        print(f"  OK, записано как непроверенное: {rec}")
+    else:
+        print(f"  ПРОВАЛ САМОПРОВЕРКИ: обход не отмечен в манифесте: {rec}")
         raise SystemExit(1)
-    except ShortRead as e:
-        print(f"  OK, поймано: {str(e)[:90]}...")
 
     print("самопроверка пройдена")
