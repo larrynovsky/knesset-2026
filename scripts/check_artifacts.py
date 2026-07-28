@@ -65,7 +65,12 @@ def parse_rules() -> dict[str, dict]:
     for i in range(1, len(blocks), 2):
         num, body = blocks[i], blocks[i + 1]
         title = body.split("**", 1)[0].strip()
-        m = re.search(r"\*Enforcement:\*\s*\*\*(LIVE|PARTIAL|MANUAL)\*\*", body)
+        # Первая редакция требовала ровно `**MANUAL**` и молча отдавала "?" на
+        # `**MANUAL.**` — точка внутри жирного. Тихий недобор в собственном
+        # стороже: 20 правил из 24 выпали из проверки, потому что она
+        # придирается только к заявленному LIVE. Поймал сгенерированный
+        # артефакт, что и есть его назначение (§24, 2026-07-28).
+        m = re.search(r"\*Enforcement:\*\s*\*\*(LIVE|PARTIAL|MANUAL)[.,: ]*\*\*", body)
         out[num] = {"title": title[:70], "enforcement": m.group(1) if m else "?"}
     return out
 
@@ -95,7 +100,12 @@ def check_enforcement_claims(rules: dict, hits: dict) -> None:
     """Самая важная проверка: заявленный LIVE обязан иметь код, который его знает."""
     for num, r in sorted(rules.items(), key=lambda x: int(x[0])):
         claimed, mentioned = r["enforcement"], hits.get(num, set())
-        if claimed == "LIVE" and not mentioned:
+        if claimed == "?":
+            # Неразобранное заявление опаснее любого заявления: правило молча
+            # выпадает из проверки. Нечитаемый свод — отказ, а не пропуск.
+            fail(f"§{num}: не разобрано поле Enforcement — правило выпало бы из "
+                 f"проверки незамеченным ({r['title']})")
+        elif claimed == "LIVE" and not mentioned:
             fail(f"§{num} заявлен LIVE, но НИ ОДИН файл в scripts/ его не упоминает — "
                  f"свод врёт о себе ({r['title']})")
         elif claimed == "MANUAL" and mentioned:
