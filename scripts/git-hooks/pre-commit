@@ -52,6 +52,10 @@ if [ -f scripts/check_criteria_order.py ]; then
   "$PY" scripts/check_criteria_order.py || exit 1
 fi
 
+# ---- оракул результата: в Кнессете всегда 120 мест ----------------------
+# Сетевой, поэтому НЕ в pre-commit (коммит не должен зависеть от сети),
+# а в post-receive на Studio. Здесь только напоминание о его существовании.
+
 # ---- §24: артефакты, отсутствие которых само есть нарушение --------------
 if [ -f scripts/check_artifacts.py ]; then
   PY=$(command -v python3 || echo /opt/homebrew/bin/python3.11)

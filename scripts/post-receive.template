@@ -40,6 +40,15 @@ if [ -f scripts/check_criteria_order.py ]; then
   fi
 fi
 
+# Оракул результата (lab_recognizer-класс): в Кнессете всегда 120 мест.
+# Смотрит не на механику, а на правдоподобие результата.
+if [ -f scripts/check_knesset_120.py ]; then
+  if ! "$PY" scripts/check_knesset_120.py 2>&1; then
+    say "СТОП: оракул 120 красный — состав каденций неполон."
+    exit 1
+  fi
+fi
+
 # §24 — артефакты. Ловит обход guarded_fetch и ложь свода о себе.
 if [ -f scripts/check_artifacts.py ]; then
   if ! "$PY" scripts/check_artifacts.py 2>&1; then
