@@ -23,7 +23,7 @@
 | §11 | Единый срез. | MANUAL | probe_phase0.py |
 | §12 | Ивритский оригинал хранится рядом с переводом. | MANUAL | classify_direction.py, post-receive.template, pre-commit |
 | §13 | В публикации нет суммарного балла, рейтинга и оценочных ярлыков. | MANUAL | build_lineage_rule.py |
-| §14 | Всё опубликованное воспроизводимо из репозитория. | MANUAL | probe_bill_texts.py, select_pilot.py |
+| §14 | Всё опубликованное воспроизводимо из репозитория. | MANUAL | extract_institutions.py, probe_bill_texts.py, select_pilot.py |
 | §15 | Исправление публикуется, а не заменяет тихо. | MANUAL | check_artifacts.py |
 | §16 | Доступно, но не продвигается. Массовость — триггер, а не разрешённое с | MANUAL | — |
 | §17 | Рамка объявлена на первом экране. | MANUAL | — |
@@ -32,7 +32,7 @@
 | §20 | Не называть сделанным то, у чего нет краснеющего механизма. | MANUAL | classify_direction.py, post-receive.template, pre-commit, select_pilot.py, verify_names_wikidata.py |
 | §21 | Риск → исполняемая проверка, а не строка в плане. | MANUAL | — |
 | §22 | Правило прогоняется по изменению, которое его вводит, и сверяется со с | MANUAL | check_criteria_order.py, pre-commit, select_pilot.py |
-| §23 | Ожидаемый объём получается ДРУГИМ путём и сверяется до использования д | LIVE | check_artifacts.py, check_knesset_120.py, classify_direction.py, commit-msg, fetch_bill_texts.py, guarded_fetch.py, probe_bill_texts.py, probe_faction_join.py, probe_odata_shapes.py, probe_phase0.py, probe_phase0_odata.py, scan_bills.py, verify_names_wikidata.py |
+| §23 | Ожидаемый объём получается ДРУГИМ путём и сверяется до использования д | LIVE | check_artifacts.py, check_knesset_120.py, classify_direction.py, commit-msg, extract_institutions.py, fetch_bill_texts.py, guarded_fetch.py, probe_bill_texts.py, probe_faction_join.py, probe_odata_shapes.py, probe_phase0.py, probe_phase0_odata.py, scan_bills.py, verify_names_wikidata.py |
 | §24 | У каждого правила есть артефакт, отсутствие которого само является нар | LIVE | check_artifacts.py, check_criteria_order.py, fetch_bill_texts.py, guarded_fetch.py, post-receive.template, pre-commit |
 
-Всего правил: 24 · заявлено LIVE: 3 · упомянуто в коде: 17
+Всего правил: 24 · заявлено LIVE: 3 · упомянуто в коде: 18
