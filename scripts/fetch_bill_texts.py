@@ -155,6 +155,57 @@ def heb_ratio(t: str) -> float:
     return len(HEB.findall("".join(letters))) / len(letters)
 
 
+# --- визуальный порядок RTL ---------------------------------------------------
+# Найдено 2026-07-29 при замере длин: тексты ПРИНЯТЫХ актов («ספר החוקים», PDF)
+# извлекались pdfminer'ом в ВИЗУАЛЬНОМ порядке — каждая строка посимвольно
+# перевёрнута. «רשומות» превращалось в «תומושר», и это не портило вид настолько,
+# чтобы кто-то заметил глазами: ивритский текст остаётся ивритским текстом.
+#
+# Что от этого ломалось, по возрастанию тяжести:
+#  · счёт статей и формул правки давал НОЛЬ на всех принятых актах — регулярки
+#    искали «תיקון סעיף» в тексте, где написано «ןוקית ףיעס»;
+#  · цитаты моделей не находились в исходнике (13 и 13 из пилота);
+#  · 21 знак направления поставлен по перевёрнутому тексту, и среди них ВСЕ
+#    семь актов оракула отбора. То есть «оракул пройден 7/7» означало
+#    «модель угадала по названию» — ровно риск R1, принятый за успех.
+#
+# Реверс строки восстанавливает буквы и ЛОМАЕТ числа: в визуальном порядке
+# числа лежат уже слева направо, поэтому их разворачиваем обратно.
+# Библиотека python-bidi решает обратную задачу (логический → визуальный)
+# и тянет зависимость ради десяти строк — не берём.
+_REV_MARK = ("תומושר", "קוח תעצה", "םיקוחה", "תסנכה", "ןוקית", "קוח")
+_FWD_MARK = ("רשומות", "הצעת חוק", "החוקים", "הכנסת", "תיקון", "חוק")
+_DIGITS = re.compile(r"\d+")
+
+
+def looks_reversed(t: str) -> bool:
+    """Перевёрнут ли текст. Считаем маркеры, а не гадаем по одному слову."""
+    head = " ".join((t or "").split())[:2000]
+    return sum(m in head for m in _REV_MARK) > sum(m in head for m in _FWD_MARK)
+
+
+def unbidi(t: str) -> str:
+    """Визуальный порядок → логический. Построчно, с возвратом чисел."""
+    out = []
+    for line in (t or "").splitlines():
+        r = line[::-1]
+        out.append(_DIGITS.sub(lambda m: m.group(0)[::-1], r))
+    return "\n".join(out)
+
+
+def repair_rtl(t: str) -> tuple[str, bool]:
+    """Чинит, если перевёрнуто. Возвращает (текст, чинили ли).
+
+    U+FEFF внутри строки — не BOM, а разделитель слов в этих PDF: без замены
+    «ספר החוקים» остаётся склеенным и не находится поиском.
+    """
+    t = (t or "").replace("﻿", " ")
+    if not looks_reversed(t):
+        return t, False
+    return unbidi(t), True
+
+
+
 def download(url: str, timeout: int = 60) -> tuple[bytes | None, str]:
     try:
         req = urllib.request.Request(url, headers=UA)
@@ -188,8 +239,64 @@ def load_docs(refresh: bool) -> list[dict]:
     return docs
 
 
+def selftest() -> int:
+    """Оракул RTL. Красное здесь = тексты принятых актов снова читаются задом наперёд."""
+    # Вход взят из реального файла data/bill_texts/2207472.txt (акт об отмене
+    # стандарта разумности): БУКВЫ перевёрнуты, ЧИСЛА стоят правильно —
+    # так работает визуальный порядок, и поэтому после реверса строки числа
+    # приходится доворачивать обратно. Первая редакция теста этого не учла
+    # и покраснела на верном коде: направление реверса чисел проверяемо
+    # только на настоящем входе, не на придуманном.
+    rev = "תומושר\n2023 ילויב 26\nהטיפשה :דוסי-קוח"
+    fixed, did = repair_rtl(rev)
+    assert did, "перевёрнутый текст не опознан"
+    assert "רשומות" in fixed, f"буквы не восстановлены: {fixed!r}"
+    assert "26 ביולי 2023" in fixed, f"числа не восстановлены: {fixed!r}"
+    assert "חוק-יסוד: השפיטה" in fixed, f"составное название не собралось: {fixed!r}"
+
+    fwd = "רשומות\nספר החוקים\nחוק-יסוד: השפיטה (תיקון מס' 3)"
+    same, did2 = repair_rtl(fwd)
+    assert not did2, "нормальный текст ошибочно признан перевёрнутым"
+    assert "חוק-יסוד" in same, "нормальный текст испорчен"
+
+    # U+FEFF как разделитель слов, а не BOM
+    glued, _ = repair_rtl("ספר﻿החוקים")
+    assert "ספר החוקים" in glued, f"FEFF не разделил слова: {glued!r}"
+    print("самопроверка RTL пройдена: 3 случая (перевёрнутый, нормальный, склейка)")
+    return 0
+
+
+def fix_existing() -> int:
+    """Разовый проход по уже выгруженным текстам той же функцией, что и выгрузка.
+
+    Отдельная реализация была бы вторым источником правды: починенное на месте
+    разошлось бы с починенным при перевыгрузке. Здесь один код, два входа.
+    """
+    files = sorted(TEXTDIR.glob("*.txt"))
+    fixed = 0
+    for p in files:
+        before = p.read_text(encoding="utf-8")
+        after, did = repair_rtl(before)
+        if did:
+            p.write_text(after, encoding="utf-8")
+            fixed += 1
+            print(f"   починен {p.stem} ({len(before)} симв)")
+    print(f"\nпочинено {fixed} из {len(files)}")
+    # §23: объявленное ожидание. Повторный проход обязан не найти ничего.
+    again = sum(1 for p in files if repair_rtl(p.read_text(encoding="utf-8"))[1])
+    if again:
+        print(f"§23 ОТКАЗ: после починки {again} файлов всё ещё опознаются "
+              f"перевёрнутыми — операция не идемпотентна", file=sys.stderr)
+        return 1
+    print("повторный проход не нашёл перевёрнутых — операция идемпотентна")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--selftest", action="store_true", help="оракул RTL, без сети")
+    ap.add_argument("--fix-existing", action="store_true",
+                    help="починить уже выгруженные тексты, без сети")
     ap.add_argument("--limit", type=int, default=0,
                     help="сколько законопроектов взять (0 = все). Для прогонов на осуществимость.")
     ap.add_argument("--refresh", action="store_true", help="перевыгрузить KNS_DocumentBill")
@@ -198,6 +305,11 @@ def main() -> int:
     ap.add_argument("--from-selection", action="store_true",
                     help="брать ровно состав пилота из data/pilot_selection.json")
     a = ap.parse_args()
+
+    if a.selftest:
+        return selftest()
+    if a.fix_existing:
+        return fix_existing()
 
     scan = json.loads(SCAN.read_text(encoding="utf-8"))
     core = set(scan["core_ids"])
@@ -243,6 +355,7 @@ def main() -> int:
             print(f"   [{i}/{len(targets)}] {b} ✗ {err[:70]}")
             continue
         text, method = extract(blob, url)
+        text, repaired = repair_rtl(text)          # визуальный RTL → логический
         text = re.sub(r"[ \t]+", " ", text).strip()
         ratio = heb_ratio(text)
         if len(text) < MIN_CHARS or ratio < MIN_HEB_RATIO:
@@ -255,8 +368,11 @@ def main() -> int:
             continue
         (TEXTDIR / f"{b}.txt").write_text(text, encoding="utf-8")
         rows.append({"bill": b, "status": "ok", "method": method, "chars": len(text),
-                     "heb": round(ratio, 2), "kind": d.get("GroupTypeDesc"), "url": url})
+                     "heb": round(ratio, 2), "kind": d.get("GroupTypeDesc"), "url": url,
+                     "rtl_repaired": repaired})
         stats[f"ok:{method}"] += 1
+        if repaired:
+            stats["rtl_repaired"] += 1
         print(f"   [{i}/{len(targets)}] {b} ✓ {method} {len(text)} симв, иврит {ratio:.0%}")
         time.sleep(0.2)
 
