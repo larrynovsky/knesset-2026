@@ -1,4 +1,8 @@
-data/
+# data/* , а НЕ data/ — git не умеет re-include файл, если исключён его
+# родительский каталог. Со строкой `data/` правило `!data/MANIFEST.json`
+# ниже не работало вовсе: манифест был не «забыт», а недостижим для git.
+# Проверка: git check-ignore -v data/MANIFEST.json (2026-07-29).
+data/*
 __pycache__/
 *.duckdb
 *.pyc

@@ -1,0 +1,32 @@
+{
+  "KNS_Faction|": {
+    "expected": 545,
+    "got": 545,
+    "pages": 6,
+    "at": "2026-07-29T09:09:55"
+  },
+  "KNS_PersonToPosition|PositionID eq 43": {
+    "expected": 2981,
+    "got": 2981,
+    "pages": 30,
+    "at": "2026-07-28T12:28:03"
+  },
+  "KNS_PersonToPosition|PositionID eq 54": {
+    "expected": 4515,
+    "got": 4515,
+    "pages": 46,
+    "at": "2026-07-29T09:11:59"
+  },
+  "KNS_Bill|KnessetNum eq 25": {
+    "expected": 7491,
+    "got": 7491,
+    "pages": 75,
+    "at": "2026-07-28T21:52:33"
+  },
+  "KNS_DocumentBill|BillID ge 1040000": {
+    "expected": 36797,
+    "got": 36797,
+    "pages": 368,
+    "at": "2026-07-28T23:35:03"
+  }
+}

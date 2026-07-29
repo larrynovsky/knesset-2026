@@ -17,7 +17,9 @@
 from __future__ import annotations
 
 import json
+import socket
 import ssl
+import tempfile
 import time
 import urllib.parse
 import urllib.request
@@ -127,7 +129,15 @@ def require_join(left: set, right: set, name: str, min_overlap: int = 1) -> int:
 
 
 def _record(entity: str, flt: str, expected: int, got: int, pages: int) -> None:
-    """Манифест выгрузки: обе цифры рядом, чтобы расхождение было видно глазом."""
+    """Манифест выгрузки: обе цифры рядом, чтобы расхождение было видно глазом.
+
+    Поле `host` — лечение R4 (две копии data/ без протокола согласованности).
+    28.07 холодный старт прогнал самопроверку на MacBook, она записала строку
+    в ЛОКАЛЬНЫЙ манифест, и check_artifacts честно доложил о непроверенной
+    выгрузке KNS_Position — которой никто не делал. Манифест без имени машины
+    не отвечает на вопрос «чьё это состояние», а два независимых data/ этот
+    вопрос задают постоянно.
+    """
     MANIFEST.parent.mkdir(parents=True, exist_ok=True)
     try:
         data = json.loads(MANIFEST.read_text()) if MANIFEST.exists() else {}
@@ -138,13 +148,22 @@ def _record(entity: str, flt: str, expected: int, got: int, pages: int) -> None:
         "got": got,
         "pages": pages,
         "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "host": socket.gethostname(),
     }
     MANIFEST.write_text(json.dumps(data, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
     # Самопроверка §23: механизм обязан краснеть, а не рассказывать о себе.
-    print("самопроверка guarded_fetch")
+    #
+    # Пишет во ВРЕМЕННЫЙ манифест, а не в data/ (лечение R4). Самопроверка
+    # намеренно провоцирует обход сверки — и до 29.07 этот учебный обход
+    # оседал в настоящем манифесте как строка о выгрузке KNS_Position,
+    # которой не было. Механизм §24 читал её и докладывал о непроверенной
+    # выгрузке. Проверяющий, загрязняющий то, что проверяет, — источник
+    # ложного сигнала, а не защита.
+    MANIFEST = Path(tempfile.gettempdir()) / "knesset_selfcheck_MANIFEST.json"
+    print(f"самопроверка guarded_fetch (манифест: {MANIFEST})")
 
     n = count("KNS_Faction")
     print(f"  независимый счётчик KNS_Faction: {n}")
