@@ -170,13 +170,19 @@ def pick_model(vendor: str) -> str:
 
 def call(vendor: str, model: str, prompt: str) -> tuple[str, dict]:
     if vendor == "anthropic":
+        # max_tokens 1500 обрывал JSON на середине: часть бюджета уходила
+        # в размышление (510 токенов на первом же прогоне), ответ не
+        # дописывался, и разбор честно возвращал None. Выглядело как «модель
+        # не смогла», было — «я задал лимит». Отсюда 4000 и явная передача
+        # stop_reason наверх: обрыв по лимиту обязан называться обрывом
+        # по лимиту, а не сливаться с невалидным ответом (§20).
         r = _post("https://api.anthropic.com/v1/messages",
-                  {"model": model, "max_tokens": 1500,
+                  {"model": model, "max_tokens": 4000,
                    "messages": [{"role": "user", "content": prompt}]},
                   {"x-api-key": os.environ["ANTHROPIC_API_KEY"],
                    "anthropic-version": "2023-06-01"})
         txt = "".join(b.get("text", "") for b in r.get("content", []))
-        usage = r.get("usage", {})
+        usage = dict(r.get("usage", {}), stop_reason=r.get("stop_reason"))
     else:
         r = _post("https://api.openai.com/v1/chat/completions",
                   {"model": model, "messages": [{"role": "user", "content": prompt}]},
@@ -245,8 +251,18 @@ def main() -> int:
                 txt, usage = call(v, model, prompt)
                 d = parse(txt)
                 if d is None:
-                    row["verdicts"][v] = {"status": "unparsed", "raw_head": (txt or "")[:200]}
-                    stats[f"unparsed:{v}"] += 1
+                    # Один повтор — и только один. Повторять до успеха значит
+                    # тянуть, пока не выпадет удобный ответ; это подгонка,
+                    # замаскированная под надёжность.
+                    txt, usage = call(v, model, prompt)
+                    d = parse(txt)
+                if d is None:
+                    cut = usage.get("stop_reason") == "max_tokens"
+                    row["verdicts"][v] = {
+                        "status": "truncated" if cut else "unparsed",
+                        "stop_reason": usage.get("stop_reason"),
+                        "raw_head": (txt or "")[:200]}
+                    stats[f"{'truncated' if cut else 'unparsed'}:{v}"] += 1
                 else:
                     d["status"] = "ok"
                     d["usage"] = usage
