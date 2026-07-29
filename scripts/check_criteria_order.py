@@ -13,8 +13,26 @@
   subject с префиксом `criteria-revision:` — пересмотр легален, тихий
   пересмотр нет.
 
+Два режима, и второй появился потому, что первого не хватало:
+
+  без аргументов        — смотрит ИСТОРИЮ. Обнаруживает нарушение, которое
+                          уже произошло.
+  --commit-msg FILE     — смотрит ИНДЕКС и сообщение готовящегося коммита.
+                          Предотвращает нарушение до попадания в историю.
+                          Ставится хуком commit-msg.
+
+Почему второй режим обязателен (проверено прогоном 2026-07-29, §22).
+В pre-commit коммита ещё нет в `git log`, поэтому исторический режим его
+не видит: тихая правка критериев проходила, а падал СЛЕДУЮЩИЙ коммит —
+любой, даже не трогающий criteria/. Защита работала с задержкой в один
+коммит и предъявляла счёт не тому изменению. Хуже: к моменту отказа автор
+уже посмотрел на данные, то есть §3 был нарушен по существу, а исправление
+требовало переписывания истории. Это §24 буквально: механизм защищал
+собственный вызов, а не правило.
+
 Выход: 0 — порядок цел · 1 — нарушен · 2 — внутренняя ошибка (это блок, не warn:
 отказ инструмента суждения не означает отсутствия нарушения).
+Самопроверка решающей логики: python3 scripts/check_criteria_order.py --selftest
 """
 from __future__ import annotations   # системный python3 на MacBook < 3.10
 
@@ -42,7 +60,71 @@ def is_ancestor(a: str, b: str) -> bool:
     return subprocess.run(["git", "merge-base", "--is-ancestor", a, b]).returncode == 0
 
 
+def violates(subject: str, staged_criteria: bool, boundary: bool) -> bool:
+    """Всё решение режима --commit-msg в одной чистой функции.
+
+    Вынесена из main намеренно: это единственное место, где принимается
+    решение «блок или пропуск», и оно обязано быть проверяемым без git,
+    без файлов и без сети. См. --selftest.
+    """
+    return boundary and staged_criteria and not subject.startswith(REVISION_PREFIX)
+
+
+def subject_of(msg_path: str) -> str:
+    """Первая непустая строка сообщения, не считая комментариев git."""
+    with open(msg_path, encoding="utf-8") as f:
+        for line in f:
+            s = line.strip()
+            if s and not s.startswith("#"):
+                return s
+    return ""
+
+
+def check_commit_msg(msg_path: str) -> int:
+    boundary = any(first_add(p) for p in WATCHED_DATA)
+    staged = git("diff", "--cached", "--name-only", "--", "criteria/")
+    subject = subject_of(msg_path)
+
+    if not violates(subject, bool(staged), boundary):
+        return 0
+
+    print("§3 ОТКАЗ: тихая правка критериев после появления данных.", file=sys.stderr)
+    for p in staged.splitlines():
+        print(f"  в индексе: {p}", file=sys.stderr)
+    print(f"  subject:   {subject[:70]}", file=sys.stderr)
+    print(f"  Пересмотр легален, но обязан нести префикс '{REVISION_PREFIX}'", file=sys.stderr)
+    print("  и поле «что заставило пересмотреть». См. CLAUDE.md §3.", file=sys.stderr)
+    return 1
+
+
+def selftest() -> int:
+    """Оракул решающей логики. Красное здесь = §3 больше не охраняется."""
+    cases = [
+        # (subject, criteria в индексе, граница наступила, ожидается блок)
+        ("правка лексикона", True, True, True),        # то, ради чего всё
+        ("criteria-revision: K4 расширил ось", True, True, False),
+        ("правка лексикона", True, False, False),      # границы ещё нет
+        ("рефакторинг скриптов", False, True, False),  # критериев в индексе нет
+        ("", True, True, True),                        # пустое сообщение не лазейка
+    ]
+    bad = [c for c in cases if violates(c[0], c[1], c[2]) != c[3]]
+    if bad:
+        print(f"САМОПРОВЕРКА ПРОВАЛЕНА на {len(bad)} случаях: {bad}", file=sys.stderr)
+        return 1
+    print(f"самопроверка §3 пройдена: {len(cases)} случая решающей логики")
+    return 0
+
+
 def main() -> int:
+    if "--selftest" in sys.argv:
+        return selftest()
+    if "--commit-msg" in sys.argv:
+        i = sys.argv.index("--commit-msg")
+        if i + 1 >= len(sys.argv):
+            print("§3: --commit-msg требует путь к файлу сообщения", file=sys.stderr)
+            return 2
+        return check_commit_msg(sys.argv[i + 1])
+
     crit = first_add("criteria/")
     data = None
     for p in WATCHED_DATA:

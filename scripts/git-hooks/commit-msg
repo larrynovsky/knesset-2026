@@ -1,0 +1,17 @@
+#!/bin/sh
+# knesset commit-msg — CLAUDE.md §3, предотвращение вместо обнаружения.
+#
+# pre-commit НЕ может это проверить: там нет сообщения коммита, а в git log
+# ещё нет самого коммита. Исторический режим check_criteria_order.py поэтому
+# пропускал тихую правку критериев и валил СЛЕДУЮЩИЙ коммит — проверено
+# прогоном 2026-07-29. Здесь доступны обе половины решения: индекс и subject.
+#
+# Установка на ОБЕИХ машинах (хуки не отслеживаются git):
+#   cp scripts/git-hooks/commit-msg .git/hooks/commit-msg && chmod +x .git/hooks/commit-msg
+
+if [ -f scripts/check_criteria_order.py ]; then
+  PY=$(command -v python3 || echo /opt/homebrew/bin/python3.11)
+  "$PY" scripts/check_criteria_order.py --commit-msg "$1" || exit 1
+fi
+
+exit 0
