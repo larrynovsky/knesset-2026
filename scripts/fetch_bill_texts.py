@@ -195,10 +195,16 @@ def main() -> int:
     ap.add_argument("--refresh", action="store_true", help="перевыгрузить KNS_DocumentBill")
     ap.add_argument("--stratify", action="store_true",
                     help="выборка по форматам поровну, а не подряд — чтобы .doc точно попал")
+    ap.add_argument("--from-selection", action="store_true",
+                    help="брать ровно состав пилота из data/pilot_selection.json")
     a = ap.parse_args()
 
     scan = json.loads(SCAN.read_text(encoding="utf-8"))
     core = set(scan["core_ids"])
+    if a.from_selection:
+        sel = json.loads((ROOT / "data" / "pilot_selection.json").read_text(encoding="utf-8"))
+        core = set(sel["selected"])
+        print(f"состав пилота из pilot_selection.json: {len(core)}")
     docs = load_docs(a.refresh)
 
     best: dict[int, dict] = {}
