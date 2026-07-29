@@ -22,7 +22,9 @@
 """
 from __future__ import annotations
 
+import argparse
 import json
+import random
 import sys
 from pathlib import Path
 
@@ -30,6 +32,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SCAN = ROOT / "data" / "bills_scan.json"
 DOCCACHE = ROOT / "data" / "document_bill.json"
 OUT = ROOT / "data" / "pilot_selection.json"
+HOLDOUT_OUT = ROOT / "data" / "holdout_selection.json"
 
 # --- КВОТЫ. Объявлены до прогона, согласованы с владельцем 2026-07-29. -------
 QUOTA = {"A_суд": 20, "C_надзор": 20, "basic_law": 11}
@@ -60,7 +63,94 @@ def even_step(pool: list[int], n: int) -> list[int]:
     return [pool[int(i * step)] for i in range(n)]
 
 
+def pick_holdout(pool: list[int], n: int, seed: int) -> list[int]:
+    """Чистая выборка: весь недетерминизм собран здесь и проверяем без файлов."""
+    return sorted(random.Random(seed).sample(pool, n))
+
+
+def selftest() -> int:
+    """Оракул отложенной выборки. Красное здесь = проверка кодбука недействительна."""
+    pool = list(range(1000, 1200))
+    a1 = pick_holdout(pool, 40, 20260729)
+    a2 = pick_holdout(pool, 40, 20260729)
+    assert a1 == a2, "тот же посев дал другую выборку — §14 нарушен"
+    assert pick_holdout(pool, 40, 1) != a1, "разные посевы дали одинаковую выборку"
+    assert len(set(a1)) == 40, "в выборке повторы"
+
+    # Главное свойство: пилот не может попасть в отложенное.
+    pilot = set(range(1000, 1100))
+    clean = sorted(set(pool) - pilot)
+    h = pick_holdout(clean, 40, 20260729)
+    assert not (set(h) & pilot), "состав пилота протёк в отложенную выборку"
+
+    try:
+        pick_holdout(clean, 1000, 1)
+        raise AssertionError("запрос больше пула обязан падать, а не усекаться молча")
+    except ValueError:
+        pass
+    print("самопроверка отложенной выборки пройдена: 5 утверждений")
+    return 0
+
+
+def holdout(eligible: set[int], by_id: dict, n: int, seed: int) -> int:
+    """Отложенная выборка: материал, в который НИКТО не смотрел (Р5, §8).
+
+    Зачем она вообще. Кодбук v1.1 выведен из девяти расхождений на 57 строках
+    пилота. Перепрогон тех же 57 покажет, что код делает написанное в кодбуке,
+    и ничего больше: расхождения там упадут почти наверняка, потому что правила
+    стали подробнее, а подробность снижает разброс независимо от правильности.
+    Отличить «правила поймали класс случаев» от «правила запомнили девять штук»
+    можно только на материале, которого правила не видели. §8 свода требует
+    ровно этого, и до сих пор не был применён ни разу.
+
+    Почему СЛУЧАЙНАЯ, в отличие от пилота. Пилот брал равномерный шаг, чтобы
+    покрыть предмет по квотам. Здесь задача обратная: выборка должна быть
+    представительной для КОРПУСА, а не для нашего представления о нём.
+    Посев фиксирован и записан в файл — воспроизводимость §14 сохраняется,
+    а систематический сдвиг равномерного шага (например, по дате через BillID)
+    не переносится на проверку.
+
+    ВЫБОРКА ОДНОРАЗОВАЯ. Как только расхождения на ней прочитаны человеком,
+    она перестала быть отложенной. Для проверки следующей версии кодбука нужна
+    новая, из нетронутого остатка — поэтому берём ровно столько, сколько нужно
+    сейчас, и печатаем, сколько осталось в резерве.
+    """
+    pilot = set(json.loads(OUT.read_text(encoding="utf-8"))["selected"]) if OUT.exists() else set()
+    pool = sorted(eligible - pilot)
+    if n > len(pool):
+        print(f"§23 ОТКАЗ: просят {n}, в нетронутом пуле {len(pool)}", file=sys.stderr)
+        return 1
+    picked = pick_holdout(pool, n, seed)
+
+    print(f"отложенная выборка: {n} из нетронутого пула {len(pool)}"
+          f" (ядро {len(eligible)} минус пилот {len(pilot)})")
+    print(f"   посев {seed} записан в файл — выборка воспроизводима (§14)")
+    print(f"   РЕЗЕРВ после этой выборки: {len(pool) - n} законопроектов")
+    print("   в состав НЕ СМОТРИМ до прогона: взгляд на материал до правил —")
+    print("   это ровно то, что §3 запрещает делать с критериями.")
+
+    HOLDOUT_OUT.write_text(json.dumps(
+        {"seed": seed, "n": n, "selected": picked,
+         "pool_size": len(pool), "reserve_after": len(pool) - n,
+         "excluded_pilot": len(pilot),
+         "stop_rule": "расхождений по общему знаку 4-9 → добрать 60 из резерва; "
+                      "меньше 4 или больше 9 → не добирать. Объявлено ДО прогона."},
+        ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"\n{HOLDOUT_OUT.relative_to(ROOT)}")
+    return 0
+
+
 def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--holdout", type=int, default=0,
+                    help="собрать отложенную выборку размера N вместо состава пилота")
+    ap.add_argument("--seed", type=int, default=20260729,
+                    help="посев отложенной выборки; записывается в файл")
+    ap.add_argument("--selftest", action="store_true")
+    a = ap.parse_args()
+    if a.selftest:
+        return selftest()
+
     scan = json.loads(SCAN.read_text(encoding="utf-8"))
     by_id = {m["id"]: m for m in scan["matched"]}
     core = set(scan["core_ids"])
@@ -74,6 +164,9 @@ def main() -> int:
             with_text.add(d["BillID"])
     eligible = core & with_text
     print(f"ядро {len(core)} · с текстом нормы {len(eligible)} ← из них выбираем")
+
+    if a.holdout:
+        return holdout(eligible, by_id, a.holdout, a.seed)
 
     # --- квоты ---
     pools = {
