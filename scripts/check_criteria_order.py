@@ -359,7 +359,7 @@ def main() -> int:
     # Коммиты, трогавшие criteria/ после границы: изменение против добавления.
     after = git("log", "--format=%H%x00%s", f"{data}..HEAD", "--", CRITERIA_DIR)
     bad: list[tuple[str, str, str]] = []
-    added_total = 0
+    added_total = validated = skipped_by_prefix = 0
     for line in after.splitlines():
         if not line:
             continue
@@ -385,6 +385,13 @@ def main() -> int:
         reason = decide(subj, modified, problems, True)
         if reason:
             bad.append((h[:9], subj, reason))
+        elif subj.startswith(REVISION_PREFIX):
+            # Помеченный пересмотр гасит проверку добавленных файлов целиком.
+            # Считаем их отдельно, иначе итоговая строка соврёт: «все с
+            # объявленным каналом» про файлы, у которых канал не проверялся.
+            skipped_by_prefix += len(real_added)
+        else:
+            validated += len(real_added)
 
     if bad:
         print("§3 НАРУШЕН: тихий пересмотр критериев после появления данных.",
@@ -397,8 +404,13 @@ def main() -> int:
         print("  и поле «что заставило пересмотреть». См. CLAUDE.md §3.", file=sys.stderr)
         return 1
 
+    tail = ""
+    if skipped_by_prefix:
+        tail = (f", из них {skipped_by_prefix} НЕ проверены — их коммит помечен "
+                f"'{REVISION_PREFIX}', а ярлык гасит проверку канала")
     print(f"§3 OK: criteria/ ({crit[:9]}) предшествуют данным ({data[:9]}); "
-          f"добавлений после границы: {added_total}, все с объявленным каналом.")
+          f"добавлений после границы: {added_total}, "
+          f"с проверенным каналом: {validated}{tail}.")
     return 0
 
 
