@@ -3,7 +3,8 @@
     "expected": 545,
     "got": 545,
     "pages": 6,
-    "at": "2026-07-29T09:09:55"
+    "at": "2026-07-30T20:58:13",
+    "host": "Studio.local"
   },
   "KNS_PersonToPosition|PositionID eq 43": {
     "expected": 2981,
@@ -15,7 +16,8 @@
     "expected": 4515,
     "got": 4515,
     "pages": 46,
-    "at": "2026-07-29T09:11:59"
+    "at": "2026-07-30T20:59:14",
+    "host": "Studio.local"
   },
   "KNS_Bill|KnessetNum eq 25": {
     "expected": 7491,
@@ -28,5 +30,19 @@
     "got": 36797,
     "pages": 368,
     "at": "2026-07-28T23:35:03"
+  },
+  "obudget:raw_budget|year in (2023, 2024, 2025)": {
+    "expected": 21231,
+    "got": 21231,
+    "pages": 22,
+    "at": "2026-07-30T20:59:37",
+    "host": "Studio.local"
+  },
+  "obudget:budget_changes|year in (2023, 2024, 2025)": {
+    "expected": 1961,
+    "got": 1961,
+    "pages": 2,
+    "at": "2026-07-30T20:59:44",
+    "host": "Studio.local"
   }
 }
