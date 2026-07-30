@@ -56,6 +56,29 @@ HEB = re.compile(r"[֐-׿]+")
 PREFIXES = "בלהומשכ"
 
 
+def _derived_stop(units: list[str], heading_marks: tuple[str, ...]) -> set[str]:
+    """Стоп-слова, ВЫВЕДЕННЫЕ из того, что правило уже объявило.
+
+    Повод (первый прогон v1.2): наследование от заголовка притащило слова
+    самого оборота «בסכומים הבאים» («в следующих суммах»), и обрубок `באים`
+    с df=3 получил почти максимальный вес — верхним кандидатом на «ремонт
+    синагог» стало «оборудование для прибывающих из Эфиопии». Обломок
+    единицы `מלש` вёл себя так же.
+
+    Список не подбирается руками под желаемый результат: он получается из
+    money_units и из маркеров заголовка, то есть из строк, которые в критерии
+    УЖЕ объявлены и объявлены до прогона. Подобрать его под ответ нельзя,
+    не подобрав сам критерий, а тот виден в диффе.
+    """
+    out: set[str] = set()
+    for src in list(units) + list(heading_marks):
+        for w in HEB.findall(src):
+            out.add(w)
+            if len(w) >= 5 and w[0] in PREFIXES:
+                out.add(w[1:])
+    return out
+
+
 # ------------------------------------------------------------------ правило
 def rule_text_and_sha() -> tuple[str, str]:
     """Правило обязано быть в HEAD и совпадать с рабочей копией (§3)."""
@@ -163,11 +186,12 @@ def classify(quote: str) -> tuple[str, str]:
     return "continuation", "нет глагола выделения и нет номера пункта"
 
 
-def terms_of(quote: str) -> list[str]:
+def terms_of(quote: str, extra_stop: set[str] | None = None) -> list[str]:
     """Термины поиска — только слова из цитаты (правило запрещает иные)."""
+    stop = STOP | (extra_stop or set())
     out: list[str] = []
     for w in HEB.findall(quote):
-        if len(w) < 3 or w in STOP:
+        if len(w) < 3 or w in stop:
             continue
         out.append(w)
         if len(w) >= 5 and w[0] in PREFIXES:
@@ -343,7 +367,13 @@ def selftest() -> int:
     assert narrow(wide, 10, ["common"], DF, 50) == ([], "term_too_generic"), \
         "в цитате нет ни одного редкого слова — законный отказ"
     assert narrow([], 10, T, DF, 50) == ([], "no_term_match")
-    print("самопроверка map_commitments пройдена: 23 утверждения")
+    # выведенные стоп-слова: обломок единицы и оборот перечня не могут стать
+    # поисковым термином. Именно они топили первый прогон v1.2
+    ds = _derived_stop(['מלש"ח'], ("בסכומים הבאים",))
+    assert "מלש" in ds and "הבאים" in ds and "באים" in ds, ds
+    assert "מלש" not in terms_of('שיפוץ - 30 מלש"ח', ds)
+    assert "כנסת" in terms_of('שיפוץ בתי כנסת - 30 מלש"ח', ds)
+    print("самопроверка map_commitments пройдена: 26 утверждений")
     return 0
 
 
@@ -359,6 +389,8 @@ def main() -> int:
     rare_max = rule_int(text, "rare_term_max_articles")
     code_pat = rule_str(text, "pattern")
     years = [2023, 2024, 2025]
+    # Стоп-слова, выведенные из объявленного в правиле, а не подобранные.
+    dstop = _derived_stop(units, HEADING_MARK)
 
     lines = AGREEMENT.read_text(encoding="utf-8").splitlines()
     cands = candidates(lines, units)
@@ -412,9 +444,9 @@ def main() -> int:
             items.append(item)
             continue
 
-        terms = terms_of(c["quote_he"])
+        terms = terms_of(c["quote_he"], dstop)
         if c.get("heading"):
-            for t in terms_of(c["heading"]["quote_he"]):
+            for t in terms_of(c["heading"]["quote_he"], dstop):
                 if t not in terms:
                     terms.append(t)
         item["terms"] = terms
