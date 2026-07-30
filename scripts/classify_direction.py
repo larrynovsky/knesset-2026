@@ -308,9 +308,15 @@ def cached_call(vendor: str, model: str, prompt: str, bill: str) -> tuple[str, d
         d = json.loads(p.read_text(encoding="utf-8"))
         return d["txt"], dict(d["usage"], cached=True)
     txt, usage = call(vendor, model, prompt)
-    CACHE.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps({"txt": txt, "usage": usage}, ensure_ascii=False),
-                 encoding="utf-8")
+    # ОБРЫВ И ПУСТОТА В КЭШ НЕ ПИШУТСЯ. Урок из пилота kegan-iooh, там записан
+    # одной строкой: «проверка stop_reason — обрыв не пишется в кэш». Я скопировал
+    # кэш без этой строки, и дефект тихий: оборванный ответ лёг бы в кэш навсегда
+    # и возвращался как валидный, а повтор в main его не перебил бы — повтор
+    # спрашивает модель, а кэш отвечает раньше. На 851 акте это потеря без следа.
+    if str(txt or "").strip() and usage.get("stop_reason") not in ("max_tokens", "length"):
+        CACHE.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps({"txt": txt, "usage": usage}, ensure_ascii=False),
+                     encoding="utf-8")
     return txt, usage
 
 
