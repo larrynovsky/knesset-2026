@@ -49,6 +49,12 @@ VERDICT_WORDS = ("выполнен", "не выполнен", "невыполн"
 # Ссылка на число: {код:год:канал}. Ссылка на отсутствие: {absent:термин}.
 REF_NUM = re.compile(r"\{(\d{10}):(\d{4}):(allocated|revised|executed|transfers)\}")
 REF_ABSENT = re.compile(r"\{absent:([^}]+)\}")
+# Третья форма, добавлена сразу после первой же попытки написать карточку:
+# `{absent:термин}` ищет термин в НАЗВАНИЯХ статей, а утверждение «статьи с
+# таким кодом не существует» — про код, а не про название. Я написал
+# {absent:0022010203} и проверка молча прошла, потому что кода в названиях
+# нет по построению. Форма, которая всегда истинна, ничего не доказывает.
+REF_NOCODE = re.compile(r"\{nocode:(\d{10})\}")
 
 problems: list[str] = []
 
@@ -270,7 +276,12 @@ def check_card(card: dict, name: str, periods: set[str], idx: dict,
         # каждая фраза опирается на проверяемое: число ИЛИ отсутствие
         nums = REF_NUM.findall(concl)
         absents = REF_ABSENT.findall(concl)
-        if not nums and not absents:
+        nocodes = REF_NOCODE.findall(concl)
+        for c10 in nocodes:
+            if idx and any(k[0] == c10 for k in idx):
+                fail(f"{p}: заявлено отсутствие кода {c10}, но он есть "
+                     "в выгрузке — утверждение неверно")
+        if not nums and not absents and not nocodes:
             fail(f"{p}: вывод без единой ссылки {{код:год:канал}} или "
                  "{{absent:термин}} — не опирается ни на что проверяемое")
         for code, year, _chan in nums:
@@ -386,6 +397,8 @@ def selftest() -> int:
             conclusion="ноль {9999999999:2023:allocated}")),
         ("ложное отсутствие", lambda c: c["commitments"][0].update(
             conclusion="нет такого {absent:מוסדות דת}")),
+        ("ложное отсутствие кода", lambda c: c["commitments"][0].update(
+            conclusion="статьи нет {nocode:0022010213}")),
         ("§14 кэш числа", lambda c: c["commitments"][0].update(net_allocated=1)),
     ]
     bad = [name for name, mut in cases if run(mut) == 0]
