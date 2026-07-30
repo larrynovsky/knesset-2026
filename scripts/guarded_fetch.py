@@ -214,7 +214,18 @@ def unsynced() -> list[str]:
             continue
         for k, v in buf.items():
             s = snap.get(k)
-            if s is None or s.get("at") != v.get("at"):
+            # Сравниваем КЛЮЧ и ЦИФРЫ, но НЕ время. Первая редакция сверяла
+            # `at`, и тогда каждый повторный прогон той же выгрузки выглядел
+            # расхождением: post-receive на Studio при каждой генерации зовёт
+            # build_periods, тот честно перевыгружает KNS_Faction, время
+            # меняется — и §24 краснел на штатной работе. Сторож, который
+            # кричит на норму, обучает себя игнорировать; это опаснее, чем
+            # его отсутствие, потому что выглядит как защита.
+            # Настоящий сигнал — ключ, которого git никогда не видел, или
+            # изменившиеся цифры. Повторная выгрузка с тем же результатом
+            # новым доказательством не является.
+            if s is None or (s.get("expected"), s.get("got")) != (
+                    v.get("expected"), v.get("got")):
                 out.append(k)
     return sorted(set(out))
 
@@ -448,6 +459,14 @@ if __name__ == "__main__":
     was, now = sync_manifest()
     assert (was, now) == (0, 1), f"flush не сработал: {was} -> {now}"
     assert unsynced() == [], "после flush детектор всё ещё жалуется"
+    # Повторный прогон той же выгрузки НЕ расхождение: меняется только время.
+    (_ROOT / "data" / "manifest" / "host.json").write_text(json.dumps(
+        {"X|": {"expected": 1, "got": 1, "pages": 1, "at": "T2", "host": "h"}}))
+    assert unsynced() == [], "повторный прогон принят за потерю — сторож кричит на норму"
+    # А изменившиеся цифры — расхождение, и оно обязано быть видно.
+    (_ROOT / "data" / "manifest" / "host.json").write_text(json.dumps(
+        {"X|": {"expected": 2, "got": 2, "pages": 1, "at": "T2", "host": "h"}}))
+    assert unsynced() == ["X|"], "изменившиеся цифры не пойманы"
     _ROOT, MANIFEST = _real_root, _real_manifest
     print("  OK: потеря обнаружена, flush её закрыл")
 
