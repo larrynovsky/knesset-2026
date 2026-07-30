@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import hashlib
 import json
 import os
 import re
@@ -46,6 +47,7 @@ import ssl
 import sys
 import time
 import unicodedata
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -286,13 +288,63 @@ def pick_model(vendor: str) -> str:
     return sorted(pref)[-1]
 
 
-def call(vendor: str, model: str, prompt: str) -> tuple[str, dict]:
+CACHE = ROOT / "data" / "llm_cache"
+
+
+def cached_call(vendor: str, model: str, prompt: str, bill: str) -> tuple[str, dict]:
+    """Кэш ответа по (вендор, модель, точный промпт). Урок из kegan-iooh:
+    некэшированное звено пришлось перезапускать целыми главами, кэшированные
+    пережили три падения процесса без потерь. Здесь цена выше: полный корпус
+    851 акт × 2 вендора — порядка сорока часов, и сбой на тридцать девятом
+    без кэша стоит суток.
+
+    Ключ включает промпт целиком: правка кодбука или промпта делает кэш
+    невалидным автоматически, и это правильно — иначе кэш подсунет ответ
+    по старым правилам и выдаст его за новый прогон.
+    """
+    h = hashlib.sha256(f"{model}\x00{prompt}".encode()).hexdigest()[:24]
+    p = CACHE / f"{vendor}_{bill}_{h}.json"
+    if p.exists():
+        d = json.loads(p.read_text(encoding="utf-8"))
+        return d["txt"], dict(d["usage"], cached=True)
+    txt, usage = call(vendor, model, prompt)
+    CACHE.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps({"txt": txt, "usage": usage}, ensure_ascii=False),
+                 encoding="utf-8")
+    return txt, usage
+
+
+RETRYABLE = (429, 500, 502, 503, 504, 529)
+
+
+def call(vendor: str, model: str, prompt: str, attempts: int = 4) -> tuple[str, dict]:
+    """Вызов вендора с отступом на перегрузку.
+
+    Прогон 29.07: пятнадцать HTTP 529 у Anthropic из 57 актов — треть корпуса
+    не ответила, и сравнение расхождений с прежней версией стало недействительным
+    (база сжалась с 57 до 36). Немедленный повтор, который был в main, против 529
+    бесполезен: перегрузка длится дольше, чем один цикл.
+    """
+    last: Exception | None = None
+    for i in range(attempts):
+        try:
+            return _call_once(vendor, model, prompt)
+        except urllib.error.HTTPError as e:      # noqa: PERF203
+            if e.code not in RETRYABLE or i == attempts - 1:
+                raise
+            last = e
+            time.sleep(2 ** i * 5)               # 5, 10, 20 сек
+    raise last                                    # недостижимо, но явно
+
+
+def _call_once(vendor: str, model: str, prompt: str) -> tuple[str, dict]:
     if vendor == "anthropic":
-        # 8000, а не 4000: двухуровневый ответ длиннее одноуровневого, а обрыв
-        # по лимиту в логе неотличим от невалидного ответа, если не передать
+        # 16000, а не 8000: двухуровневый ответ с парностью K3 и разметкой по
+        # норме K6 длиннее прежнего — 29.07 пять ответов оборвались по лимиту.
+        # Обрыв в логе неотличим от невалидного ответа, если не передать
         # stop_reason наверх (наблюдалось 29.07 на max_tokens=1500).
         r = _post("https://api.anthropic.com/v1/messages",
-                  {"model": model, "max_tokens": 8000,
+                  {"model": model, "max_tokens": 16000,
                    "messages": [{"role": "user", "content": prompt}]},
                   {"x-api-key": os.environ["ANTHROPIC_API_KEY"],
                    "anthropic-version": "2023-06-01"})
@@ -358,6 +410,18 @@ def parse(txt: str) -> dict | None:
             return None
     if sum(1 for n in norms if n.get("strongest")) > 1:
         return None              # K2b: сильнейшая одна, иначе это не пометка
+
+    # K2d: пометка об основании — ОТКАЗ, а не warning. Так объявлено в кодбуке
+    # («Отсутствие пометки — отказ, не warning»), но до 29.07 код только считал:
+    # 39 записей прошли без basis_note там, где он обязателен. Проверка стоит
+    # здесь, а не в enrich, потому что здесь у ответа есть второй шанс: main
+    # делает один повтор на невалидный разбор. Условие — чистая функция ответа.
+    # ov.get("sign"), а НЕ s: цикл выше переиспользовал имя s под знак нормы,
+    # и первая редакция этой проверки читала знак последней нормы вместо общего.
+    # Поймано самопроверкой, а не прогоном.
+    if (ov.get("sign") not in (None, 0) and len(norms) > 1
+            and not str(ov.get("basis_note") or "").strip()):
+        return None
     return d
 
 
@@ -487,11 +551,13 @@ def main() -> int:
         prompt = PROMPT.format(checklist=chk, codebook=cod, name=name, text=text_cut)
         for v, model in models.items():
             try:
-                txt, usage = call(v, model, prompt)
+                txt, usage = cached_call(v, model, prompt, b)
                 d = parse(txt)
                 if d is None:
                     # Один повтор, и только один. Повторять до успеха значит
-                    # тянуть, пока не выпадет удобный ответ.
+                    # тянуть, пока не выпадет удобный ответ. Повтор идёт МИМО
+                    # кэша: кэшированный ответ уже признан невалидным, и
+                    # повторное чтение того же файла ничего не изменит.
                     txt, usage = call(v, model, prompt)
                     d = parse(txt)
                 if d is None:
@@ -685,7 +751,18 @@ def selftest() -> int:
     assert k3_pairs([{"checklist_item": "E3", "sign": 1},
                      {"checklist_item": "B4", "sign": -1}]) == 0, "разные пункты посчитаны парой"
 
-    print("самопроверка механики v1.1 пройдена: 16 утверждений")
+    # K2d: знак ≠ 0 и норм больше одной без basis_note — ОТКАЗ разбора, не warning
+    ovm = {"sign": -1, "quote_he": "a", "quote_ru": "a", "confidence": "low",
+           "argument_against": "x", "basis_note": ""}
+    two = [{"checklist_item": "A1", "sign": -1, "quote_he": "a"},
+           {"checklist_item": "A2", "sign": 0, "quote_he": "b"}]
+    assert parse(json.dumps({"overall": ovm, "norms": two})) is None, \
+        "K2d: ответ без basis_note обязан отвергаться разбором, а не считаться"
+    assert parse(json.dumps({"overall": dict(ovm, basis_note="знак по одной норме"),
+                             "norms": two})) is not None, \
+        "K2d: ответ С пометкой отвергнут — проверка слишком широка"
+
+    print("самопроверка механики v1.1 пройдена: 18 утверждений")
     return 0
 
 
