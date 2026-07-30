@@ -96,17 +96,45 @@ def rule_str(text: str, key: str) -> str:
 
 
 # ------------------------------------------------------------- извлечение
+ITEM_RE = re.compile(r"^([א-ת]\.|\d+\.|\+)\s")
+HEADING_MARK = ("בסכומים הבאים",)
+BASE_MARK = ("בבסיס התקציב", "לבסיס התקציב")
+
+
+def _in_base(s: str) -> bool:
+    return any(m in s for m in BASE_MARK)
+
+
 def candidates(lines: list[str], units: list[str]) -> list[dict]:
-    """Строки с числом и денежной единицей, с якорем страницы ⟦N⟧."""
-    page, out = None, []
+    """Строки с числом и денежной единицей, с якорем страницы и заголовком.
+
+    Заголовок перечня сумм не содержит и потому сам кандидатом не является —
+    но именно он несёт предмет («религиозные здания») и признак «в базе
+    бюджета». Первая редакция его не видела, и семь обязательств теряли и то
+    и другое: они находились по слову «ремонт», которое стоит в сотнях статей.
+    """
+    page, out, heading = None, [], None
     for i, raw in enumerate(lines, 1):
         s = raw.strip()
         m = re.fullmatch(r"⟦(\d+)⟧", s)
         if m:
             page = int(m.group(1))
             continue
-        if re.search(r"[0-9]", s) and any(u in s for u in units):
-            out.append({"line": i, "page": page, "quote_he": s})
+        if not s:
+            continue
+        has_money = bool(re.search(r"[0-9]", s)) and any(u in s for u in units)
+        is_item = bool(ITEM_RE.match(s))
+
+        if not has_money and any(v in s for v in VERBS_COMMIT) and (
+                s.endswith(":") or s.endswith(": ") or any(h in s for h in HEADING_MARK)):
+            heading = {"quote_he": s, "line": i, "in_base": _in_base(s)}
+            continue
+        if heading and not is_item and not has_money:
+            heading = None            # перечень кончился
+
+        if has_money:
+            out.append({"line": i, "page": page, "quote_he": s,
+                        "heading": heading if (heading and is_item) else None})
     return out
 
 
@@ -174,49 +202,56 @@ def amount_of(quote: str) -> float | None:
 TITLE_FIELDS = ("title", "title_level8", "title_level6", "title_level4")
 
 
-def search(rows: list[dict], terms: list[str], years: list[int]) -> list[dict]:
-    """Кандидаты-строки бюджета: сколько РАЗНЫХ терминов встретилось в названии."""
+def doc_freq(rows: list[dict], term: str, _cache: dict = {}) -> int:  # noqa: B006
+    """В скольких названиях статей встречается термин. Считается один раз."""
+    if term not in _cache:
+        _cache[term] = sum(1 for r in rows if term in (r["title"] or ""))
+    return _cache[term]
+
+
+def search(rows: list[dict], terms: list[str], years: list[int],
+           dfs: dict[str, int]) -> list[dict]:
+    """Кандидаты-строки: вес термина 1/(1+df), вес строки — сумма весов.
+
+    Считается не СКОЛЬКО терминов совпало, а какие. `שיפוץ` («ремонт») стоит
+    в сотнях названий и весит почти ноль; `מקומות קדושים` — в трёх и весит
+    почти единицу. Прежняя редакция считала их одинаковыми, и частое слово
+    выигрывало у редкого просто потому, что встречалось чаще.
+    """
     hits: dict[str, dict] = {}
     for r in rows:
-        if len(r["code"]) != 10 or r["year"] not in years:
+        if r["year"] not in years:
             continue
         blob = " ".join(str(r.get(f) or "") for f in TITLE_FIELDS)
         matched = [t for t in terms if t in blob]
         if not matched:
             continue
-        key = r["code"]
-        cur = hits.get(key)
-        if cur is None or len(matched) > len(cur["matched"]):
-            hits[key] = {"code": key, "title": r["title"], "matched": matched}
-    return sorted(hits.values(), key=lambda h: (-len(h["matched"]), h["code"]))
+        score = sum(1.0 / (1 + dfs[t]) for t in matched)
+        cur = hits.get(r["code"])
+        if cur is None or score > cur["score"]:
+            hits[r["code"]] = {"code": r["code"], "title": r["title"],
+                               "matched": matched, "score": round(score, 5)}
+    return sorted(hits.values(), key=lambda h: (-h["score"], h["code"]))
 
 
-def narrow(found: list[dict], max_shown: int) -> tuple[list[dict], str | None]:
+def narrow(found: list[dict], max_shown: int, terms: list[str],
+           dfs: dict[str, int], rare_max: int) -> tuple[list[dict], str | None]:
     """Сужение словами из цитаты — то, что правило предписывает ДО отказа.
 
-    Первая редакция этого не делала: любой набор шире max_candidates_shown
-    уходил в term_too_generic. На ШАС это дало 18 отказов из 21 обязательства
-    и НОЛЬ решений для человека — то есть артефакт, который выглядит
-    построенным и не содержит работы. Правило же говорит буквально: отказ
-    законен, когда «сузить его словами из цитаты НЕ УДАЛОСЬ».
-
-    Сужение: берём строки, совпавшие по наибольшему числу разных терминов,
-    и спускаемся на ярус ниже, только пока помещаемся в лимит. Если уже
-    верхний ярус шире лимита — сузить нечем, и это честный term_too_generic.
+    v1.1 сужала по числу совпавших терминов и давала 18 отказов из 21: слово
+    «ремонт» топило цитату целиком. v1.2 сужает по РЕДКОСТИ. Цитата, в которой
+    нет ни одного термина редче объявленного порога, не различает ничего —
+    и вот это законный term_too_generic, а не «нашлось слишком много».
     """
     if not found:
         return [], "no_term_match"
-    tiers: dict[int, list[dict]] = {}
-    for f in found:
-        tiers.setdefault(len(f["matched"]), []).append(f)
-    out: list[dict] = []
-    for k in sorted(tiers, reverse=True):
-        if out and len(out) + len(tiers[k]) > max_shown:
-            break
-        if not out and len(tiers[k]) > max_shown:
-            return [], "term_too_generic"
-        out.extend(tiers[k])
-    return out, None
+    rare = [t for t in terms if dfs.get(t, 10 ** 9) <= rare_max]
+    if not rare:
+        return [], "term_too_generic"
+    keep = [f for f in found if any(t in f["matched"] for t in rare)]
+    if not keep:
+        return [], "no_term_match"
+    return keep[:max_shown], None
 
 
 def numbers_for(rows_by_code_year: dict, code: str, years: list[int]) -> dict:
@@ -272,8 +307,26 @@ def selftest() -> int:
     assert "מקוואות" in terms_of("בנית מקוואות - 40 מלש\"ח")
     rows = [{"code": "0022010203", "year": 2023, "title": "קהילות יהודיות",
              "title_level8": "", "title_level6": "", "title_level4": ""}]
-    assert search(rows, ["קהילות"], [2023])[0]["code"] == "0022010203"
-    assert search(rows, ["קהילות"], [2024]) == []
+    D = {"קהילות": 3}
+    assert search(rows, ["קהילות"], [2023], D)[0]["code"] == "0022010203"
+    assert search(rows, ["קהילות"], [2024], D) == []
+    # редкий термин весит больше частого — это и есть вся правка v1.2
+    many = [{"code": f"{i:010d}", "year": 2023, "title": "שיפוץ משהו",
+             "title_level8": "", "title_level6": "", "title_level4": ""}
+            for i in range(3)]
+    many.append({"code": "9" * 10, "year": 2023, "title": "שיפוץ מקומות קדושים",
+                 "title_level8": "", "title_level6": "", "title_level4": ""})
+    D2 = {"שיפוץ": 400, "מקומות": 3}
+    res = search(many, ["שיפוץ", "מקומות"], [2023], D2)
+    assert res[0]["code"] == "9" * 10, "редкий термин обязан выигрывать у частого"
+    # заголовок перечня отдаёт подпункту «в базе бюджета»
+    heads = ["⟦9⟧", "3. תתוקצב בבסיס התקציב בנייה של מבני הדת בסכומים הבאים :",
+             "", 'א. שיפוץ בתי כנסת - 30 מלש"ח.', "", "טקסט אחר בלי סימן",
+             'ב. משהו - 5 מלש"ח.']
+    cs = candidates(heads, ['מלש"ח'])
+    assert len(cs) == 2, cs
+    assert cs[0]["heading"] is not None and cs[0]["heading"]["in_base"] is True
+    assert cs[1]["heading"] is None, "перечень обязан кончаться на чужой строке"
     ch = [{"year": 2023, "transaction_id": "t1", "budget_code_title": ["00220102:x"],
            "net_expense_diff": 1.0, "change_title": ["עודפים"], "explanation": "",
            "date": ["2023-01-01"]}]
@@ -281,13 +334,16 @@ def selftest() -> int:
     assert transfers_for(ch, "0099999999", [2023]) == []
     # narrow: сужение обязано случиться ДО отказа, иначе отказов будет больше,
     # чем работы, и артефакт окажется пустым при зелёном прогоне
-    wide = [{"code": f"{i:010d}", "matched": ["a"]} for i in range(20)]
-    top = [{"code": "9" * 10, "matched": ["a", "b"]}]
-    assert narrow(top + wide, 10)[0] == top, "верхний ярус обязан выигрывать"
-    assert narrow(wide, 10) == ([], "term_too_generic"), "нечем сужать — отказ"
-    assert narrow([], 10) == ([], "no_term_match")
-    assert narrow(top, 10) == (top, None)
-    print("самопроверка map_commitments пройдена: 17 утверждений")
+    wide = [{"code": f"{i:010d}", "matched": ["common"]} for i in range(20)]
+    rarerow = [{"code": "9" * 10, "matched": ["common", "rare"]}]
+    DF = {"common": 400, "rare": 3}
+    T = ["common", "rare"]
+    assert narrow(rarerow + wide, 10, T, DF, 50)[0] == rarerow, \
+        "оставляем только строки с редким термином"
+    assert narrow(wide, 10, ["common"], DF, 50) == ([], "term_too_generic"), \
+        "в цитате нет ни одного редкого слова — законный отказ"
+    assert narrow([], 10, T, DF, 50) == ([], "no_term_match")
+    print("самопроверка map_commitments пройдена: 23 утверждения")
     return 0
 
 
@@ -300,6 +356,7 @@ def main() -> int:
     expected = rule_int(text, "candidate_lines_expected")
     max_shown = rule_int(text, "max_candidates_shown")
     max_manual = rule_int(text, "max_manual_decisions")
+    rare_max = rule_int(text, "rare_term_max_articles")
     code_pat = rule_str(text, "pattern")
     years = [2023, 2024, 2025]
 
@@ -314,6 +371,7 @@ def main() -> int:
     budget = json.loads(TAKANOT.read_text(encoding="utf-8"))
     changes = json.loads(CHANGES.read_text(encoding="utf-8"))["rows"]
     rows = budget["rows"]
+    rows10 = [r for r in rows if len(r["code"]) == 10]
     by_cy = {(r["code"], r["year"]): r for r in rows}
     print(f"бюджет: {len(rows)} строк (снимок {budget['fetched_at']}), "
           f"переносов: {len(changes)}")
@@ -326,8 +384,11 @@ def main() -> int:
             "category": cat,
             "category_rule": rule_fired,
             "amount_ils": amount_of(c["quote_he"]),
+            # Признак берётся из цитаты ИЛИ из заголовка перечня: подпункт
+            # «а. ремонт синагог — 30 млн» сам «в базе бюджета» не говорит,
+            # это сказано строкой выше за все семь подпунктов сразу.
             "in_budget_base": "required_in_base"
-            if ("בבסיס התקציב" in c["quote_he"] or "לבסיס התקציב" in c["quote_he"])
+            if (_in_base(c["quote_he"]) or (c.get("heading") or {}).get("in_base"))
             else "not_specified",
             "granularity": None,          # решает человек, Ф5
             "rejection_reason": None,
@@ -352,13 +413,21 @@ def main() -> int:
             continue
 
         terms = terms_of(c["quote_he"])
+        if c.get("heading"):
+            for t in terms_of(c["heading"]["quote_he"]):
+                if t not in terms:
+                    terms.append(t)
         item["terms"] = terms
-        found = search(rows, terms, years)
+        dfs = {t: doc_freq(rows10, t) for t in terms}
+        item["term_df"] = dfs
+        found = search(rows10, terms, years, dfs)
         item["matches_before_narrowing"] = len(found)
-        found, why = narrow(found, max_shown)
+        found, why = narrow(found, max_shown, terms, dfs, rare_max)
         if why:
             item["rejection_reason"] = why
         else:
+            if len(found) == max_shown:
+                item["candidates_truncated_from"] = item["matches_before_narrowing"]
             for f in found:
                 f["years"] = numbers_for(by_cy, f["code"], years)
                 f["transfers"] = transfers_for(changes, f["code"], years)
