@@ -191,6 +191,34 @@ def search(rows: list[dict], terms: list[str], years: list[int]) -> list[dict]:
     return sorted(hits.values(), key=lambda h: (-len(h["matched"]), h["code"]))
 
 
+def narrow(found: list[dict], max_shown: int) -> tuple[list[dict], str | None]:
+    """Сужение словами из цитаты — то, что правило предписывает ДО отказа.
+
+    Первая редакция этого не делала: любой набор шире max_candidates_shown
+    уходил в term_too_generic. На ШАС это дало 18 отказов из 21 обязательства
+    и НОЛЬ решений для человека — то есть артефакт, который выглядит
+    построенным и не содержит работы. Правило же говорит буквально: отказ
+    законен, когда «сузить его словами из цитаты НЕ УДАЛОСЬ».
+
+    Сужение: берём строки, совпавшие по наибольшему числу разных терминов,
+    и спускаемся на ярус ниже, только пока помещаемся в лимит. Если уже
+    верхний ярус шире лимита — сузить нечем, и это честный term_too_generic.
+    """
+    if not found:
+        return [], "no_term_match"
+    tiers: dict[int, list[dict]] = {}
+    for f in found:
+        tiers.setdefault(len(f["matched"]), []).append(f)
+    out: list[dict] = []
+    for k in sorted(tiers, reverse=True):
+        if out and len(out) + len(tiers[k]) > max_shown:
+            break
+        if not out and len(tiers[k]) > max_shown:
+            return [], "term_too_generic"
+        out.extend(tiers[k])
+    return out, None
+
+
 def numbers_for(rows_by_code_year: dict, code: str, years: list[int]) -> dict:
     out = {}
     for y in years:
@@ -251,7 +279,15 @@ def selftest() -> int:
            "date": ["2023-01-01"]}]
     assert transfers_for(ch, "0022010203", [2023])[0]["matched_code"] == "00220102"
     assert transfers_for(ch, "0099999999", [2023]) == []
-    print("самопроверка map_commitments пройдена: 13 утверждений")
+    # narrow: сужение обязано случиться ДО отказа, иначе отказов будет больше,
+    # чем работы, и артефакт окажется пустым при зелёном прогоне
+    wide = [{"code": f"{i:010d}", "matched": ["a"]} for i in range(20)]
+    top = [{"code": "9" * 10, "matched": ["a", "b"]}]
+    assert narrow(top + wide, 10)[0] == top, "верхний ярус обязан выигрывать"
+    assert narrow(wide, 10) == ([], "term_too_generic"), "нечем сужать — отказ"
+    assert narrow([], 10) == ([], "no_term_match")
+    assert narrow(top, 10) == (top, None)
+    print("самопроверка map_commitments пройдена: 17 утверждений")
     return 0
 
 
@@ -318,11 +354,10 @@ def main() -> int:
         terms = terms_of(c["quote_he"])
         item["terms"] = terms
         found = search(rows, terms, years)
-        if not found:
-            item["rejection_reason"] = "no_term_match"
-        elif len(found) > max_shown:
-            item["rejection_reason"] = "term_too_generic"
-            item["candidates_count"] = len(found)
+        item["matches_before_narrowing"] = len(found)
+        found, why = narrow(found, max_shown)
+        if why:
+            item["rejection_reason"] = why
         else:
             for f in found:
                 f["years"] = numbers_for(by_cy, f["code"], years)
