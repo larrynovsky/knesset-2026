@@ -76,20 +76,41 @@ def fetch_headers() -> list[dict]:
                "IsNoConfidenceInGov,ForOptionDesc,AgainstOptionDesc,VoteStatusDesc")
 
 
-def fetch_faction_bridge() -> dict[int, list[dict]]:
-    """PersonID → список членств во фракциях с датами (25-й Кнессет).
+def _nm(s) -> str:
+    return " ".join(str(s or "").split()).strip()
 
-    Даты нужны не для красоты: §1 требует единицу «партия × период», и депутат,
-    сменивший фракцию в середине каденции, обязан считаться по той фракции,
-    в которой он состоял НА ДАТУ ГОЛОСОВАНИЯ, а не по последней.
+
+def fetch_faction_bridge() -> tuple[dict, dict]:
+    """Два моста от голосующего к фракции. Возвращает (по PersonID, по ФИО).
+
+    ПОЧЕМУ ДВА. MkId в поимённых голосах и PersonID в позициях — РАЗНЫЕ
+    пространства идентификаторов, как и предупреждал свод (SOURCES, ловушка 3).
+    Первая версия этого скрипта считала их одним: пять проверенных депутатов
+    совпали, и я записал «мост есть». Прогон на 2869 голосах дал 22,5% сшивки,
+    ШАС получила десять голосов вместо сотен — то есть партийный агрегат был бы
+    неверен, а не пуст, и это худший исход.
+
+    Замер (probe_mk_bridge, 20 000 голосов, 120 голосующих — ровно число
+    мандатов): прямой мост покрывает 45 из 120 (38%), сшивка по ФИО — 120 из 120
+    при НУЛЕ неоднозначностей. Поэтому ФИО — основной путь, а совпадение
+    идентификаторов остаётся быстрой проверкой для тех, у кого оно есть.
+
+    Однофамильцы не гадаются: если под одним ФИО несколько персон с фракцией,
+    запись не сшивается вовсе и попадает в счётчик несшитых.
     """
     rows = fetch_all("KNS_PersonToPosition", flt=f"KnessetNum eq {K25_NUM}",
                      select="PersonID,FactionID,FactionName,StartDate,FinishDate")
-    bridge: dict[int, list[dict]] = collections.defaultdict(list)
+    by_person: dict[int, list[dict]] = collections.defaultdict(list)
     for r in rows:
         if r.get("FactionID"):
-            bridge[r["PersonID"]].append(r)
-    return bridge
+            by_person[r["PersonID"]].append(r)
+
+    persons = fetch_all("KNS_Person", select="Id,LastName,FirstName")
+    by_name: dict[tuple, set] = collections.defaultdict(set)
+    for p in persons:
+        if p["Id"] in by_person:
+            by_name[(_nm(p.get("LastName")), _nm(p.get("FirstName")))].add(p["Id"])
+    return by_person, by_name
 
 
 def faction_at(bridge: dict[int, list[dict]], person: int, when: str):
@@ -108,6 +129,19 @@ def faction_at(bridge: dict[int, list[dict]], person: int, when: str):
     # догадка о партии хуже отсутствия записи.
     uniq = {(m["FactionID"], (m.get("FactionName") or "").strip()) for m in memberships}
     return uniq.pop() if len(uniq) == 1 else None
+
+
+def resolve_person(by_person: dict, by_name: dict, rec: dict) -> int | None:
+    """MkId голоса → PersonID позиций. Сначала прямое совпадение, потом ФИО.
+
+    Возврат None означает «не сшилось» и НИКОГДА не означает «наверное вот этот»:
+    неоднозначное ФИО оставляет голос вне партийного агрегата, и он считается.
+    """
+    mk = rec.get("MkId")
+    if mk in by_person:
+        return mk
+    cands = by_name.get((_nm(rec.get("LastName")), _nm(rec.get("FirstName"))), set())
+    return cands.copy().pop() if len(cands) == 1 else None
 
 
 def fetch_named_votes(vote_id: int) -> list[dict]:
@@ -160,8 +194,9 @@ def main() -> int:
               "данные наверх не отдаются.")
         return 1
 
-    bridge = fetch_faction_bridge()
-    print(f"\nмост персона→фракция: {len(bridge)} персон 25-го Кнессета")
+    by_person, by_name = fetch_faction_bridge()
+    print(f"\nмост персона→фракция: {len(by_person)} персон с фракцией, "
+          f"{len(by_name)} уникальных ФИО (сшивка по ФИО — основной путь, см. docstring)")
 
     targets = matched[:a.limit_votes] if a.limit_votes else matched
     print(f"выкачиваю поимённые по {len(targets)} голосованиям…\n")
@@ -171,7 +206,8 @@ def main() -> int:
         named = fetch_named_votes(h["Id"])
         by_fac: dict = collections.defaultdict(collections.Counter)
         for r in named:
-            fac = faction_at(bridge, r.get("MkId"), r.get("VoteDate") or "")
+            pid = resolve_person(by_person, by_name, r)
+            fac = faction_at(by_person, pid, r.get("VoteDate") or "") if pid else None
             if fac is None:
                 unbridged[r.get("MkId")] += 1
                 continue
@@ -243,7 +279,22 @@ def selftest() -> int:
         "единственное членство обязано применяться, даже если даты не покрыли"
     assert faction_at(bridge, 999, "2023-05-01T10:00:00+03:00") is None, \
         "персона без моста обязана давать None, а не догадку"
-    print("самопроверка fetch_votes пройдена: 4 утверждения")
+
+    # resolve_person: прямой id важнее ФИО, однофамильцы не гадаются
+    by_name = {("כהן", "יעקב"): {7}, ("לוי", "משה"): {11, 12}}
+    assert resolve_person(bridge, by_name, {"MkId": 7, "LastName": "кто-то"}) == 7, \
+        "прямое совпадение id обязано срабатывать первым"
+    assert resolve_person(bridge, by_name,
+                          {"MkId": 99999, "LastName": "כהן", "FirstName": "יעקב"}) == 7, \
+        "сшивка по ФИО не сработала — а она покрывает 120 из 120 голосующих"
+    assert resolve_person(bridge, by_name,
+                          {"MkId": 99999, "LastName": "לוי", "FirstName": "משה"}) is None, \
+        "однофамильцы обязаны давать None: догадка приписала бы голос чужой партии"
+    assert resolve_person(bridge, by_name,
+                          {"MkId": 99999, "LastName": "אין", "FirstName": "כזה"}) is None, \
+        "неизвестное ФИО обязано давать None"
+
+    print("самопроверка fetch_votes пройдена: 8 утверждений")
     return 0
 
 
