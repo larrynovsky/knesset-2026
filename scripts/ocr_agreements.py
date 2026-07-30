@@ -40,6 +40,22 @@ REPORT = ROOT / "data" / "agreements_ocr_report.json"
 BREW = "/opt/homebrew/bin"          # ssh без login-шелла не видит Homebrew в PATH
 DPI = 300
 
+# МОДЕЛЬ РАСПОЗНАВАНИЯ — tessdata_best, а не то, что пришло с Homebrew.
+#
+# Замер на странице 10 соглашения с ШАС (560 слов): модель из пакета
+# tesseract-lang 4.1.0 дала 35 слов с ошибкой конечной мем, tessdata_best — 8.
+# В четыре с лишним раза меньше, и «חרדיים», «הקריטריונים», «שקלים» читаются
+# верно там, где быстрая модель ставила самех. Это ступень «нативная
+# возможность вместо своего кода»: лучшая модель убирает большую часть того,
+# что я собирался чинить регулярками.
+#
+# §14: путь к модели, её URL и контрольная сумма зафиксированы здесь, чтобы
+# прогон из чистого клона давал тот же текст. Без версии модели «воспроизводимо»
+# означало бы «воспроизводимо, если у вас случайно та же модель».
+TESSDATA = Path.home() / "tessdata_best"
+HEB_URL = "https://github.com/tesseract-ocr/tessdata_best/raw/main/heb.traineddata"
+HEB_SHA256 = "dbaa827aea6bc21215638447f17783a1004987c2d0bf5573d111fee397abdae5"
+
 
 HEB = re.compile(r"[א-ת]")
 WORD = re.compile(r"[א-ת]+")
@@ -77,15 +93,32 @@ def garbage_score(line: str) -> float:
     return 1.0 - ok / len(s)
 
 
+def ensure_model() -> None:
+    """Модель на месте и та самая. Иначе прогон не воспроизводим (§14)."""
+    import hashlib
+    import urllib.request
+    p = TESSDATA / "heb.traineddata"
+    if p.exists() and hashlib.sha256(p.read_bytes()).hexdigest() == HEB_SHA256:
+        return
+    TESSDATA.mkdir(parents=True, exist_ok=True)
+    print(f"скачиваю модель распознавания: {HEB_URL}")
+    urllib.request.urlretrieve(HEB_URL, p)
+    got = hashlib.sha256(p.read_bytes()).hexdigest()
+    if got != HEB_SHA256:
+        raise RuntimeError(f"контрольная сумма модели не сошлась: {got}")
+
+
 def ocr_pdf(pdf: Path, workdir: Path) -> list[str]:
     """Постранично: pdftoppm → tesseract -l heb. Якорь ⟦N⟧ = страница файла."""
+    env = {"TESSDATA_PREFIX": str(TESSDATA), "PATH": BREW}
     subprocess.run([f"{BREW}/pdftoppm", "-r", str(DPI), "-png", str(pdf),
                     str(workdir / "pg")], check=True, timeout=1800)
     pages = []
     for png in sorted(workdir.glob("pg-*.png")):
         base = png.with_suffix("")
         subprocess.run([f"{BREW}/tesseract", str(png), str(base), "-l", "heb",
-                        "--psm", "6"], check=True, capture_output=True, timeout=300)
+                        "--psm", "6"], check=True, capture_output=True,
+                       timeout=300, env=env)
         raw = base.with_suffix(".txt").read_text(encoding="utf-8", errors="replace")
         pages.append(raw)
     return pages
@@ -121,6 +154,7 @@ def main() -> int:
                     help="§23: ожидаемое суммарное число страниц, объявляется ДО прогона")
     a = ap.parse_args()
 
+    ensure_model()
     OUT.mkdir(parents=True, exist_ok=True)
     pdfs = sorted(RAW.glob("CA37-*.pdf"))
     if a.only:
@@ -188,7 +222,19 @@ def selftest() -> int:
 
     assert garbage_score("הסכם קואליציוני בין סיעת הליכוד") < 0.05, "иврит принят за мусор"
     assert garbage_score("~@#$%^&*<>|\\{}[]_=+") > 0.8, "мусор не опознан"
-    print("самопроверка ocr_agreements пройдена: 7 утверждений")
+
+    # Модель: сумма зафиксирована и совпадает с тем, чем распознавали.
+    # Красное здесь = текст соглашений получен другой моделью, чем записано,
+    # и «воспроизводимо из репозитория» перестало быть правдой (§14).
+    import hashlib
+    p = TESSDATA / "heb.traineddata"
+    if p.exists():
+        got = hashlib.sha256(p.read_bytes()).hexdigest()
+        assert got == HEB_SHA256, f"модель на диске не та, что записана: {got}"
+    assert len(HEB_SHA256) == 64 and HEB_URL.endswith("heb.traineddata"), \
+        "константы модели повреждены"
+
+    print("самопроверка ocr_agreements пройдена: 9 утверждений")
     return 0
 
 
