@@ -6,6 +6,12 @@
 
 Вывод — в stdout, оттуда руками в docs/reference/SOURCES.md.
 Скрипт без зависимостей: только stdlib.
+
+§23-exempt: одноразовая разведка ГЛУБИНЫ, написана до §23 и до канала Б.
+Ходит в obudget собственным urlopen и объёма не сверяет — предмет изучения
+здесь сама форма выдачи, а не выборка. Рабочая выгрузка канала Б —
+scripts/fetch_budget.py через guarded_fetch.fetch_sql. Этот файл — долг
+на удаление (follow-up 1 снимка 2026-07-30).
 """
 from __future__ import annotations
 

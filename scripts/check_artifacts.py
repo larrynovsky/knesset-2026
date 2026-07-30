@@ -41,6 +41,13 @@ CODE_GLOBS = ("*.py", "git-hooks/*", "post-receive.template")
 # всего лишь качал PDF соглашений. §23 — про выгрузку МНОЖЕСТВА записей,
 # то есть про OData, а не про весь домен.
 ODATA_MARK = "OdataV4/ParliamentInfo"
+# Второй источник массовых данных, добавлен 2026-07-30 (канал Б). obudget
+# отдаёт строки страницами по 1000 независимо от запроса — тот же класс тихого
+# недобора, что $top=200 в OData. Пока хост не стоял в этом списке, любой новый
+# скрипт обходил §23 МОЛЧА: guarded_fetch не мог его увидеть, потому что не
+# вызывался. Это ровно тот дефект, ради которого §24 написан, — второй раз.
+OBUDGET_MARK = "next.obudget.org"
+BULK_MARKS = (ODATA_MARK, OBUDGET_MARK)
 # Явный, громкий и считаемый обход — по образцу `# silent-ok:` из health-os §7.
 EXEMPT_MARK = "§23-exempt:"
 
@@ -120,15 +127,24 @@ def check_no_fetch_bypass() -> None:
         if f.suffix != ".py" or f.name in ("guarded_fetch.py", "check_artifacts.py"):
             continue  # guard — эталон; сам детектор содержит образцы, которые ищет
         txt = f.read_text(encoding="utf-8", errors="replace")
-        if ODATA_MARK not in txt or "urlopen(" not in txt:
+        if not any(m in txt for m in BULK_MARKS) or "urlopen(" not in txt:
             continue
-        if "guarded_fetch" in txt:
+        # Требуется ИМПОРТ, а не упоминание. Первая редакция принимала любое
+        # вхождение слова `guarded_fetch` — и тогда КОММЕНТАРИЙ глушил детектор.
+        # Найдено 2026-07-30 на себе: я дописал в docstring probe_phase0 фразу
+        # «рабочая выгрузка идёт через guarded_fetch.fetch_sql», и файл стал
+        # выглядеть защищённым. Тот же класс, что названная дыра проверки (A):
+        # упоминание доказывает намерение, а не работу механизма — только здесь
+        # оно ещё и ОТКЛЮЧАЕТ проверку, а не просто ничего не доказывает.
+        if re.search(r"^\s*(?:import\s+guarded_fetch|from\s+guarded_fetch\s+import)",
+                     txt, flags=re.M):
             continue
         m = re.search(re.escape(EXEMPT_MARK) + r"\s*(\S.*)", txt)
         if m:
             note(f"§23 обход объявлен в {f.name}: {m.group(1).strip()[:70]}")
             continue
-        fail(f"§23 ОБХОД: {f.name} сам ходит в OData через urlopen, не использует "
+        fail(f"§23 ОБХОД: {f.name} сам ходит в источник массовых данных "
+             f"(OData или obudget) через urlopen, не использует "
              f"guarded_fetch и не несёт пометки `{EXEMPT_MARK} <причина>` — "
              "выгрузка без объявленного ожидания объёма")
 
@@ -180,7 +196,54 @@ def check_cards() -> None:
             break
 
 
-# ------------------------------------------------------------ E. артефакт
+# --------------------------------------- E. установлен ли хук (§20, §24)
+def check_hooks_installed() -> None:
+    """Отслеживаемый хук и установленный обязаны совпадать.
+
+    Повод (2026-07-30): `scripts/git-hooks/commit-msg` с 29.07 зовёт и §3,
+    и квитанцию ponytail — а в `.git/hooks/commit-msg` лежала прежняя редакция,
+    занятая одним ponytail'ом. Переустановить забыли. Предупредительный режим
+    §3 не вызывался НИОТКУДА, и это не было видно ничем: механизм есть, файл
+    в репозитории есть, в отчётах он считался работающим (§20).
+
+    Класс отказа тот же, что у §23: шаг отчитался об успехе («хук написан»)
+    и тихо не сделал того, чего от него ждали. Установка — тоже операция,
+    и у неё тоже обязан быть оракул.
+
+    Хуки не отслеживаются git по устройству, поэтому единственная возможная
+    проверка — сверка содержимого двух файлов. Она ловит расхождение, а не
+    правильность хука.
+    """
+    src_dir = SCRIPTS / "git-hooks"
+    dst_dir = ROOT / ".git" / "hooks"
+    if not src_dir.is_dir():
+        note("scripts/git-hooks/ нет — установку проверять нечем")
+        return
+    if not dst_dir.is_dir():
+        note(".git/hooks/ недоступен (не рабочее дерево?) — установку не проверить")
+        return
+    for src in sorted(src_dir.iterdir()):
+        if not src.is_file():
+            continue
+        dst = dst_dir / src.name
+        if not dst.exists():
+            fail(f"хук {src.name} НЕ УСТАНОВЛЕН: есть scripts/git-hooks/{src.name}, "
+                 f"нет .git/hooks/{src.name}. Механизм, который не вызывается, "
+                 "не работает (§20). Лечится: "
+                 f"cp scripts/git-hooks/{src.name} .git/hooks/ && "
+                 f"chmod +x .git/hooks/{src.name}")
+            continue
+        a = src.read_text(encoding="utf-8", errors="replace")
+        b = dst.read_text(encoding="utf-8", errors="replace")
+        if a != b:
+            fail(f"хук {src.name} РАСХОДИТСЯ с отслеживаемым: "
+                 f"scripts/git-hooks/{src.name} ({len(a)} б) против "
+                 f".git/hooks/{src.name} ({len(b)} б). Работает установленный, "
+                 "а читают отслеживаемый — это два источника правды. Лечится "
+                 f"переустановкой либо правкой отслеживаемого.")
+
+
+# ------------------------------------------------------------ F. артефакт
 def write_enforcement(rules: dict, hits: dict) -> None:
     ENFORCEMENT.parent.mkdir(parents=True, exist_ok=True)
     lines = [
@@ -216,6 +279,7 @@ def main() -> int:
     check_no_fetch_bypass()
     check_manifest()
     check_cards()
+    check_hooks_installed()
     write_enforcement(rules, hits)
 
     for n in notes:

@@ -153,6 +153,118 @@ def _record(entity: str, flt: str, expected: int, got: int, pages: int) -> None:
     MANIFEST.write_text(json.dumps(data, ensure_ascii=False, indent=2))
 
 
+# ============================================================ obudget (SQL)
+# Второй источник, добавлен 2026-07-30 для канала Б. Тот же §23-контракт,
+# другой протокол: obudget принимает ГОТОВЫЙ SQL строкой в URL.
+#
+# Ловушка того же класса, что $top=200 в OData, и она измерена:
+# page_size жёстко 1000 независимо от запроса, страницы с нуля, число страниц
+# в поле `pages`. Запрос на 5 970 строк отдаёт 1 000 с HTTP 200 и без
+# предупреждения (проверено 2026-07-30).
+BUDGET_API = "https://next.obudget.org/api/query"
+
+
+class UnsafeLiteral(ValueError):
+    """Литерал, который нельзя безопасно вставить в SQL-строку."""
+
+
+def _sql_literal(s: str) -> str:
+    """Единственный законный способ положить строку в SQL для obudget.
+
+    Параметризации у этого API нет. Возражение «это же наш собственный
+    запрос» не принимается: термины поиска приходят из OCR-текста и из
+    редактируемого criteria/*.yaml, то есть из-за границы доверия
+    (OWASP WSTG-INPV-05). Ломается не безопасность публичной read-only базы —
+    ломается §23: HTTP 200, правдоподобные строки, условие ДРУГОЕ.
+
+    Двойная кавычка внутри одинарных для Postgres безопасна и проверена —
+    а она есть в каждом ивритском сокращении вроде ש"ס и מלש"ח, поэтому
+    запрещать её нельзя. Запрещаются: обратный слеш, точка с запятой
+    (разрыв на два оператора) и управляющие символы.
+    """
+    if "\\" in s or ";" in s or any(ord(c) < 32 for c in s):
+        raise UnsafeLiteral(f"недопустимый символ в литерале: {s!r}")
+    return "'" + s.replace("'", "''") + "'"
+
+
+def _budget_get(query: str, page: int | None = None, timeout: int = 120) -> dict:
+    url = BUDGET_API + "?query=" + urllib.parse.quote(query)
+    if page is not None:
+        url += f"&page={page}"
+    req = urllib.request.Request(url, headers=UA)
+    with urllib.request.urlopen(req, timeout=timeout, context=CTX) as r:
+        return json.loads(r.read())
+
+
+def count_sql(table: str, where: str = "") -> int:
+    """Независимый путь к величине: ОТДЕЛЬНЫЙ count(1), а не поле total выдачи.
+
+    Поле `total` приходит той же выдачей и потому не независимо от неё.
+    Честная граница та же, что у @odata.count: запрос идёт на тот же сервер
+    с тем же WHERE. Проверка независима от НАШЕЙ пагинации, но не от
+    серверной фильтрации.
+    """
+    q = f"select count(1) as n from {table}"
+    if where:
+        q += f" where {where}"
+    r = _budget_get(q)
+    rows = r.get("rows") or []
+    if not rows or "n" not in rows[0]:
+        raise ShortRead(f"{table}: count(1) не вернул числа — ожидание неполучаемо")
+    return int(rows[0]["n"])
+
+
+def fetch_sql(
+    table: str,
+    select: str,
+    order_by: str,
+    where: str = "",
+    expected: int | None = None,
+    unchecked_reason: str = "",
+    pause: float = 0.2,
+) -> list[dict]:
+    """Полная выгрузка из obudget со сверкой объёма. Семантика как у fetch_all.
+
+    `order_by` обязателен и не имеет разумного дефолта: без явного порядка
+    страницы не гарантируют устойчивости, и строки могут повториться или
+    пропасть — тихо, с HTTP 200. Пустой order_by поэтому отказ, а не
+    «возьму первую колонку».
+    """
+    if not order_by:
+        raise ValueError("fetch_sql: order_by обязателен — пагинация без "
+                         "порядка теряет строки молча")
+    if unchecked_reason:
+        print(f"   §23 СВЕРКА ПРОПУЩЕНА для {table}: {unchecked_reason}")
+        expected = None
+    elif expected is None:
+        expected = count_sql(table, where)
+
+    q = f"select {select} from {table}"
+    if where:
+        q += f" where {where}"
+    q += f" order by {order_by}"
+
+    out: list[dict] = []
+    page, pages = 0, 1
+    while page < pages:
+        r = _budget_get(q, page=page)
+        out.extend(r.get("rows") or [])
+        pages = int(r.get("pages") or 1)
+        page += 1
+        if page < pages:
+            time.sleep(pause)
+
+    if expected is not None and len(out) != expected:
+        raise ShortRead(
+            f"§23 ТИХИЙ НЕДОБОР: {table} — ожидалось {expected}, получено "
+            f"{len(out)} за {page} стр. Данные НЕ отдаются наверх. "
+            f"WHERE: {where or '(нет)'}"
+        )
+
+    _record(f"obudget:{table}", where, expected, len(out), page)
+    return out
+
+
 if __name__ == "__main__":
     # Самопроверка §23: механизм обязан краснеть, а не рассказывать о себе.
     #
@@ -187,5 +299,56 @@ if __name__ == "__main__":
     else:
         print(f"  ПРОВАЛ САМОПРОВЕРКИ: обход не отмечен в манифесте: {rec}")
         raise SystemExit(1)
+
+    # ---- obudget: экранирование литерала и §23 на SQL-пути -----------------
+    print("экранирование литерала: ивритские кавычки обязаны проходить...")
+    for ok in ('ש"ס', 'מלש"ח', "בתי כנסת", "רשת מעיין החינוך התורני"):
+        got = _sql_literal(ok)
+        if got != "'" + ok + "'":
+            print(f"  ПРОВАЛ: {ok!r} -> {got!r}")
+            raise SystemExit(1)
+    if _sql_literal("ו'תו") != "'ו''תו'":
+        print("  ПРОВАЛ: апостроф не удвоен")
+        raise SystemExit(1)
+    print("  OK: двойная кавычка сохранена, апостроф удвоен")
+    # assert, а не печать: если экранирование сломают, самопроверка обязана
+    # остановиться, а не сообщить об этом строчкой в общем потоке.
+    assert _sql_literal('ש"ס') == "'" + 'ש"ס' + "'", "ивритская кавычка сломана"
+    assert _sql_literal("a'b") == "'a''b'", "апостроф не удвоен"
+
+    print("экранирование литерала: разрыв оператора обязан отвергаться...")
+    for bad in ("x; drop table budget", "a\\b", "line\nbreak"):
+        try:
+            _sql_literal(bad)
+            print(f"  ПРОВАЛ САМОПРОВЕРКИ: {bad!r} не отвергнут")
+            raise SystemExit(1)
+        except UnsafeLiteral:
+            pass
+    print("  OK: `;`, обратный слеш и перевод строки отвергнуты")
+
+    print("§23 на SQL-пути: сверка через отдельный count(1)...")
+    W = "year = 2025 and length(code) = 2"
+    n_sql = count_sql("raw_budget", W)
+    rows = fetch_sql("raw_budget", "code, title", "code", where=W)
+    if len(rows) != n_sql:
+        print(f"  ПРОВАЛ: count(1)={n_sql}, выгрузка={len(rows)}")
+        raise SystemExit(1)
+    print(f"  OK: count(1) и выгрузка совпали на {n_sql} строках")
+
+    print("  провокация на SQL-пути: заведомо неверное ожидание...")
+    try:
+        fetch_sql("raw_budget", "code", "code", where=W, expected=n_sql + 1)
+        print("  ПРОВАЛ САМОПРОВЕРКИ: недобор на SQL-пути не пойман")
+        raise SystemExit(1)
+    except ShortRead as e:
+        print(f"  OK, поймано: {str(e)[:90]}...")
+
+    print("  order_by без значения обязан быть отказом, а не догадкой...")
+    try:
+        fetch_sql("raw_budget", "code", "", where=W)
+        print("  ПРОВАЛ САМОПРОВЕРКИ: пустой order_by пропущен")
+        raise SystemExit(1)
+    except ValueError:
+        print("  OK: пустой order_by отвергнут")
 
     print("самопроверка пройдена")

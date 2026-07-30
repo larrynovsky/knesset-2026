@@ -9,9 +9,43 @@
   первый коммит, вводящий criteria/, обязан быть предком первого коммита,
   вводящего cards/ или data-манифест.
 
-  Любой коммит, ТРОГАЮЩИЙ criteria/ после этой границы, обязан иметь
-  subject с префиксом `criteria-revision:` — пересмотр легален, тихий
-  пересмотр нет.
+  После этой границы РАЗЛИЧАЮТСЯ два действия, и это различение — суть
+  редакции 2026-07-30:
+
+    ИЗМЕНЕНИЕ существующего файла criteria/ — обязан префикс
+      `criteria-revision:`. Это и есть тот трюк, против которого §3 написан:
+      посмотреть на результаты и подкрутить критерий.
+
+    ДОБАВЛЕНИЕ нового файла для канала, по которому данных ЕЩЁ НЕТ — законно
+      без префикса, но файл обязан объявить свой канал и то, чем этот канал
+      опознаётся в репозитории. Сторож проверяет, что таких данных на момент
+      добавления действительно не было.
+
+Почему различение обязательно (иначе §3 деградирует сам).
+Свод формулирует правило как «раньше, чем появится первый артефакт данных
+ПО СООТВЕТСТВУЮЩЕМУ КАНАЛУ». Прежняя реализация каналов не различала:
+любое касание criteria/ после границы требовало ярлыка «пересмотр». Тогда
+новый критерий нового канала обязан лгать о себе, что он пересмотр, — а
+когда ярлык стоит на всём, читать его перестают, и НАСТОЯЩИЙ пересмотр
+становится невидим в шуме. Поймано 2026-07-30 на criteria/budget_mapping.yaml:
+новый критерий канала Б был отвергнут как тихая правка.
+
+Объявление в файле критериев — две строки-комментария, поэтому годятся и
+yaml, и json, и парсер не нужен (stdlib, ступень 2 лестницы):
+
+    # §3-channel: B-budget
+    # §3-data-markers: obudget:*, cards/*budget*
+
+Маркеры сверяются с КЛЮЧАМИ data/MANIFEST.json и с путями дерева на момент,
+предшествующий добавлению. Манифест выбран потому, что он отслеживается git и
+его ключи называют источник (`KNS_Faction|`, `obudget:raw_budget|`), тогда как
+сами выгрузки в git не попадают — data/ заигнорен.
+
+Честная граница, называю сразу: объявленные маркеры пишет автор файла.
+Неверный или слишком узкий маркер сторож не поймает. Он ловит то, что
+проверяемо: файл обязан объявить канал ДО данных, объявление публично, и
+несоответствие видно в диффе. Это доказывает, что заявление сделано, а не
+что оно правдиво (§24, честная граница — дословно оттуда).
 
 Два режима, и второй появился потому, что первого не хватало:
 
@@ -21,7 +55,14 @@
                           Предотвращает нарушение до попадания в историю.
                           Ставится хуком commit-msg.
 
-Почему второй режим обязателен (проверено прогоном 2026-07-29, §22).
+⚠️ Второй режим существовал с 29.07 и НЕ ВЫЗЫВАЛСЯ: правильный
+scripts/git-hooks/commit-msg (он зовёт и §3, и квитанцию ponytail) не был
+переустановлен в .git/hooks на MacBook — там лежала прежняя редакция, занятая
+одним ponytail'ом. Механизм был, механизм не работал, и в отчётах считался
+работающим (§20). Обнаружено 2026-07-30 тем, что нарушение прошло, а счёт был
+предъявлен следующему коммиту — ровно как предсказано абзацем ниже. С этого дня
+несовпадение установленного хука с отслеживаемым ловит check_artifacts.
+
 В pre-commit коммита ещё нет в `git log`, поэтому исторический режим его
 не видит: тихая правка критериев проходила, а падал СЛЕДУЮЩИЙ коммит —
 любой, даже не трогающий criteria/. Защита работала с задержкой в один
@@ -36,11 +77,17 @@
 """
 from __future__ import annotations   # системный python3 на MacBook < 3.10
 
+import fnmatch
+import json
 import subprocess
 import sys
 
 WATCHED_DATA = ["cards/", "data/MANIFEST.json"]
 REVISION_PREFIX = "criteria-revision:"
+CRITERIA_DIR = "criteria/"
+BOUNDARY_MARK = "ГРАНИЦА §3"
+CHANNEL_MARK = "# §3-channel:"
+MARKERS_MARK = "# §3-data-markers:"
 
 
 def git(*args: str) -> str:
@@ -48,6 +95,11 @@ def git(*args: str) -> str:
         ["git", *args], capture_output=True, text=True, check=True
     )
     return out.stdout.strip()
+
+
+def git_or_empty(*args: str) -> str:
+    out = subprocess.run(["git", *args], capture_output=True, text=True)
+    return out.stdout if out.returncode == 0 else ""
 
 
 def first_add(path: str) -> str | None:
@@ -60,14 +112,124 @@ def is_ancestor(a: str, b: str) -> bool:
     return subprocess.run(["git", "merge-base", "--is-ancestor", a, b]).returncode == 0
 
 
-def violates(subject: str, staged_criteria: bool, boundary: bool) -> bool:
-    """Всё решение режима --commit-msg в одной чистой функции.
+# ------------------------------------------------------- чистая логика решения
+def parse_channel(text: str) -> tuple[str, list[str]]:
+    """Объявление канала из файла критериев. Пустое — значит не объявлено."""
+    channel, markers = "", []
+    for line in text.splitlines():
+        s = line.strip()
+        if s.startswith(CHANNEL_MARK):
+            channel = s[len(CHANNEL_MARK):].strip()
+        elif s.startswith(MARKERS_MARK):
+            markers = [m.strip() for m in s[len(MARKERS_MARK):].split(",") if m.strip()]
+    return channel, markers
 
-    Вынесена из main намеренно: это единственное место, где принимается
-    решение «блок или пропуск», и оно обязано быть проверяемым без git,
-    без файлов и без сети. См. --selftest.
+
+def check_added(path: str, text: str, prior_keys: list[str],
+                prior_paths: list[str]) -> str | None:
+    """Законно ли ДОБАВЛЕНИЕ этого файла критериев. None — законно."""
+    if BOUNDARY_MARK not in text:
+        return (f"{path}: добавлен без блока «{BOUNDARY_MARK}» — заявление о том, "
+                "что автор видел и чего не видел, обязательно")
+    channel, markers = parse_channel(text)
+    if not channel:
+        return f"{path}: не объявлен `{CHANNEL_MARK} <id>`"
+    if not markers:
+        return f"{path}: не объявлены `{MARKERS_MARK} <glob, glob>`"
+    hits = [k for k in prior_keys if any(fnmatch.fnmatch(k, m) for m in markers)]
+    hits += [p for p in prior_paths if any(fnmatch.fnmatch(p, m) for m in markers)]
+    if hits:
+        return (f"{path}: данные канала «{channel}» уже существовали на момент "
+                f"добавления критерия: {hits[:3]}")
+    return None
+
+
+def decide(subject: str, modified: list[str], added_problems: list[str],
+           boundary: bool) -> str | None:
+    """Единственное место, где принимается решение «блок или пропуск».
+
+    Вынесена намеренно: обязана быть проверяемой без git, без файлов и без
+    сети. См. --selftest.
     """
-    return boundary and staged_criteria and not subject.startswith(REVISION_PREFIX)
+    if not boundary:
+        return None
+    if subject.startswith(REVISION_PREFIX):
+        return None                     # помеченный пересмотр законен всегда
+    if modified:
+        return ("изменение существующих критериев без префикса: "
+                + ", ".join(sorted(modified)))
+    if added_problems:
+        return "; ".join(added_problems)
+    return None
+
+
+# ------------------------------------------------------------ состояние «до»
+def manifest_keys_at(ref: str) -> list[str]:
+    txt = git_or_empty("show", f"{ref}:data/MANIFEST.json")
+    if not txt.strip():
+        return []
+    try:
+        return list(json.loads(txt).keys())
+    except Exception:                   # повреждённый манифест — не наша забота
+        return []
+
+
+def tree_paths_at(ref: str) -> list[str]:
+    return git_or_empty("ls-tree", "-r", "--name-only", ref).splitlines()
+
+
+def split_status(raw: str, at_head_paths: list[str] | None = None
+                 ) -> tuple[list[str], list[str]]:
+    """`A\\tpath` -> (modified, added). Повторное добавление = изменение.
+
+    Лазейка, которую это закрывает: удалить файл критериев и добавить заново,
+    чтобы статус стал A и ярлык стал не нужен.
+    """
+    modified, added = [], []
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        parts = line.split("\t")
+        st, path = parts[0].strip(), parts[-1].strip()
+        if st.startswith("A") and (at_head_paths is None or path not in at_head_paths):
+            added.append(path)
+        else:
+            modified.append(path)
+    return modified, added
+
+
+def check_commit_msg(msg_path: str) -> int:
+    boundary = any(first_add(p) for p in WATCHED_DATA)
+    raw = git_or_empty("diff", "--cached", "--name-status", "--", CRITERIA_DIR)
+    head_paths = tree_paths_at("HEAD")
+    modified, added = split_status(raw, head_paths)
+    # Повторное добавление уже существовавшего в истории пути — не добавление,
+    # а изменение: удалить файл и завести заново не должно снимать ярлык.
+    real_added = []
+    for p in added:
+        (modified if first_add(p) else real_added).append(p)
+    added = real_added
+
+    prior_keys, prior_paths = manifest_keys_at("HEAD"), head_paths
+    problems = []
+    for p in added:
+        text = git_or_empty("show", f":{p}")
+        prob = check_added(p, text, prior_keys, prior_paths)
+        if prob:
+            problems.append(prob)
+
+    subject = subject_of(msg_path)
+    reason = decide(subject, modified, problems, boundary)
+    if reason is None:
+        return 0
+
+    print("§3 ОТКАЗ до попадания в историю:", file=sys.stderr)
+    print(f"  {reason}", file=sys.stderr)
+    print(f"  subject: {subject[:70]}", file=sys.stderr)
+    print(f"  Пересмотр легален, но обязан нести префикс '{REVISION_PREFIX}'",
+          file=sys.stderr)
+    print("  и поле «что заставило пересмотреть». См. CLAUDE.md §3.", file=sys.stderr)
+    return 1
 
 
 def subject_of(msg_path: str) -> str:
@@ -80,38 +242,83 @@ def subject_of(msg_path: str) -> str:
     return ""
 
 
-def check_commit_msg(msg_path: str) -> int:
-    boundary = any(first_add(p) for p in WATCHED_DATA)
-    staged = git("diff", "--cached", "--name-only", "--", "criteria/")
-    subject = subject_of(msg_path)
-
-    if not violates(subject, bool(staged), boundary):
-        return 0
-
-    print("§3 ОТКАЗ: тихая правка критериев после появления данных.", file=sys.stderr)
-    for p in staged.splitlines():
-        print(f"  в индексе: {p}", file=sys.stderr)
-    print(f"  subject:   {subject[:70]}", file=sys.stderr)
-    print(f"  Пересмотр легален, но обязан нести префикс '{REVISION_PREFIX}'", file=sys.stderr)
-    print("  и поле «что заставило пересмотреть». См. CLAUDE.md §3.", file=sys.stderr)
-    return 1
-
-
 def selftest() -> int:
     """Оракул решающей логики. Красное здесь = §3 больше не охраняется."""
+    ok = True
+
+    # --- decide: то, ради чего всё
     cases = [
-        # (subject, criteria в индексе, граница наступила, ожидается блок)
-        ("правка лексикона", True, True, True),        # то, ради чего всё
-        ("criteria-revision: K4 расширил ось", True, True, False),
-        ("правка лексикона", True, False, False),      # границы ещё нет
-        ("рефакторинг скриптов", False, True, False),  # критериев в индексе нет
-        ("", True, True, True),                        # пустое сообщение не лазейка
+        # (subject, modified, added_problems, boundary, ожидается блок)
+        ("правка лексикона", ["criteria/keyvotes.yaml"], [], True, True),
+        ("criteria-revision: K4 расширил ось", ["criteria/keyvotes.yaml"], [], True, False),
+        ("правка лексикона", ["criteria/keyvotes.yaml"], [], False, False),
+        ("рефакторинг скриптов", [], [], True, False),
+        ("", ["criteria/keyvotes.yaml"], [], True, True),
+        ("Ф1: новый критерий канала Б", [], [], True, False),
+        ("Ф1: новый критерий канала Б", [], ["criteria/x.yaml: не объявлен канал"], True, True),
+        # помеченный пересмотр гасит и претензию к добавленному файлу — обход
+        # легален, потому что он ВИДЕН в истории
+        ("criteria-revision: и то и это", [], ["criteria/x.yaml: нет блока"], True, False),
     ]
-    bad = [c for c in cases if violates(c[0], c[1], c[2]) != c[3]]
+    bad = [c for c in cases if (decide(c[0], c[1], c[2], c[3]) is not None) != c[4]]
     if bad:
-        print(f"САМОПРОВЕРКА ПРОВАЛЕНА на {len(bad)} случаях: {bad}", file=sys.stderr)
+        print(f"decide: ПРОВАЛ на {len(bad)} случаях: {bad}", file=sys.stderr)
+        ok = False
+
+    # --- parse_channel
+    text = ("# §3-channel: B-budget\n"
+            "# §3-data-markers: obudget:*, cards/*budget*\n"
+            "version: '1.0'\n")
+    if parse_channel(text) != ("B-budget", ["obudget:*", "cards/*budget*"]):
+        print(f"parse_channel: ПРОВАЛ -> {parse_channel(text)}", file=sys.stderr)
+        ok = False
+    if parse_channel("version: '1.0'") != ("", []):
+        print("parse_channel: необъявленное прочиталось как объявленное", file=sys.stderr)
+        ok = False
+
+    # --- check_added: главный случай и все отказы
+    good = f"# {BOUNDARY_MARK}\n" + text
+    subcases = [
+        ("данных канала нет", good, ["KNS_Faction|"], ["scripts/x.py"], False),
+        ("данные канала уже есть", good, ["obudget:raw_budget|year=2023"], [], True),
+        ("карточка канала уже есть", good, [], ["cards/shas-budget.yaml"], True),
+        ("нет блока границы", text, [], [], True),
+        ("нет канала", f"# {BOUNDARY_MARK}\n# §3-data-markers: obudget:*\n", [], [], True),
+        ("нет маркеров", f"# {BOUNDARY_MARK}\n# §3-channel: B\n", [], [], True),
+    ]
+    for name, txt, keys, paths, expect_block in subcases:
+        got = check_added("criteria/t.yaml", txt, keys, paths)
+        if (got is not None) != expect_block:
+            print(f"check_added [{name}]: ПРОВАЛ -> {got}", file=sys.stderr)
+            ok = False
+
+    # --- split_status: повторное добавление не должно выглядеть добавлением
+    m, a = split_status("A\tcriteria/new.yaml\nM\tcriteria/old.yaml\n",
+                        ["criteria/old.yaml"])
+    if (m, a) != (["criteria/old.yaml"], ["criteria/new.yaml"]):
+        print(f"split_status: ПРОВАЛ -> {m}, {a}", file=sys.stderr)
+        ok = False
+    m, a = split_status("A\tcriteria/old.yaml\n", ["criteria/old.yaml"])
+    if a or m != ["criteria/old.yaml"]:
+        print(f"split_status: пере-добавление прошло как добавление -> {m}, {a}",
+              file=sys.stderr)
+        ok = False
+
+    # Три инварианта, которые обязаны держаться всегда — assert'ом, а не
+    # печатью. Печать сообщает; assert останавливает. Если §3 когда-нибудь
+    # начнут «чинить», сломав одно из этих трёх, самопроверка обязана упасть,
+    # а не напечатать строчку в общем потоке.
+    assert decide("правка лексикона", ["criteria/keyvotes.yaml"], [], True) is not None, \
+        "§3: правка существующих критериев после границы обязана блокироваться"
+    assert decide("criteria-revision: повод", ["criteria/keyvotes.yaml"], [], True) is None, \
+        "§3: помеченный пересмотр обязан проходить — иначе ярлык бесполезен"
+    assert check_added("criteria/t.yaml", good, ["obudget:raw_budget|"], []) is not None, \
+        "§3: добавление критерия при уже существующих данных канала — нарушение"
+
+    if not ok:
         return 1
-    print(f"самопроверка §3 пройдена: {len(cases)} случая решающей логики")
+    n = len(cases) + len(subcases) + 7
+    print(f"самопроверка §3 пройдена: {n} утверждений решающей логики")
     return 0
 
 
@@ -125,7 +332,7 @@ def main() -> int:
             return 2
         return check_commit_msg(sys.argv[i + 1])
 
-    crit = first_add("criteria/")
+    crit = first_add(CRITERIA_DIR)
     data = None
     for p in WATCHED_DATA:
         c = first_add(p)
@@ -149,25 +356,49 @@ def main() -> int:
         print(f"  данные введены в  {data[:9]}", file=sys.stderr)
         return 1
 
-    # Коммиты, трогавшие criteria/ после границы, обязаны быть помечены.
-    after = git("log", "--format=%H%x00%s", f"{data}..HEAD", "--", "criteria/")
-    bad = []
+    # Коммиты, трогавшие criteria/ после границы: изменение против добавления.
+    after = git("log", "--format=%H%x00%s", f"{data}..HEAD", "--", CRITERIA_DIR)
+    bad: list[tuple[str, str, str]] = []
+    added_total = 0
     for line in after.splitlines():
         if not line:
             continue
         h, _, subj = line.partition("\x00")
-        if not subj.startswith(REVISION_PREFIX):
-            bad.append((h[:9], subj))
+        raw = git_or_empty("show", "--format=", "--name-status", h, "--", CRITERIA_DIR)
+        modified, added = split_status(raw)
+        # A, но не первое появление пути в истории → это пере-добавление.
+        real_added, readded = [], []
+        for p in added:
+            (real_added if first_add(p) == h else readded).append(p)
+        modified += readded
+
+        prior_keys = manifest_keys_at(f"{h}^")
+        prior_paths = tree_paths_at(f"{h}^")
+        problems = []
+        for p in real_added:
+            txt = git_or_empty("show", f"{h}:{p}")
+            prob = check_added(p, txt, prior_keys, prior_paths)
+            if prob:
+                problems.append(prob)
+        added_total += len(real_added)
+
+        reason = decide(subj, modified, problems, True)
+        if reason:
+            bad.append((h[:9], subj, reason))
 
     if bad:
-        print("§3 НАРУШЕН: тихий пересмотр критериев после появления данных.", file=sys.stderr)
-        for h, subj in bad:
+        print("§3 НАРУШЕН: тихий пересмотр критериев после появления данных.",
+              file=sys.stderr)
+        for h, subj, reason in bad:
             print(f"  {h}  {subj}", file=sys.stderr)
-        print(f"  Пересмотр легален, но обязан нести префикс '{REVISION_PREFIX}'", file=sys.stderr)
+            print(f"            {reason}", file=sys.stderr)
+        print(f"  Пересмотр легален, но обязан нести префикс '{REVISION_PREFIX}'",
+              file=sys.stderr)
         print("  и поле «что заставило пересмотреть». См. CLAUDE.md §3.", file=sys.stderr)
         return 1
 
-    print(f"§3 OK: criteria/ ({crit[:9]}) предшествуют данным ({data[:9]}).")
+    print(f"§3 OK: criteria/ ({crit[:9]}) предшествуют данным ({data[:9]}); "
+          f"добавлений после границы: {added_total}, все с объявленным каналом.")
     return 0
 
 
