@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import socket
 import ssl
+import sys
 import tempfile
 import time
 import urllib.parse
@@ -28,7 +29,19 @@ from pathlib import Path
 UA = {"User-Agent": "knesset-research/0.1"}
 CTX = ssl.create_default_context()
 BASE = "https://knesset.gov.il/OdataV4/ParliamentInfo"
-MANIFEST = Path(__file__).resolve().parent.parent / "data" / "MANIFEST.json"
+_ROOT = Path(__file__).resolve().parent.parent
+# Снимок в git — доказательство §23 для читателя репозитория.
+MANIFEST = _ROOT / "data" / "MANIFEST.json"
+# Рантайм-буфер ВНЕ git (data/* заигнорено). Развязка введена 2026-07-30:
+# манифест — write-back кэш, и он терял записи при каждой доставке.
+# post-receive делает `git reset --hard bare/main`, а MANIFEST.json
+# отслеживается — значит все записи о выгрузках, сделанных после последнего
+# коммита манифеста, стирались. Проверено: обе записи канала Б исчезли между
+# 16:26 и 17:23 того же дня. Антипаттерн из Таненбаума §7.5.4 дословно:
+# «отсутствие механизма обработки отказов — данные теряются без возможности
+# восстановления». Лечение — тоже оттуда: явный flush вместо надежды.
+# Неотслеживаемый файл `reset --hard` не трогает, поэтому буфер переживает push.
+RUNTIME = _ROOT / "data" / "manifest" / f"{socket.gethostname()}.json"
 
 
 class ShortRead(RuntimeError):
@@ -138,9 +151,9 @@ def _record(entity: str, flt: str, expected: int, got: int, pages: int) -> None:
     не отвечает на вопрос «чьё это состояние», а два независимых data/ этот
     вопрос задают постоянно.
     """
-    MANIFEST.parent.mkdir(parents=True, exist_ok=True)
+    RUNTIME.parent.mkdir(parents=True, exist_ok=True)
     try:
-        data = json.loads(MANIFEST.read_text()) if MANIFEST.exists() else {}
+        data = json.loads(RUNTIME.read_text()) if RUNTIME.exists() else {}
     except Exception:  # noqa: BLE001
         data = {}
     data[f"{entity}|{flt}"] = {
@@ -150,7 +163,54 @@ def _record(entity: str, flt: str, expected: int, got: int, pages: int) -> None:
         "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "host": socket.gethostname(),
     }
-    MANIFEST.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+    RUNTIME.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+
+
+def sync_manifest() -> tuple[int, int]:
+    """Явный flush буфера в отслеживаемый снимок. Возвращает (было, стало).
+
+    Тот самый `sync()`, отсутствие которого делает write-back кэш ненадёжным.
+    Не вызывается автоматически: автоматический flush прятал бы момент, когда
+    доказательство §23 попадает в git, а именно этот момент и надо видеть в
+    диффе. Зовётся руками или из post-receive после генерации.
+    """
+    MANIFEST.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        snap = json.loads(MANIFEST.read_text()) if MANIFEST.exists() else {}
+    except Exception:  # noqa: BLE001
+        snap = {}
+    before = len(snap)
+    for f in sorted((_ROOT / "data" / "manifest").glob("*.json")):
+        try:
+            snap.update(json.loads(f.read_text()))
+        except Exception as exc:  # noqa: BLE001
+            raise ShortRead(f"буфер {f.name} не читается: {exc}") from exc
+    MANIFEST.write_text(json.dumps(snap, ensure_ascii=False, indent=2))
+    return before, len(snap)
+
+
+def unsynced() -> list[str]:
+    """Ключи, которые есть в буфере и отсутствуют/расходятся в снимке.
+
+    Это и есть детектор потери: непустой список означает, что выгрузка была,
+    а следа в git нет. Читается механизмом §24.
+    """
+    try:
+        snap = json.loads(MANIFEST.read_text()) if MANIFEST.exists() else {}
+    except Exception:  # noqa: BLE001
+        snap = {}
+    out: list[str] = []
+    for f in (_ROOT / "data" / "manifest").glob("*.json"):
+        try:
+            buf = json.loads(f.read_text())
+        except Exception:  # noqa: BLE001
+            out.append(f"{f.name}: буфер не читается")
+            continue
+        for k, v in buf.items():
+            s = snap.get(k)
+            if s is None or s.get("at") != v.get("at"):
+                out.append(k)
+    return sorted(set(out))
 
 
 # ============================================================ obudget (SQL)
@@ -265,6 +325,15 @@ def fetch_sql(
     return out
 
 
+if __name__ == "__main__" and "--sync" in sys.argv:
+    was, now = sync_manifest()
+    print(f"манифест синхронизирован: было {was} записей, стало {now}")
+    left = unsynced()
+    if left:
+        print(f"ПРОВАЛ: после flush осталось несинхронизированным: {left}")
+        raise SystemExit(1)
+    raise SystemExit(0)
+
 if __name__ == "__main__":
     # Самопроверка §23: механизм обязан краснеть, а не рассказывать о себе.
     #
@@ -274,8 +343,10 @@ if __name__ == "__main__":
     # которой не было. Механизм §24 читал её и докладывал о непроверенной
     # выгрузке. Проверяющий, загрязняющий то, что проверяет, — источник
     # ложного сигнала, а не защита.
-    MANIFEST = Path(tempfile.gettempdir()) / "knesset_selfcheck_MANIFEST.json"
-    print(f"самопроверка guarded_fetch (манифест: {MANIFEST})")
+    RUNTIME = Path(tempfile.gettempdir()) / "knesset_selfcheck_manifest.json"
+    if RUNTIME.exists():
+        RUNTIME.unlink()
+    print(f"самопроверка guarded_fetch (буфер: {RUNTIME})")
 
     n = count("KNS_Faction")
     print(f"  независимый счётчик KNS_Faction: {n}")
@@ -293,7 +364,7 @@ if __name__ == "__main__":
 
     print("  обход сверки обязан быть громким и попадать в манифест...")
     fetch_all("KNS_Position", unchecked_reason="проверка громкости обхода")
-    rec = json.loads(MANIFEST.read_text()).get("KNS_Position|")
+    rec = json.loads(RUNTIME.read_text()).get("KNS_Position|")
     if rec and rec.get("expected") is None:
         print(f"  OK, записано как непроверенное: {rec}")
     else:
@@ -350,5 +421,28 @@ if __name__ == "__main__":
         raise SystemExit(1)
     except ValueError:
         print("  OK: пустой order_by отвергнут")
+
+    # ---- flush буфера: детектор потери обязан краснеть -------------------
+    print("манифест как write-back кэш: потеря записи обязана быть видна...")
+    _tmp_snap = Path(tempfile.gettempdir()) / "knesset_selfcheck_SNAPSHOT.json"
+    _tmp_dir = Path(tempfile.gettempdir()) / "knesset_selfcheck_bufdir"
+    _tmp_dir.mkdir(exist_ok=True)
+    (_tmp_dir / "host.json").write_text(json.dumps(
+        {"X|": {"expected": 1, "got": 1, "pages": 1, "at": "T1", "host": "h"}}))
+    _tmp_snap.write_text("{}")
+    _real_root, _real_manifest = _ROOT, MANIFEST
+    _ROOT = _tmp_dir.parent / "knesset_selfcheck_root"
+    (_ROOT / "data").mkdir(parents=True, exist_ok=True)
+    import shutil
+    shutil.rmtree(_ROOT / "data" / "manifest", ignore_errors=True)
+    shutil.copytree(_tmp_dir, _ROOT / "data" / "manifest")
+    MANIFEST = _ROOT / "data" / "MANIFEST.json"
+    MANIFEST.write_text("{}")
+    assert unsynced() == ["X|"], "потеря записи НЕ обнаружена — детектор мёртв"
+    was, now = sync_manifest()
+    assert (was, now) == (0, 1), f"flush не сработал: {was} -> {now}"
+    assert unsynced() == [], "после flush детектор всё ещё жалуется"
+    _ROOT, MANIFEST = _real_root, _real_manifest
+    print("  OK: потеря обнаружена, flush её закрыл")
 
     print("самопроверка пройдена")

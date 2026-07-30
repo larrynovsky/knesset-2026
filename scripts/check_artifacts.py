@@ -167,6 +167,24 @@ def check_manifest() -> None:
             fail(f"§23: в манифесте расхождение {k}: ожидалось {v['expected']}, "
                  f"записано {v.get('got')}")
 
+    # Выгрузка была, а следа в git нет. До 30.07 это состояние было НЕВИДИМО:
+    # манифест лежал в рабочем дереве, post-receive делал `git reset --hard`,
+    # и записи исчезали — молчание проверки не отличалось от «выгрузок не было».
+    # Теперь рантайм-буфер живёт вне git и переживает сброс, а расхождение
+    # буфера со снимком ловится здесь.
+    try:
+        sys.path.insert(0, str(SCRIPTS))
+        from guarded_fetch import unsynced  # noqa: PLC0415  §23
+        left = unsynced()
+    except Exception as e:  # noqa: BLE001
+        fail(f"§23: детектор рассинхронизации манифеста не работает: {e}")
+        return
+    if left:
+        fail(f"§23: выгрузок без следа в git — {len(left)}: "
+             f"{', '.join(left[:4])}. Буфер помнит, снимок нет. "
+             "Лечится: python3 scripts/guarded_fetch.py --sync && "
+             "git add data/MANIFEST.json")
+
 
 # ------------------------------------ D. карточки против справочников (§1,§7)
 def check_cards() -> None:

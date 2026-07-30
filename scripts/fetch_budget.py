@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import json
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -114,7 +115,20 @@ def fetch_changes(years=DEFAULT_YEARS) -> list[dict]:
 
 
 def selftest() -> int:
-    """Оракул: краснеет, если выгрузка молча недобирает или врёт о фильтре."""
+    """Оракул: краснеет, если выгрузка молча недобирает или врёт о фильтре.
+
+    Пишет во ВРЕМЕННЫЙ буфер, а не в рабочий. Первая редакция писала в
+    настоящий, и после неё в манифесте оставалась запись о выгрузке
+    `year = 2025 and length(code) = 4`, которой никто не делал, — тот же
+    дефект, ради лечения которого selftest guarded_fetch переключён на
+    temp ещё 29.07. Воспроизведён заново в новом модуле; отсюда правило:
+    проверяющий не имеет права писать в то, что проверяет.
+    """
+    import guarded_fetch as _gf
+    _gf.RUNTIME = Path(tempfile.gettempdir()) / "knesset_fb_selfcheck.json"
+    if _gf.RUNTIME.exists():
+        _gf.RUNTIME.unlink()
+
     where = "year = 2025 and length(code) = 4"
     n = count_sql("raw_budget", where)
     rows = fetch_sql("raw_budget", "code, year", "code", where=where)
