@@ -614,6 +614,129 @@ def agreement(a: dict, o: dict) -> dict:
     }
 
 
+# ============================================================================
+# Ф27 — КОНТРОЛЬ КЛАССИФИКАТОРА ПОДЛОЖЕННЫМИ НОРМАМИ
+# ============================================================================
+# «Зелёный прогон должен вызывать расследование, а не радость», и автоматику
+# положено проверять, подсовывая ей заведомые дефекты. Шесть искусственных
+# норм с заранее известным знаком — по одной на каждое правило, которое может
+# сломаться молча. Классификатор, не поймавший подлог, к корпусу не
+# допускается.
+#
+# Ожидания записаны ЗДЕСЬ и закоммичены ДО первого прогона контроля. Иначе
+# «мы ожидали именно этого» — фраза, а не проверка.
+#
+# Чего контроль НЕ ловит: общего заблуждения всех трёх моделей. Если они
+# ошибутся одинаково, кворум даст уверенное большинство на неверном знаке, и
+# это будет видно ТОЛЬКО здесь — потому что здесь мы знаем правильный ответ.
+CONTROLS = [
+    {"id": "ctl-k1-report", "expect_sign": 0, "expect_column": None,
+     "why": "K1: голая обязанность информировать без полномочия — ноль",
+     "name": "חוק הדיווח לוועדת החוקה (תיקון)",
+     "text": "1. השר ידווח לוועדת החוקה, חוק ומשפט של הכנסת אחת לשנה על יישום "
+             "הוראות חוק זה.\n2. הדיווח יכלול נתונים סטטיסטיים בלבד.\n"
+             "3. אין בדיווח כדי לגרוע מסמכויות השר."},
+    {"id": "ctl-plus-review", "expect_sign": 1, "expect_column": "inside",
+     "why": "базовый +1: у суда появилось право отменить решение власти",
+     "name": "חוק בתי המשפט (תיקון — ביקורת שיפוטית)",
+     "text": "1. בית המשפט העליון רשאי לבטל החלטה של הממשלה או של שר בעילת "
+             "חוסר סבירות קיצוני.\n2. הוראות סעיף 1 יחולו גם על מינויים "
+             "בכירים.\n3. תחילתו של חוק זה ביום פרסומו."},
+    {"id": "ctl-k8-exempt", "expect_sign": -1, "expect_column": "inside",
+     "why": "K8: освобождение группы по ПРИПИСАННОМУ признаку без эквивалента",
+     "name": "חוק שירות ביטחון (תיקון — פטור לתלמידי ישיבות)",
+     "text": "1. תלמיד ישיבה שתורתו אומנותו פטור משירות ביטחון.\n"
+             "2. הפטור לפי סעיף 1 ניתן על יסוד לימוד תורה ואינו מותנה בשירות "
+             "אזרחי חלופי כלשהו.\n3. הוראות חוק זה יחולו על מי שמלאו לו 18 שנים."},
+    {"id": "ctl-k8-equivalent", "expect_sign": 0, "expect_column": "inside",
+     "why": "K8: обязанность заменена ЭКВИВАЛЕНТНОЙ — ноль, а не минус",
+     "name": "חוק שירות אזרחי (תיקון — שירות חלופי)",
+     "text": "1. תלמיד ישיבה ישרת שירות אזרחי חלופי בהיקף שעות זהה לשירות "
+             "הביטחון.\n2. אי-התייצבות לשירות החלופי דינה כדין אי-התייצבות "
+             "לשירות ביטחון.\n3. תחילתו של חוק זה בשנת הגיוס הבאה."},
+    {"id": "ctl-k9-territories", "expect_sign": -1, "expect_column": "territories",
+     "why": "K9: норма о правовом режиме на территориях — вторая колонка",
+     "name": "צו בדבר ערר על החלטות המפקד הצבאי באזור",
+     "text": "1. ערר על החלטת המפקד הצבאי באזור יוגש לוועדת ערר צבאית בלבד.\n"
+             "2. אין להגיש עתירה לבית המשפט לעניינים מנהליים בעניין החלטה "
+             "כאמור בסעיף 1.\n3. הוראות צו זה יחולו על תושבי האזור."},
+    {"id": "ctl-k7-outside", "expect_sign": None, "expect_column": None,
+     "why": "K7: предмет вне оси — прочерк, а НЕ ноль",
+     "name": "חוק תקציב משרד התחבורה לשנת 2025",
+     "text": "1. תקציב משרד התחבורה לשנת 2025 יעמוד על 12 מיליארד שקלים "
+             "חדשים.\n2. מתוך הסכום האמור בסעיף 1, 3 מיליארד ייועדו לתחבורה "
+             "ציבורית.\n3. שר האוצר ממונה על ביצוע חוק זה."},
+]
+
+
+def control() -> int:
+    """Прогон подложенных норм. 0 — классификатор допущен, 1 — нет."""
+    load_secrets()
+    for var in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY"):
+        if not os.environ.get(var):
+            sys.exit(f"нет {var} — контроль требует всех трёх вендоров")
+    models = {v: pick_model(v) for v in ("anthropic", "openai", "google")}
+    print(f"КОНТРОЛЬ Ф27 · модели: {models}")
+    print("ожидания закоммичены ДО прогона вместе с текстами норм\n")
+    chk, cod = checklist_text(), codebook_text()
+
+    fails = []
+    for c in CONTROLS:
+        units = structure_units(c["text"])
+        prompt = PROMPT.format(checklist=chk, codebook=cod,
+                               name=c["name"], text=c["text"])
+        verdicts = {}
+        for v, model in models.items():
+            try:
+                txt, usage = cached_call(v, model, prompt, c["id"])
+                d = parse(txt)
+                if d is None:
+                    txt, usage = call(v, model, prompt)
+                    d = parse(txt)
+                verdicts[v] = (dict(enrich(d, norm_he(c["text"]),
+                                           norm_he(c["name"]), units),
+                                    status="ok")
+                               if d else {"status": "unparsed"})
+            except Exception as e:                      # noqa: BLE001
+                verdicts[v] = {"status": "error", "err": f"{type(e).__name__}"}
+            time.sleep(0.3)
+
+        q = quorum(verdicts)
+        has_q = q["kind"] in ("unanimous", "majority")
+        got = q["value"] if has_q else "НЕТ КВОРУМА"
+        sign_ok = has_q and q["value"] == c["expect_sign"]
+
+        col_ok = True
+        if c["expect_column"]:
+            cols = [nn.get("column") for v, d in verdicts.items()
+                    if d.get("status") == "ok"
+                    for nn in d.get("norms", []) if nn.get("sign") in (-1, 1)]
+            col_ok = cols.count(c["expect_column"]) * 2 >= len(cols) if cols else False
+
+        mark = "✓" if sign_ok and col_ok else "✗"
+        print(f"{mark} {c['id']:<22} ждали {str(c['expect_sign']):>5} "
+              f"получили {str(got):>11}  [{q['kind']}]  голоса={q['votes']}")
+        print(f"    {c['why']}")
+        if c["expect_column"]:
+            print(f"    колонка: ждали {c['expect_column']}, "
+                  f"{'сошлось' if col_ok else 'НЕ сошлось'}")
+        if not (sign_ok and col_ok):
+            fails.append(c["id"])
+
+    print()
+    if fails:
+        print(f"КОНТРОЛЬ ПРОВАЛЕН: {len(fails)} из {len(CONTROLS)} — {fails}")
+        print("К корпусу классификатор НЕ допускается. Провал на подложенной")
+        print("норме означает, что кворум трёх вендоров даст уверенное")
+        print("большинство на неверном знаке — и на реальном корпусе этого")
+        print("будет уже не видно, потому что там правильный ответ неизвестен.")
+        return 1
+    print(f"контроль пройден: {len(CONTROLS)} из {len(CONTROLS)}.")
+    print("Это НЕ доказывает правильность разметки корпуса — только то, что")
+    print("на случаях с известным ответом кворум не ошибается (§24).")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0, help="0 = весь состав пилота")
@@ -622,9 +745,13 @@ def main() -> int:
                          "Расхождение с фактом печатается, но не блокирует.")
     ap.add_argument("--out", default=None, help="путь результата (по умолчанию direction_pilot.json)")
     ap.add_argument("--selftest", action="store_true")
+    ap.add_argument("--control", action="store_true",
+                    help="Ф27: подложенные нормы с известным знаком")
     a = ap.parse_args()
     if a.selftest:
         return selftest()
+    if a.control:
+        return control()
 
     out_path = Path(a.out) if a.out else OUT
     load_secrets()
@@ -930,6 +1057,28 @@ def selftest() -> int:
     assert parse(json.dumps({"overall": dict(ovm, basis_note="знак по одной норме"),
                              "norms": two})) is not None, \
         "K2d: ответ С пометкой отвергнут — проверка слишком широка"
+
+    # --- Ф27: сами подложенные нормы обязаны быть пригодны -------------------
+    # Контроль ходит в сеть и потому не может быть самопроверкой. Но ДАННЫЕ
+    # контроля проверяемы офлайн, и без этого норму можно добавить без
+    # ожидания либо с текстом, который классификатор отбросит как
+    # неразобранный, — и контроль тихо станет слабее.
+    assert len({c["id"] for c in CONTROLS}) == len(CONTROLS), "id провокаций не уникальны"
+    for c in CONTROLS:
+        assert set(c) >= {"id", "expect_sign", "expect_column", "why", "name", "text"}, \
+            f"{c['id']}: неполная провокация"
+        assert c["expect_sign"] in (-1, 0, 1, None), f"{c['id']}: знак вне перечня"
+        assert c["expect_column"] in ("inside", "territories", None), \
+            f"{c['id']}: колонка вне перечня"
+        assert structure_units(c["text"]) > 0, \
+            f"{c['id']}: текст не разбирается на единицы — будет отброшен как " \
+            "text_unstructured, и провокация не проверит ничего"
+        assert str(c["why"]).strip(), f"{c['id']}: провокация без названной причины"
+    assert {c["expect_sign"] for c in CONTROLS} == {-1, 0, 1, None}, \
+        "провокации обязаны покрывать ВСЕ четыре исхода: иначе классификатор, " \
+        "ставящий один знак всему, пройдёт контроль"
+    assert any(c["expect_column"] == "territories" for c in CONTROLS), \
+        "K9 без провокации на территории не проверен"
 
     # --- K9: колонка ---------------------------------------------------------
     import json as _j
