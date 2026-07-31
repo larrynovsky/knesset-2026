@@ -28,7 +28,7 @@
 | §16 | Доступно, но не продвигается. Массовость — триггер, а не разрешённое с | LIVE | build_report.py |
 | §17 | Рамка объявлена на первом экране. | LIVE | build_report.py |
 | §18 | Секреты вне репозитория. | MANUAL | classify_direction.py, pre-commit |
-| §19 | Пишет только MacBook, canonical — Studio. | MANUAL | build_report.py, classify_direction.py, fetch_budget.py, guarded_fetch.py, map_commitments.py, pre-commit |
+| §19 | Пишет только MacBook, canonical — Studio. | MANUAL | build_report.py, fetch_budget.py, guarded_fetch.py, map_commitments.py, pre-commit |
 | §20 | Не называть сделанным то, у чего нет краснеющего механизма. | MANUAL | check_artifacts.py, check_criteria_order.py, classify_direction.py, map_commitments.py, post-receive.template, pre-commit, select_pilot.py, validate_cards.py, verify_names_wikidata.py |
 | §21 | Риск → исполняемая проверка, а не строка в плане. | MANUAL | — |
 | §22 | Правило прогоняется по изменению, которое его вводит, и сверяется со с | MANUAL | pre-commit, select_pilot.py |
