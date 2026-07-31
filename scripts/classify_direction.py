@@ -231,6 +231,7 @@ PROMPT = """Ты классифицируешь ИЗРАИЛЬСКИЙ ЗАКО�
  }},
  "norms": [
    {{"checklist_item": "A3", "sign": -1, "strongest": true,
+     "column": "inside" | "territories",
      "quote_he": "<дословно>", "quote_ru": "<перевод>",
      "what_changes": "<что именно норма делает: даёт право, снимает ограничение, ...>"}},
    {{"checklist_item": "A4", "sign": null,
@@ -240,6 +241,16 @@ PROMPT = """Ты классифицируешь ИЗРАИЛЬСКИЙ ЗАКО�
                         "toward_plus": "<чем усиливает>"}}}}
  ]
 }}
+
+Поле column (K9) обязательно у каждой нормы со знаком, отличным от null:
+  "inside"      — норма действует в пределах, где применяется израильское
+                  гражданское право;
+  "territories" — норма о правовом режиме на территориях, о гражданстве и
+                  въезде, о статусе жителей, к которым гражданское право
+                  применяется иначе.
+Колонки НЕ складываются: это два разных счёта, а не одна шкала. Если из
+текста неясно — не угадывай, оставь поле пустым: неразмеченная запись
+считается отдельно и ни одну колонку не искажает.
 
 Поле argument_against обязательно и не может быть отпиской: подтверждения
 находятся сами, опровержения — нет.
@@ -477,6 +488,12 @@ def parse(txt: str) -> dict | None:
             if not isinstance(bd, dict) or not all(
                     str(bd.get(k) or "").strip() for k in ("toward_minus", "toward_plus")):
                 return None
+        # K9: колонка. Отсутствие — не отказ: запись помечается unmarked и
+        # считается отдельно. Отвергать её значило бы терять норму целиком
+        # из-за одного поля, а подставлять умолчание «inside» — тихо сваливать
+        # территориальные нормы в основную колонку, ровно чего K9 и не хочет.
+        col = str(n.get("column") or "").strip().lower()
+        n["column"] = col if col in ("inside", "territories") else "unmarked"
         if not str(n.get("checklist_item") or "").strip():
             return None
         if not str(n.get("quote_he") or "").strip():
@@ -691,6 +708,9 @@ def main() -> int:
                     # Замер под три решения кодбука, принятые 29.07 и ещё
                     # не механизированные: K3-парность, K6-множества, K7-прочерки.
                     stats[f"k3_pairs:{v}"] += k3_pairs(d["norms"])
+                    for nn in d["norms"]:
+                        if nn.get("sign") in (-1, 0, 1):
+                            stats[f"column:{nn.get('column', 'unmarked')}"] += 1
                     stats[f"norm_declined:{v}"] += sum(
                         1 for n in d["norms"] if n.get("sign") is None)
                     if len({n.get("checklist_item") for n in d["norms"]}) > 1:
@@ -911,6 +931,20 @@ def selftest() -> int:
                              "norms": two})) is not None, \
         "K2d: ответ С пометкой отвергнут — проверка слишком широка"
 
+    # --- K9: колонка ---------------------------------------------------------
+    import json as _j
+    _base = ('{"overall":{"sign":-1,"quote_he":"a","quote_ru":"б","confidence":"high",'
+             '"confidence_reason":"р","argument_against":"д"},'
+             '"norms":[{"checklist_item":"A1","sign":-1,"strongest":true,'
+             '"quote_he":"a","quote_ru":"б"%s}]}')
+    assert parse(_base % ',"column":"territories"')["norms"][0]["column"] == "territories"
+    assert parse(_base % ',"column":"INSIDE"')["norms"][0]["column"] == "inside", \
+        "регистр колонки не должен ронять разметку"
+    assert parse(_base % '')["norms"][0]["column"] == "unmarked", \
+        "нет колонки — unmarked, а НЕ inside: умолчание свалило бы "\
+        "территориальные нормы в основную колонку молча"
+    assert parse(_base % ',"column":"выдумка"')["norms"][0]["column"] == "unmarked"
+
     # --- кворум и выбор модели: добавлено 31.07 вместе с третьим вендором ---
     ok, ok2, ok0 = ({"status": "ok", "overall": {"sign": s}} for s in (-1, 1, 0))
     err = {"status": "error"}
@@ -937,8 +971,8 @@ def selftest() -> int:
     assert _gemini_pick(["gemini-flash-latest", "gemini-3.5-flash"]) is None, \
         "нет стабильной pro — падаем, а не берём что попало"
 
-    print("самопроверка механики v1.2 пройдена: 18 + 12 утверждений "
-          "(кворум два из трёх и выбор модели)")
+    print("самопроверка механики v1.2 пройдена: 18 + 12 + 4 утверждения "
+          "(кворум два из трёх, выбор модели, колонка K9)")
     return 0
 
 
