@@ -199,13 +199,20 @@ def substitute(text: str, idx: dict, titles: list[str], nulls: list[str]) -> str
         if hits:
             raise Refuse(f"заявлено отсутствие {term!r}, но оно есть в "
                          f"{len(hits)} названиях статей — утверждение неверно")
-        return f'<span class=absent>«{esc(term)}» не встречается ни разу</span>'
+        # Подстановка — именная группа, а не предложение. Первая редакция
+        # вставляла «не встречается ни разу», и рядом с фразой карточки
+        # получалось «Слова «מקוואות» не встречается ни разу нет ни в одном
+        # из 17 791 названия». Грамматику держит проза карточки; разметка
+        # добавляет только пометку о проверке, как у ссылки на число.
+        return (f'<span class=absent>«{esc(term)}»</span>'
+                f'<span class=src>[отсутствие проверено]</span>')
 
     def nocode(m: re.Match) -> str:
         code = m.group(1)
         if any(k[0] == code for k in idx):
             raise Refuse(f"заявлено отсутствие кода {code}, но он есть в выгрузке")
-        return f'<span class=absent>статьи {code} нет в бюджете</span>'
+        return (f'<span class=absent>{code}</span>'
+                f'<span class=src>[отсутствие проверено]</span>')
 
     out = vc.REF_NUM.sub(num, out)
     out = vc.REF_ABSENT.sub(absent, out)
