@@ -131,7 +131,15 @@ def load_secrets() -> None:
     for line in SECRETS.read_text(encoding="utf-8").splitlines():
         if "=" in line and not line.lstrip().startswith("#"):
             k, v = line.split("=", 1)
-            os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+            k, v = k.strip(), v.strip().strip('"').strip("'")
+            os.environ.setdefault(k, v)
+            # Имя кладётся И как написано, И в верхнем регистре. 31.07 ключ
+            # Google записали как `Gemini_api_key`, код искал `GEMINI_API_KEY`,
+            # и load_secrets отработал «успешно», вернув пустоту: файл прочитан,
+            # переменная не найдена, ошибка вылезла на сто строк ниже как
+            # TypeError о NoneType. Регистр имени — не то, на чём должен
+            # спотыкаться прогон на шестьдесят часов.
+            os.environ.setdefault(k.upper(), v)
 
 
 def block(pattern: str) -> str:
@@ -261,6 +269,32 @@ def _get(url: str, headers: dict, timeout: int = 60) -> dict:
         return json.loads(r.read())
 
 
+def _gemini_pick(ids: list[str]) -> str | None:
+    """Стабильная pro-модель максимальной версии, либо None.
+
+    Вынесено из pick_model отдельной функцией не ради красоты: внутри неё
+    отбор ходит в сеть, и проверить логику выбора было бы нечем. Функция
+    чистая — её проверяет selftest без единого запроса.
+    """
+    bad = ("latest", "preview", "image", "tts", "lite", "customtools",
+           "robotics", "vision", "computer-use", "omni")
+    pref = [i for i in ids if "pro" in i and not any(b in i for b in bad)]
+    return sorted(pref, key=_gemini_ver)[-1] if pref else None
+
+
+def _gemini_ver(name: str) -> tuple:
+    """Версия из имени модели числом, а не строкой.
+
+    Лексикографически `gemini-2.5-pro` больше `gemini-10-pro`, потому что
+    «2» > «1». Сортировка строк выбрала бы устаревшую модель и молчала бы об
+    этом — тот же класс, что и прочие тихие подмены в этом проекте.
+    """
+    m = re.search(r"gemini-(\d+)(?:\.(\d+))?", name)
+    if not m:
+        return (-1, -1, name)
+    return (int(m.group(1)), int(m.group(2) or 0), name)
+
+
 def pick_model(vendor: str) -> str:
     """Идентификатор модели не угадывается — спрашивается у вендора.
 
@@ -270,6 +304,21 @@ def pick_model(vendor: str) -> str:
     env = os.environ.get(f"KNESSET_{vendor.upper()}_MODEL")
     if env:
         return env
+    if vendor == "google":
+        r = _get("https://generativelanguage.googleapis.com/v1beta/models",
+                 {"x-goog-api-key": os.environ["GEMINI_API_KEY"]})
+        ids = [m["name"].split("/")[-1] for m in r.get("models", [])
+               if "generateContent" in m.get("supportedGenerationMethods", [])]
+        # Алиасы `-latest` ИСКЛЮЧЕНЫ намеренно: под ними модель меняется молча,
+        # а кэш у нас по (вендор, модель, промпт) — сменившийся алиас выдал бы
+        # ответ другой модели за ответ той же. Прямая потеря воспроизводимости
+        # (§14), и невидимая. Preview исключены: они исчезают.
+        got = _gemini_pick(ids)
+        if got:
+            return got
+        sys.exit(f"google: нет СТАБИЛЬНОЙ pro-модели среди {len(ids)} — "
+                 "не беру ни preview, ни -latest, и не угадываю. "
+                 "Задать явно: KNESSET_GOOGLE_MODEL=<id>")
     if vendor == "anthropic":
         r = _get("https://api.anthropic.com/v1/models?limit=100",
                  {"x-api-key": os.environ["ANTHROPIC_API_KEY"],
@@ -356,6 +405,24 @@ def _call_once(vendor: str, model: str, prompt: str) -> tuple[str, dict]:
                    "anthropic-version": "2023-06-01"})
         txt = "".join(b.get("text", "") for b in r.get("content", []))
         usage = dict(r.get("usage", {}), stop_reason=r.get("stop_reason"))
+    elif vendor == "google":
+        # maxOutputTokens щедрее прочих: у thinking-моделей рассуждение
+        # тратится из того же бюджета, и на 16000 ответ обрывается. Обрыв
+        # ловится по finishReason и в кэш не пишется.
+        r = _post(f"https://generativelanguage.googleapis.com/v1beta/models/"
+                  f"{model}:generateContent",
+                  {"contents": [{"parts": [{"text": prompt}]}],
+                   "generationConfig": {"maxOutputTokens": 32000}},
+                  {"x-goog-api-key": os.environ["GEMINI_API_KEY"]})
+        cand = (r.get("candidates") or [{}])[0]
+        # Части с thought=true — рассуждение модели, а не ответ. Склеить их с
+        # ответом значит подсунуть парсеру текст, которого модель не
+        # предъявляла как результат.
+        txt = "".join(pt.get("text", "")
+                      for pt in (cand.get("content", {}).get("parts") or [])
+                      if not pt.get("thought"))
+        usage = dict(r.get("usageMetadata", {}),
+                     stop_reason=str(cand.get("finishReason") or "").lower())
     else:
         r = _post("https://api.openai.com/v1/chat/completions",
                   {"model": model, "messages": [{"role": "user", "content": prompt}]},
@@ -476,6 +543,41 @@ def k3_pairs(norms: list) -> int:
     return sum(1 for signs in by.values() if signs == {-1, 1})
 
 
+def quorum(verdicts: dict) -> dict:
+    """Значение записи — знак, данный не менее чем двумя вендорами из трёх.
+
+    Почему не двое. Защита от единичного сбоя требует минимум ТРЁХ копий: при
+    двух расхождение даёт сигнал и не даёт решения, а согласие не даёт
+    гарантии вовсе — обе модели могут ошибаться одинаково. До 31.07 метрика
+    «согласие вендоров 83,3%» читалась как точность; она мерила
+    воспроизводимость.
+
+    Чего кворум НЕ лечит, и это названо: общего заблуждения всех трёх. Все
+    обучены на схожих корпусах и склонны к схожим прочтениям юридического
+    текста. Единственная проверка — подложенные нормы с известным знаком.
+
+    Исходы:
+      unanimous    — все ответившие сошлись;
+      majority     — знак дали >= 2, но не все: запись СПОРНАЯ, помечается;
+      no_quorum    — большинства нет. Это НЕ прочерк K7: прочерк означает
+                     «случай вне кодбука», здесь кодбук применим, а оценщики
+                     разошлись. Идёт на эскалацию владельцу;
+      insufficient — ответил один или ни одного. Не вина оценщиков.
+    """
+    votes = {v: d.get("overall", {}).get("sign")
+             for v, d in verdicts.items() if d.get("status") == "ok"}
+    if len(votes) < 2:
+        return {"kind": "insufficient", "value": None,
+                "votes": votes, "n_voters": len(votes)}
+    counts = collections.Counter(votes.values())
+    top, n_top = counts.most_common(1)[0]
+    if n_top < 2:
+        return {"kind": "no_quorum", "value": None,
+                "votes": votes, "n_voters": len(votes)}
+    return {"kind": "unanimous" if n_top == len(votes) else "majority",
+            "value": top, "votes": votes, "n_voters": len(votes)}
+
+
 def agreement(a: dict, o: dict) -> dict:
     """Три уровня согласия, а не один.
 
@@ -527,7 +629,11 @@ def main() -> int:
         print(f"ОБЪЯВЛЕНО ДО ПРОГОНА (§23): ожидаю расхождений по общему знаку "
               f"— {a.expect_disagreements}")
 
-    models = {v: pick_model(v) for v in ("anthropic", "openai")}
+    for var in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY"):
+        if not os.environ.get(var):
+            sys.exit(f"нет {var} в ~/.knesset_secrets/llm.env — кворум два из "
+                     "трёх требует трёх вендоров; с двумя большинства нет")
+    models = {v: pick_model(v) for v in ("anthropic", "openai", "google")}
     print(f"модели (спрошены у вендоров, не угаданы): {models}")
     chk, cod = checklist_text(), codebook_text()
 
@@ -598,11 +704,17 @@ def main() -> int:
 
         va = row["verdicts"].get("anthropic", {})
         vo = row["verdicts"].get("openai", {})
+        vg = row["verdicts"].get("google", {})
+        # agreement на ПАРЕ остаётся: только по нему сравнимы прежние прогоны.
+        # Решение о знаке принимает кворум, не она.
         both_ok = va.get("status") == "ok" and vo.get("status") == "ok"
         if both_ok:
             row["agree"] = agreement(va, vo)
-        sa = va.get("overall", {}).get("sign", "—") if va.get("status") == "ok" else "—"
-        so = vo.get("overall", {}).get("sign", "—") if vo.get("status") == "ok" else "—"
+        row["quorum"] = quorum(row["verdicts"])
+        stats[f"quorum:{row['quorum']['kind']}"] += 1
+        def _s(d):
+            return d.get("overall", {}).get("sign", "—") if d.get("status") == "ok" else "—"
+        sa, so, sg = _s(va), _s(vo), _s(vg)
 
         orc = ""
         if b in oracle:
@@ -617,18 +729,48 @@ def main() -> int:
                 if x is None:
                     return "declined"
                 return "hit" if x == exp else "miss"
-            row["oracle"] = {"expect": exp, "anthropic": verdict(sa), "openai": verdict(so)}
-            orc = f"  ОРАКУЛ {exp:+d} → A:{row['oracle']['anthropic']} O:{row['oracle']['openai']}"
+            row["oracle"] = {"expect": exp, "anthropic": verdict(sa),
+                             "openai": verdict(so), "google": verdict(sg),
+                             "quorum": verdict(row["quorum"]["value"]
+                                               if row["quorum"]["kind"] in
+                                               ("unanimous", "majority") else "—")}
+            orc = (f"  ОРАКУЛ {exp:+d} → A:{row['oracle']['anthropic']}"
+                   f" O:{row['oracle']['openai']} G:{row['oracle']['google']}"
+                   f" КВОРУМ:{row['oracle']['quorum']}")
 
-        mark = "=" if both_ok and row["agree"]["overall_sign"] else "≠"
+        mark = {"unanimous": "≡", "majority": "≈",
+                "no_quorum": "✗", "insufficient": "·"}[row["quorum"]["kind"]]
         qa = va.get("overall", {}).get("quote_found", "-") if va.get("status") == "ok" else "-"
-        print(f"   [{i}/{len(targets)}] {b} A={sa} O={so} {mark} норм={len(va.get('norms', []))}"
-              f" цит={qa}{orc}  {name[:36]}")
+        print(f"   [{i}/{len(targets)}] {b} A={sa} O={so} G={sg} {mark}"
+              f" норм={len(va.get('norms', []))} цит={qa}{orc}  {name[:36]}")
         rows.append(row)
 
     ok_rows = [r for r in rows if r.get("agree")]
     dis = {k: sum(1 for r in ok_rows if not r["agree"][k])
            for k in ("overall_sign", "norm_count", "strongest")}
+
+    # --- КВОРУМ: то, чем теперь определяется знак записи --------------------
+    kinds = collections.Counter(r["quorum"]["kind"] for r in rows if "quorum" in r)
+    tot_q = sum(kinds.values())
+    print("\n=== КВОРУМ ДВА ИЗ ТРЁХ (решает знак; agreement ниже — только")
+    print("    для сопоставимости с прежними прогонами на паре вендоров) ===")
+    for k in ("unanimous", "majority", "no_quorum", "insufficient"):
+        v = kinds.get(k, 0)
+        print(f"   {k:<13} {v:>4}" + (f"  ({100*v/tot_q:.1f}%)" if tot_q else ""))
+    if tot_q:
+        got_q = (kinds.get("unanimous", 0) + kinds.get("majority", 0)) / tot_q
+        got_u = kinds.get("unanimous", 0) / tot_q
+        # Ожидания объявлены ДО прогона в plans/PLAN_direction_2026-07-31b.md,
+        # коммит 1bb8b1a. Здесь только сверка, подкрутка запрещена.
+        print(f"   ОБЪЯВЛЕНО ДО ПРОГОНА: кворум >= 95%, единогласие 70-85%")
+        print(f"   вышло: кворум {100*got_q:.1f}%, единогласие {100*got_u:.1f}%")
+        if got_q < 0.90:
+            print("   ⚠ КВОРУМ НИЖЕ 90% — это ЭСКАЛАЦИЯ владельцу, а не повод")
+            print("     править кодбук (stopping_rule). Рефлекс «низкое согласие")
+            print("     => правка критериев» и создал двенадцать ревизий за пять дней.")
+        if kinds.get("no_quorum"):
+            print(f"   {kinds['no_quorum']} записей без большинства — три разных знака.")
+            print("     Это НЕ прочерк K7: кодбук применим, разошлись оценщики.")
 
     print("\n=== ВХОД В РЕШЕНИЕ Р2 ===")
     print(f"оба вендора ответили: {len(ok_rows)}/{len(targets)}")
@@ -692,7 +834,8 @@ def main() -> int:
 
     out_path.write_text(json.dumps(
         {"at": datetime.now(timezone.utc).isoformat(), "models": models,
-         "codebook_version": "1.1",
+         "codebook_version": "1.2",
+         "quorum_kinds": dict(kinds),
          "selected": len(sel["selected"]), "attempted": len(targets),
          "no_text": no_text, "stats": dict(stats),
          "expected_disagreements": a.expect_disagreements,
@@ -768,7 +911,34 @@ def selftest() -> int:
                              "norms": two})) is not None, \
         "K2d: ответ С пометкой отвергнут — проверка слишком широка"
 
-    print("самопроверка механики v1.1 пройдена: 18 утверждений")
+    # --- кворум и выбор модели: добавлено 31.07 вместе с третьим вендором ---
+    ok, ok2, ok0 = ({"status": "ok", "overall": {"sign": s}} for s in (-1, 1, 0))
+    err = {"status": "error"}
+    assert quorum({"a": ok, "b": ok, "c": ok})["kind"] == "unanimous"
+    assert quorum({"a": ok, "b": ok, "c": ok2})["kind"] == "majority"
+    assert quorum({"a": ok, "b": ok, "c": ok2})["value"] == -1, \
+        "большинство обязано давать ЗНАК, а не только метку"
+    assert quorum({"a": ok, "b": ok0, "c": ok2})["kind"] == "no_quorum", \
+        "три разных знака — большинства нет"
+    assert quorum({"a": ok, "b": ok2, "c": err})["kind"] == "no_quorum", \
+        "двое разошлись — большинства нет, ровно ради этого и третий вендор"
+    assert quorum({"a": ok, "b": err})["kind"] == "insufficient"
+    assert quorum({"a": ok, "b": ok0, "c": ok2})["value"] is None, \
+        "без кворума знака быть не может"
+    dec = {"status": "ok", "overall": {"sign": None}}
+    assert quorum({"a": dec, "b": dec, "c": ok})["kind"] == "majority", \
+        "отказ по K5 — это ГОЛОС, а не молчание"
+    assert quorum({"a": dec, "b": dec, "c": ok})["value"] is None
+    assert _gemini_pick(["gemini-pro-latest", "gemini-2.5-pro",
+                         "gemini-3-pro-preview"]) == "gemini-2.5-pro", \
+        "алиас -latest и preview брать нельзя: кэш по имени модели разъедется молча"
+    assert _gemini_pick(["gemini-2.5-pro", "gemini-10-pro"]) == "gemini-10-pro", \
+        "версия сравнивается числом: лексикографически 2.5 больше 10"
+    assert _gemini_pick(["gemini-flash-latest", "gemini-3.5-flash"]) is None, \
+        "нет стабильной pro — падаем, а не берём что попало"
+
+    print("самопроверка механики v1.2 пройдена: 18 + 12 утверждений "
+          "(кворум два из трёх и выбор модели)")
     return 0
 
 
