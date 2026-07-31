@@ -3,7 +3,7 @@
     "expected": 545,
     "got": 545,
     "pages": 6,
-    "at": "2026-07-30T20:58:13",
+    "at": "2026-07-31T14:26:31",
     "host": "Studio.local"
   },
   "KNS_PersonToPosition|PositionID eq 43": {
@@ -16,7 +16,7 @@
     "expected": 4515,
     "got": 4515,
     "pages": 46,
-    "at": "2026-07-30T20:59:14",
+    "at": "2026-07-31T14:27:32",
     "host": "Studio.local"
   },
   "KNS_Bill|KnessetNum eq 25": {
@@ -35,7 +35,7 @@
     "expected": 21231,
     "got": 21231,
     "pages": 22,
-    "at": "2026-07-30T20:59:37",
+    "at": "2026-07-31T11:17:28",
     "host": "Studio.local"
   },
   "obudget:budget_changes|year in (2023, 2024, 2025)": {
@@ -43,6 +43,20 @@
     "got": 1961,
     "pages": 2,
     "at": "2026-07-30T20:59:44",
+    "host": "Studio.local"
+  },
+  "KNS_PlenumVote|VoteDateTime ge 2022-11-15T00:00:00Z and VoteDateTime lt 2026-12-31T00:00:00Z": {
+    "expected": 7562,
+    "got": 7562,
+    "pages": 76,
+    "at": "2026-07-31T14:16:25",
+    "host": "Studio.local"
+  },
+  "obudget:raw_budget|year = 2022": {
+    "expected": 6940,
+    "got": 6940,
+    "pages": 7,
+    "at": "2026-07-31T14:19:06",
     "host": "Studio.local"
   }
 }
