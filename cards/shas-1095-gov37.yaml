@@ -4,6 +4,7 @@
 # по-своему. Остальные семнадцать перечислены в coverage и НЕ размечены.
 # Числа в карточке не хранятся (§14): только коды, годы и решения.
 card_version: 1
+data_fingerprint: sha256:2e442ba1c191cceef106ffaa886c803c2af55993b9af032626d5f4802a9cb503
 card_type: party
 period_id: 1095-gov37
 party_he: ש"ס
