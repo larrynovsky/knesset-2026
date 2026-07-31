@@ -43,9 +43,18 @@ def main() -> int:
         select="Id,VoteDateTime,ItemID,SessionID,VoteTitle")
     print(f"голосований 25-го Кнессета: {len(heads)}")
 
+    # Сущность целиком — 168 887 строк по всем каденциям, около полутора часов
+    # выгрузки. Нужны только сессии, в которых есть НАШИ голосования, поэтому
+    # берётся диапазон их SessionID. Это НАДМНОЖЕСТВО нужного по построению:
+    # любой ключ, который мы будем искать, имеет SessionID внутри [min, max],
+    # — сужение не может потерять ни одной искомой пары.
+    sids = [h["SessionID"] for h in heads if h.get("SessionID")]
+    lo, hi = min(sids), max(sids)
+    print(f"диапазон сессий наших голосований: {lo}–{hi}")
     items = fetch_all("KNS_PlmSessionItem",
+                      flt=f"PlenumSessionID ge {lo} and PlenumSessionID le {hi}",
                       select="ItemID,PlenumSessionID,ItemTypeID,ItemTypeDesc")
-    print(f"пунктов повестки всего: {len(items)}")
+    print(f"пунктов повестки в диапазоне: {len(items)}")
 
     # ключ (сессия, пункт) → тип. Один пункт может встречаться в сессии
     # несколько раз (Ordinal), тип при этом обязан совпадать.
