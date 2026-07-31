@@ -90,6 +90,16 @@ def load_yaml_ish(path: Path) -> dict:
                 continue
             if not isinstance(out, dict):
                 break
+            if ":" not in s:
+                # Продолжение многострочного скаляра без `>-`. Разборщик его
+                # не склеивает, а прежняя редакция молча превращала такую
+                # строку в пустой ключ и ТЕРЯЛА хвост значения. Обнаружено
+                # 31.07 рендером: `holdout_checked.outcome` в отчёте обрывался
+                # на слове «поэтому». Ровно класс §23 — операция отчиталась
+                # об успехе и вернула правдоподобный неполный результат.
+                raise ValueError(
+                    f"строка без ключа: {s[:60]!r}. Многострочное значение "
+                    "обязано объявляться через `>-` — иначе хвост теряется")
             key, _, rest = s.partition(":")
             key, rest = key.strip(), rest.strip()
             if rest in (">-", ">", "|", "|-"):
@@ -121,6 +131,10 @@ def load_yaml_ish(path: Path) -> dict:
         if not sub_lines:
             return None, i
         if ":" not in sub_lines[0][1]:
+            if len(sub_lines) > 1:
+                raise ValueError(
+                    f"элемент списка {sub_lines[0][1][:40]!r} продолжается "
+                    "следующими строками — объяви его через `- >-`")
             return scalar(sub_lines[0][1]), i
         val, _ = parse(sub_lines, 0, sub_lines[0][0])
         return val, i
@@ -133,6 +147,12 @@ def load_yaml_ish(path: Path) -> dict:
             return s == "true"
         if re.fullmatch(r"-?\d+", s):
             return int(s)
+        if s.startswith("[") and not s.endswith("]"):
+            # Тот же класс: список в потоковой форме, разорванный переносом.
+            # `[553, 557,` разбирался как СТРОКА, и шесть номеров из
+            # семнадцати исчезали, не оставив следа.
+            raise ValueError(f"незакрытый список: {s[:60]!r}. Потоковый "
+                             "список обязан умещаться в одну строку")
         if s.startswith("[") and s.endswith("]"):
             try:
                 return ast.literal_eval(s)
@@ -343,6 +363,19 @@ def emit_schema() -> str:
     return "\n".join(lines) + "\n"
 
 
+def load_yaml_ish_ok() -> bool:
+    """Корректная карточка обязана разбираться. Отказ, введённый выше, легко
+    сделать слишком широким — эта проверка держит его границу."""
+    import tempfile
+    f = Path(tempfile.mkdtemp()) / "c.yaml"
+    f.write_text("a: 1\nb:\n  c: текст\n  d: >-\n    длинное\n    значение\n"
+                 "e: [1, 2, 3]\nf:\n  - g: >-\n      много\n      строк\n",
+                 encoding="utf-8")
+    d = load_yaml_ish(f)
+    return (d["b"]["d"] == "длинное значение" and d["e"] == [1, 2, 3]
+            and d["f"][0]["g"] == "много строк")
+
+
 def selftest() -> int:
     """Каждая из проверок обязана краснеть на своём нарушении."""
     base = {
@@ -410,6 +443,25 @@ def selftest() -> int:
             conclusion="статьи нет {nocode:0022010213}")),
         ("§14 кэш числа", lambda c: c["commitments"][0].update(net_allocated=1)),
     ]
+    # Разборщик обязан ОТКАЗЫВАТЬ на том, чего не умеет, а не усекать молча.
+    import tempfile
+    parser_cases = [
+        ("многострочный скаляр без >-", "a: начало\n  продолжение\n"),
+        ("разорванный потоковый список", "a: [1, 2,\n   3]\n"),
+        ("элемент списка с продолжением", "a:\n  - раз\n    два\n"),
+    ]
+    for pname, text in parser_cases:
+        f = Path(tempfile.mkdtemp()) / "c.yaml"
+        f.write_text(text, encoding="utf-8")
+        try:
+            load_yaml_ish(f)
+            print(f"САМОПРОВЕРКА ПРОВАЛЕНА: разборщик проглотил {pname!r}",
+                  file=sys.stderr)
+            return 1
+        except ValueError:
+            pass
+    assert load_yaml_ish_ok(), "разборщик перестал понимать корректный YAML"
+
     bad = [name for name, mut in cases if run(mut) == 0]
     if bad:
         print(f"САМОПРОВЕРКА ПРОВАЛЕНА: не покраснели {bad}", file=sys.stderr)

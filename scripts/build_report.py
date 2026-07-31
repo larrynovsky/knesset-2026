@@ -107,6 +107,16 @@ def esc(s) -> str:
     return html.escape(s)
 
 
+def as_text(w) -> str:
+    """Элемент `searched_where` — либо строка, либо `источник: …`. Прежняя
+    редакция звала esc() прямо на словаре и печатала в отчёт python-repr:
+    `{'источник': 'raw_budget, поиск…'}`. Читатель видел служебную скобку
+    там, где обещана область поиска."""
+    if isinstance(w, dict):
+        return "; ".join(f"{k}: {v}" for k, v in w.items())
+    return str(w)
+
+
 def money(v) -> str:
     if v is None:
         return "нет значения"
@@ -265,7 +275,8 @@ def render_commitment(c: dict, idx, titles, nulls) -> str:
         p.append(f'<p class=r><b>{esc(READING_RU.get(r.get("type")))} '
                  f'прочтение.</b> {esc(r.get("text"))}</p>')
     cs = c.get("counter_search") or {}
-    where = "".join(f"<li>{esc(w)}</li>" for w in cs.get("searched_where") or [])
+    where = "".join(f"<li>{esc(as_text(w))}</li>"
+                    for w in cs.get("searched_where") or [])
     p.append(f'<p class=r><b>Поиск опровержения.</b> '
              f'{esc(OUTCOME_RU.get(cs.get("outcome"), cs.get("outcome")))}.</p>'
              f'<ul class=meta>{where}</ul>')
@@ -424,6 +435,16 @@ def selftest() -> int:
     if html.escape(hostile) not in h:
         fails.append("экранирование: цитата потеряла кусок")
 
+    # 6b: область поиска, записанная как `источник: …`, доходит до читателя
+    # текстом, а не служебной скобкой
+    c6 = card()
+    c6["commitments"][0]["counter_search"]["searched_where"] = [
+        {"источник": "raw_budget, дата 2026-07-30"}]
+    h6 = build([("t", c6)], idx, titles)
+    if "raw_budget, дата 2026-07-30" not in h6 or "&#x27;источник&#x27;" in h6:
+        fails.append("область поиска отрендерена как python-repr, "
+                     "а не как текст")
+
     # 7: §13 — сортировать нечем, потому что нечего и незачем
     if "<table" in ok or "<script" in ok:
         fails.append("§13: в документе таблица или скрипт — появилась "
@@ -467,7 +488,7 @@ def selftest() -> int:
         for f in fails:
             print(f"  ✗ {f}", file=sys.stderr)
         return 1
-    print("самопроверка отчёта пройдена: 13 утверждений. Напоминание: "
+    print("самопроверка отчёта пройдена: 14 утверждений. Напоминание: "
           "проверено, что документ СОБИРАЕТСЯ и не врёт механически; "
           "осмысленность выводов машиной не проверяется (§24)")
     return 0

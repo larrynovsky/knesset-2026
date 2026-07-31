@@ -23,7 +23,7 @@
 | §11 | Единый срез. | MANUAL | build_report.py, fetch_budget.py, map_commitments.py, probe_phase0.py, validate_cards.py |
 | §12 | Ивритский оригинал хранится рядом с переводом. | MANUAL | classify_direction.py, fetch_agreements.py, map_commitments.py, ocr_agreements.py, post-receive.template, pre-commit, render_mapping_review.py, validate_cards.py |
 | §13 | В публикации нет суммарного балла, рейтинга и оценочных ярлыков. | MANUAL | build_lineage_rule.py, build_report.py, render_mapping_review.py, validate_cards.py |
-| §14 | Всё опубликованное воспроизводимо из репозитория. | MANUAL | build_report.py, extract_institutions.py, fetch_agreements.py, ocr_agreements.py, probe_bill_texts.py, select_pilot.py, validate_cards.py |
+| §14 | Всё опубликованное воспроизводимо из репозитория. | MANUAL | build_report.py, extract_institutions.py, fetch_agreements.py, fetch_budget.py, ocr_agreements.py, probe_bill_texts.py, select_pilot.py, validate_cards.py |
 | §15 | Исправление публикуется, а не заменяет тихо. | MANUAL | build_report.py, check_artifacts.py, validate_cards.py |
 | §16 | Доступно, но не продвигается. Массовость — триггер, а не разрешённое с | MANUAL | build_report.py |
 | §17 | Рамка объявлена на первом экране. | MANUAL | build_report.py |
