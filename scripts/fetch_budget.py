@@ -165,9 +165,31 @@ def main() -> int:
         return selftest()
 
     years = DEFAULT_YEARS
-    print(f"канал Б: годы {years}")
+    # --only: выгрузить лишь одну таблицу. Нужно `make reproduce` (§14):
+    # отчёт читает ТОЛЬКО raw_budget, и требовать ради его воспроизведения
+    # ещё и budget_changes значит ставить воспроизводимость документа в
+    # зависимость от источника, которого в документе нет. 31.07 obudget
+    # перестал отвечать на count(1) по budget_changes — §23 отказал, и
+    # сборка отчёта встала бы из-за таблицы, которую отчёт не открывает.
+    only = None
+    if "--only" in sys.argv:
+        i = sys.argv.index("--only")
+        only = sys.argv[i + 1] if len(sys.argv) > i + 1 else None
+        if only not in ("takanot", "changes"):
+            print("--only принимает takanot либо changes", file=sys.stderr)
+            return 1
+    print(f"канал Б: годы {years}" + (f", только {only}" if only else ""))
 
     t0 = time.time()
+    if only == "changes":
+        changes = fetch_changes(years)
+        p2 = _write("budget_changes.json", changes,
+                    {"table": "budget_changes", "years": list(years),
+                     "count": len(changes)})
+        print(f"  budget_changes: {len(changes)} переносов -> {p2.name}")
+        print(f"готово за {time.time() - t0:.0f} с")
+        return 0
+
     takanot = fetch_takanot(years)
     p1 = _write("budget_takanot.json", takanot,
                 {"table": "raw_budget", "years": list(years), "count": len(takanot)})
@@ -176,6 +198,12 @@ def main() -> int:
         by_len[len(r["code"])] = by_len.get(len(r["code"]), 0) + 1
     print(f"  raw_budget: {len(takanot)} строк -> {p1.name}")
     print("  по длине кода: " + ", ".join(f"{k}:{v}" for k, v in sorted(by_len.items())))
+
+    if only == "takanot":
+        print(f"budget_changes НЕ выгружался (--only takanot) — отчёт его "
+              f"не читает. Канал transfers не реализован.")
+        print(f"готово за {time.time() - t0:.0f} с")
+        return 0
 
     changes = fetch_changes(years)
     p2 = _write("budget_changes.json", changes,

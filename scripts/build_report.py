@@ -82,6 +82,8 @@ OUTCOME_RU = {
     "nothing": "честный поиск ничего не дал",
     "contradictory": "свидетельства противоречивы, доминирующего вывода нет",
 }
+CHAN_RU = {"allocated": "база", "revised": "после пересмотра",
+           "executed": "исполнено", "transfers": "переносы"}
 GRAN_RU = {
     "exact_takana": "код статьи назван в самом обязательстве",
     "subset_of_line": "часть строки бюджета",
@@ -178,8 +180,8 @@ def substitute(text: str, idx: dict, titles: list[str], nulls: list[str]) -> str
         v = cell_value(code, year, chan, idx)
         if v is None:
             nulls.append(f"{code}:{year}:{chan}")
-        return (f'<span class=n title="строка {code}, {year}">{money(v)}</span>'
-                f'<span class=src>[{code}·{year}]</span>')
+        return (f'<span class=n>{money(v)}</span>'
+                f'<span class=src>[{code} · {year} · {CHAN_RU[chan]}]</span>')
 
     def absent(m: re.Match) -> str:
         term = m.group(1)
@@ -187,8 +189,7 @@ def substitute(text: str, idx: dict, titles: list[str], nulls: list[str]) -> str
         if hits:
             raise Refuse(f"заявлено отсутствие {term!r}, но оно есть в "
                          f"{len(hits)} названиях статей — утверждение неверно")
-        return (f'<span class=absent>«{esc(term)}» — нет ни в одном из '
-                f'{len(titles)} названий статей</span>')
+        return f'<span class=absent>«{esc(term)}» не встречается ни разу</span>'
 
     def nocode(m: re.Match) -> str:
         code = m.group(1)

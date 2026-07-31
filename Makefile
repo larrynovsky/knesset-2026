@@ -20,7 +20,7 @@
 PY ?= python3
 SHA := shasum -a 256
 
-.PHONY: help check check-net fetch validate report stamp reproduce
+.PHONY: help check check-net fetch fetch-report validate report stamp reproduce
 
 help:
 	@echo "check      — самопроверки без сети (валидатор карточки, генератор, §3, §24)"
@@ -45,6 +45,9 @@ check-net:
 fetch:
 	$(PY) scripts/fetch_budget.py
 
+fetch-report:
+	$(PY) scripts/fetch_budget.py --only takanot
+
 validate:
 	$(PY) scripts/validate_cards.py
 
@@ -58,7 +61,11 @@ stamp:
 # означает, что в документ просочилось что-то, чего нет во входе, — время
 # сборки, порядок обхода словаря, случайность. Такой отчёт нельзя ни
 # проверить, ни сравнить с предыдущим.
-reproduce: check fetch validate report
+# Перевыгружается ТОЛЬКО raw_budget: отчёт читает его и ничего больше.
+# Тянуть сюда budget_changes значило бы поставить воспроизводимость
+# документа в зависимость от источника, которого в документе нет, — 31.07
+# obudget перестал отвечать на count(1) по этой таблице, и §23 отказал.
+reproduce: check fetch-report validate report
 	$(SHA) site/index.html > .repro.sha
 	$(PY) scripts/build_report.py
 	@$(SHA) site/index.html | diff - .repro.sha > /dev/null \
