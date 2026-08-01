@@ -53,6 +53,7 @@ from __future__ import annotations
 import argparse
 import collections
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -146,6 +147,70 @@ def link_head(h: dict, typ: dict[tuple, set],
     if b is None:
         return "законопроект вне переписи", None
     return "сшито прямым ключом", b
+
+
+def law_head(name: str) -> str:
+    """Имя закона до первой скобки: «какой закон», без «какая поправка».
+
+    `חוק יסוד: הממשלה (תיקון - כשירות)` и `חוק יסוד: הממשלה (תיקון מס' 3)` —
+    один закон, разные поправки. Их одинаковый `law_head` не делает их одним
+    актом и НЕ является основанием склеить: он только объясняет, почему
+    голосование могло попасть в один пункт повестки с другой поправкой.
+    """
+    return norm_he(re.split(r"[(（]", name or "", 1)[0])
+
+
+def classify_divergence(by_name_pairs: set, direct: dict,
+                        by_id: dict) -> dict[str, list]:
+    """Три класса расхождения прямого ключа и сшивки по имени.
+
+    Классы объявлены до разбора в
+    criteria/declared_before_divergence_2026-08-01.yaml (коммит c9a646b).
+    Прежний оракул P18 требовал ровно ноль расхождений и был опровергнут
+    прогоном: посылка «имя бедно, но проверено» неверна — при одноимённых
+    актах `load_bills` брала первого встречного, то есть наугад.
+
+    Разбиение обязано быть полным: пара, не попавшая ни в один класс, — отказ.
+    """
+    out: dict[str, list] = {"тёзка": [], "содержательное": [], "потеря": []}
+    for vid, nb in sorted(by_name_pairs):
+        db = direct.get(vid)
+        if db == nb:
+            continue                       # ключи согласны — не расхождение
+        if db is None:
+            out["потеря"].append((vid, nb, None))
+        elif norm_he(by_id[nb]["name"]) == norm_he(by_id[db]["name"]):
+            out["тёзка"].append((vid, nb, db))
+        else:
+            out["содержательное"].append((vid, nb, db))
+    return out
+
+
+def load_adjudication(root: Path) -> dict[int, str]:
+    """Вердикты по содержательным расхождениям: vote_id → вердикт.
+
+    Разбор — человеческий и версионируемый. Отсутствие файла не «мягкая
+    деградация»: без него содержательные расхождения останавливают сборку.
+    Формат нарочно плоский, чтобы не тащить разборщик: строки вида
+    `<vote_id>: <вердикт>` под ключом `verdicts:`.
+    """
+    files = sorted((root / "criteria").glob("vote_link_adjudication_*.yaml"))
+    if not files:
+        return {}
+    out: dict[int, str] = {}
+    inside = False
+    for line in files[-1].read_text(encoding="utf-8").splitlines():
+        if line.startswith("verdicts:"):
+            inside = True
+            continue
+        if inside:
+            if line and not line.startswith(" "):
+                inside = False
+                continue
+            k, _, v = line.strip().partition(":")
+            if k.isdigit() and v.strip():
+                out[int(k)] = v.strip()
+    return out
 
 
 def fetch_headers() -> list[dict]:
@@ -285,19 +350,32 @@ def main() -> int:
         if b is not None:
             by_name_pairs.add((h["Id"], b["id"]))
     direct_pairs = {(m["Id"], m["bill_id"]) for m in matched}
+    direct_by_vote = {m["Id"]: m["bill_id"] for m in matched}
     only_name = by_name_pairs - direct_pairs
     print(f"\nКОНТРОЛЬ · сшивка по имени: {len(by_name_pairs)} пар · "
-          f"прямым ключом: {len(direct_pairs)} · "
-          f"найдено ТОЛЬКО именем: {len(only_name)}")
+          f"прямым ключом: {len(direct_pairs)} · расходятся: {len(only_name)}")
 
-    # P18: прямой ключ обязан быть строго богаче, а не другим. Объявлено до
-    # прогона в criteria/declared_before_directkey_2026-08-01.yaml.
-    if only_name:
-        print("§3/P18 ОТКАЗ: прямой ключ потерял пары, которые находило имя. "
-              "Это значит, что ключи не вложены, а расходятся, и вопрос «какой "
-              "из двух прав» не решён. Данные наверх не отдаются.")
-        print(f"   примеры потерянных пар: {sorted(only_name)[:10]}")
+    # Оракул трёх классов. Заменил P18 («ноль расхождений»), опровергнутый
+    # прогоном 01.08: посылка «имя бедно, но проверено» неверна.
+    cls3 = classify_divergence(by_name_pairs, direct_by_vote, bills_by_id)
+    assert sum(len(v) for v in cls3.values()) == len(only_name), (
+        f"разбиение расхождений неполно: {sum(len(v) for v in cls3.values())} "
+        f"против {len(only_name)}")
+    for k, v in cls3.items():
+        print(f"   {len(v):>4}  {k}")
+
+    verdicts = load_adjudication(ROOT)
+    need = [t for t in cls3["содержательное"] + cls3["потеря"]
+            if t[0] not in verdicts]
+    if need:
+        print(f"\n§3 ОТКАЗ: {len(need)} расхождений без вердикта в "
+              f"criteria/vote_link_adjudication_*.yaml. Содержательное "
+              f"расхождение и потеря не решаются механически: молчание о них "
+              f"тихо выбирает один ключ из двух. Данные наверх не отдаются.")
+        for vid, nb, db in need[:8]:
+            print(f"   голосование {vid}: имя → {nb}, ключ → {db}")
         return 1
+    print(f"   вердиктов прочитано: {len(verdicts)}")
 
     if a.expect_matched is not None:
         ok = abs(len(bills_hit) - a.expect_matched) <= max(5, a.expect_matched * 0.2)
@@ -441,7 +519,41 @@ def selftest() -> int:
                          (500, 900001), (999, 1)]}
     assert len(seen) == 5, f"классы обязаны различаться, получено {seen}"
 
-    print("самопроверка fetch_votes пройдена: 14 утверждений (8 мост, 6 прямой ключ)")
+    # classify_divergence: три класса. Случаи различаются ТОЛЬКО тем полем,
+    # которое их и разделяет, — иначе проверка пройдёт по посторонней причине,
+    # как уже случилось с первой редакцией теста link_head выше.
+    cb = {1: {"id": 1, "name": "חוק א (תיקון 1)"},
+          2: {"id": 2, "name": "חוק א (תיקון 1)"},   # ТЁЗКА первого
+          3: {"id": 3, "name": "חוק ב (תיקון 5)"}}   # другое имя
+    pairs = {(10, 1), (11, 1), (12, 1), (13, 1)}
+    dirmap = {10: 1,      # ключи согласны — не расхождение
+              11: 2,      # найден тёзка
+              12: 3}      # найден акт с другим именем; 13 не найден вовсе
+    c = classify_divergence(pairs, dirmap, cb)
+    assert [t[0] for t in c["тёзка"]] == [11], f"тёзка: {c['тёзка']}"
+    assert [t[0] for t in c["содержательное"]] == [12], f"сод.: {c['содержательное']}"
+    assert [t[0] for t in c["потеря"]] == [13], f"потеря: {c['потеря']}"
+    assert sum(len(v) for v in c.values()) == 3, \
+        "согласная пара не имеет права попасть в расхождения"
+    # разбиение полно: каждая расходящаяся пара ровно в одном классе
+    seen = [t[0] for v in c.values() for t in v]
+    assert sorted(seen) == [11, 12, 13] and len(set(seen)) == 3, \
+        f"классы пересеклись или потеряли пару: {seen}"
+
+    # load_adjudication: отсутствие файла даёт пустоту, а не догадку
+    import tempfile
+    tmp = Path(tempfile.mkdtemp())
+    (tmp / "criteria").mkdir()
+    assert load_adjudication(tmp) == {}, "нет файла ⇒ пусто, и это отказ выше"
+    (tmp / "criteria" / "vote_link_adjudication_2026-01-01.yaml").write_text(
+        "verdicts:\n  10: ключ прав, имя выбрало тёзку\n  13: пункта нет\n"
+        "прочее:\n  99: не вердикт\n", encoding="utf-8")
+    v = load_adjudication(tmp)
+    assert v == {10: "ключ прав, имя выбрало тёзку", 13: "пункта нет"}, v
+    assert 99 not in v, "строка вне блока verdicts не имеет права стать вердиктом"
+
+    print("самопроверка fetch_votes пройдена: 22 утверждения "
+          "(8 мост, 6 прямой ключ, 8 расхождения)")
     return 0
 
 
