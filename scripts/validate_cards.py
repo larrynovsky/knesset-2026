@@ -37,7 +37,10 @@ CONFIDENCE = ("high", "medium", "low", "none")
 READING_TYPES = ("weakening", "strengthening", "reframing")
 GRANULARITY = ("exact_takana", "subset_of_line", "spread_over_lines",
                "not_found", "not_budgetary")
-STATUS = ("has_record", "no_record")
+# §7 (ред. 01.08.2026): четыре взаимно исключающих статуса экспозиции.
+# no_record удалён намеренно — он схлопывал три состояния в одно.
+EXPOSURE_STATUSES = ("not_exposed", "source_missing", "lineage_unresolved")
+STATUS = ("observed",) + EXPOSURE_STATUSES   # has_record переименован в observed
 CARD_TYPES = ("party", "figure")
 
 # §13: ярлыки, которые превращают раскрытие в оценку. Список ЗАВЕДОМО НЕПОЛОН
@@ -203,10 +206,34 @@ def check_card(card: dict, name: str, periods: set[str], idx: dict,
     if card.get("card_type") not in CARD_TYPES:
         bad("§2", f"card_type обязан быть из {CARD_TYPES}")
 
-    # §7 — ноль периодов правления ⇒ только no_record
+    # §7 — словарь статусов закрыт. Прежде константа STATUS существовала и НЕ
+    # проверялась ничем: карточка со статусом "banana" проходила молча.
+    if card.get("status") not in STATUS:
+        bad("§7", f"status обязан быть из {STATUS}, получено {card.get('status')!r}")
+
+    # §7 — ноль периодов правления ⇒ матрица экспозиции, а не базовая ставка.
+    # Прежняя редакция требовала здесь единственный статус no_record. Он
+    # схлопывал три РАЗНЫХ состояния в одно: «партия не могла быть наблюдаема»,
+    # «источник не отдал данные» и «преемственность не установлена». При таком
+    # схлопывании сломанная выгрузка неотличима от отсутствия полномочий, и
+    # технический дефект превращается в политический вывод.
     n = card.get("periods_in_government")
-    if n == 0 and card.get("status") != "no_record":
-        bad("§7", "periods_in_government == 0, но статус не no_record")
+    if n == 0:
+        st = card.get("status")
+        if st == "no_record":
+            bad("§7", "no_record запрещён: схлопывает not_exposed / "
+                      "source_missing / lineage_unresolved в одно состояние")
+        elif st not in EXPOSURE_STATUSES:
+            bad("§7", f"periods_in_government == 0 ⇒ статус из {EXPOSURE_STATUSES}, "
+                      f"получено {st!r}")
+        elif st == "not_exposed" and not card.get("exposure_evidence"):
+            # «Ноль периодов» обязан быть ДОКАЗАН, а не постулирован: иначе
+            # not_exposed — человеческое утверждение в машинном значке.
+            bad("§7", "not_exposed без exposure_evidence — ноль постулирован, "
+                      "а не доказан")
+    if "base_rate" in card:
+        bad("§7", "base_rate в карточке партии: базовая ставка — характеристика "
+                  "канала, а не партии, и живёт на странице методологии")
 
     # §11 — снимки покрывают источники
     snaps = card.get("snapshots") or {}
@@ -335,7 +362,7 @@ def emit_schema() -> str:
         "| §4 | `counter_search.searched_where` непусто + `outcome` |",
         "| §5 | минимум два `readings`, не все `weakening` |",
         "| §6 | `confidence` из перечисления + `confidence_reason` |",
-        "| §7 | ноль периодов правления ⇒ `status: no_record` |",
+        "| §7 | ноль периодов ⇒ статус экспозиции, не `no_record`; нет `base_rate` |",
         "| §8 | пустой `holdout_checked` ⇒ `confidence` не `high` |",
         "| §11 | `snapshots` непусто; `plan_year == fact_year` |",
         "| §12 | `quote_he` и `quote_ru` оба непусты |",
@@ -380,7 +407,7 @@ def selftest() -> int:
     """Каждая из проверок обязана краснеть на своём нарушении."""
     base = {
         "card_version": 1, "period_id": "1095-gov37", "card_type": "party",
-        "periods_in_government": 1, "status": "has_record",
+        "periods_in_government": 1, "status": "observed",
         "snapshots": {"raw_budget": "2026-07-30"},
         "holdout_checked": {"period": "gov36"},
         "revisions": [{"version": 1}],
@@ -413,6 +440,12 @@ def selftest() -> int:
         ("§1", lambda c: c.update(period_id="нетакого")),
         ("§2", lambda c: c.update(card_type="что-то")),
         ("§7", lambda c: c.update(periods_in_government=0)),
+        # три отдельных подлога: схлопывание, недоказанный ноль, базовая ставка
+        ("§7", lambda c: c.update(periods_in_government=0, status="no_record")),
+        ("§7", lambda c: c.update(periods_in_government=0, status="not_exposed",
+                                  exposure_evidence=None)),
+        ("§7", lambda c: c.update(base_rate=0.27)),
+        ("§7", lambda c: c.update(status="banana")),
         ("§11 snapshots", lambda c: c.update(snapshots={})),
         ("§15", lambda c: c.update(card_version=3)),
         ("§12 he", lambda c: c["commitments"][0].update(quote_he="")),
@@ -443,6 +476,27 @@ def selftest() -> int:
             conclusion="статьи нет {nocode:0022010213}")),
         ("§14 кэш числа", lambda c: c["commitments"][0].update(net_allocated=1)),
     ]
+    # §7 — ПОЛОЖИТЕЛЬНАЯ сторона. Подлоги выше проверяют, что негодное
+    # отвергается; без этого блока не проверено, что годное проходит, — а
+    # правило, отвергающее в том числе законные карточки, останавливает работу
+    # так же надёжно, как пропускающее незаконные.
+    def _sev(**over) -> list:
+        """Нарушения §7 у карточки с подменёнными полями."""
+        run(lambda c: c.update(over))
+        return [p for p in problems if "§7" in p]
+
+    assert not _sev(periods_in_government=0, status="not_exposed",
+                    exposure_evidence={"governments": [36, 37], "portfolios": 0}), \
+        f"законная карточка экспозиции отвергнута: {problems}"
+    for st in ("source_missing", "lineage_unresolved"):
+        assert not _sev(periods_in_government=0, status=st), \
+            f"статус {st} обязан быть законным при нуле периодов: {problems}"
+    assert _sev(periods_in_government=0, status="observed"), \
+        "observed при нуле периодов обязан отвергаться: наблюдать было нечего"
+    assert _sev(base_rate=0.0), \
+        "base_rate=0.0 обязан отвергаться так же, как ненулевая: проверяется " \
+        "наличие поля, а не его истинность"
+
     # Разборщик обязан ОТКАЗЫВАТЬ на том, чего не умеет, а не усекать молча.
     import tempfile
     parser_cases = [

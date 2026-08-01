@@ -393,7 +393,7 @@ def selftest() -> int:
     def card(**kw) -> dict:
         c = {"card_version": 1, "period_id": "1095-gov37", "card_type": "party",
              "party_ru": "Тест", "party_he": "מבחן", "periods_in_government": 1,
-             "status": "has_record", "snapshots": {"raw_budget": "2026-07-30"},
+             "status": "observed", "snapshots": {"raw_budget": "2026-07-30"},
              "holdout_checked": {"period": None}, "revisions": [{"version": 1}],
              "commitments": [{
                  "id": "t1", "quote_he": "טקסט", "quote_ru": "текст",
