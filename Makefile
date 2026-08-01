@@ -20,10 +20,12 @@
 PY ?= python3
 SHA := shasum -a 256
 
-.PHONY: help check check-net fetch fetch-report validate report stamp reproduce
+.PHONY: help check check-net fetch fetch-report validate report stamp reproduce layout selftest
 
 help:
 	@echo "check      — самопроверки без сети (валидатор карточки, генератор, §3, §24)"
+	@echo "layout     — вёрстка отчёта: канон, прокрутка, маскировка (нужен Chromium)"
+	@echo "selftest   — поднести бумажку к каждому датчику: все ли проверки живы"
 	@echo "check-net  — самопроверки, которым нужна сеть (§23, выгрузка, оракул 120)"
 	@echo "fetch      — выгрузка бюджета (сеть, минуты)"
 	@echo "validate   — контракт карточки на реальных данных"
@@ -56,6 +58,25 @@ report:
 
 stamp:
 	$(PY) scripts/build_report.py --stamp
+
+# Вёрстка отчёта. Обе проверки объявляют, сколько объектов осмотрели:
+# «осмотрено 0» — красный, а не зелёный (§23, применённый к проверкам).
+layout:
+	$(PY) scripts/check_report_canon.py site
+	$(PY) scripts/check_layout.py site
+
+# Поднести бумажку к каждому датчику. Проверка, не покрасневшая на собственном
+# подложенном нарушении, мертва — узнать это иначе нельзя: работающая и мёртвая
+# проверки печатают одинаковое зелёное.
+#
+# Это КОМАНДА, а не хук: механизм, срабатывающий лишь при вызове, защищает
+# вызов (§24). В post-receive не вставлена намеренно — check_layout поднимает
+# браузер. Названо вслух, чтобы не считалось сторожем.
+selftest:
+	$(PY) scripts/validate_cards.py --selftest
+	$(PY) scripts/build_report.py --selftest
+	$(PY) scripts/check_report_canon.py site --selftest
+	$(PY) scripts/check_layout.py site --selftest
 
 # Две сборки подряд на одних данных обязаны совпасть побайтово. Расхождение
 # означает, что в документ просочилось что-то, чего нет во входе, — время
