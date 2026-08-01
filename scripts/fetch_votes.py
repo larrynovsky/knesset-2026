@@ -24,11 +24,29 @@ KNS_PlenumVoteResult совпадает с KNS_PersonToPosition.PersonID у по
 большинства депутатов 25-го Кнессета. Утверждение свода уточнено данными,
 но НЕ отменено: несшитые остаются, они считаются и печатаются, а не прячутся.
 
-Сцепка голосования с законопроектом — по VoteTitle. ItemID указывает на пункт
-повестки, не на билль; VoteSubject у 25-го Кнессета пуст у части записей, тогда
-как VoteTitle заполнен у всех 200 проверенных и содержит название законопроекта
-дословно. Сшивка идёт по нормализованному ивриту (та же функция, что проверяет
-цитаты в classify_direction) и объявляет ожидание до сверки.
+Сцепка голосования с законопроектом — ПРЯМЫМ КЛЮЧОМ (с 01.08.2026).
+
+    KNS_PlenumVote(SessionID, ItemID) → KNS_PlmSessionItem(PlenumSessionID,
+    ItemID) → если ItemTypeID = 2, то ItemID И ЕСТЬ идентификатор законопроекта.
+
+Прежняя редакция утверждала здесь обратное: «ItemID указывает на пункт
+повестки, не на билль», и на этом основании сшивала по нормализованному
+VoteTitle. Утверждение опровергнуто замером 31.07 (probe_vote_links): из 7300
+пунктов с ItemTypeID=2 в справочнике законопроектов нашлись 7299. Сшивка по
+имени давала 212 связей, прямой ключ — около 1805.
+
+Ошибка была не в коде, а в записанном основании, и жила она в докстринге
+дольше, чем в поведении: любой следующий читатель принимал вопрос за решённый.
+Поэтому строка не удалена, а переписана вместе с историей.
+
+Сшивка по VoteTitle СОХРАНЕНА — но как КОНТРОЛЬ, а не запасной путь. Она
+считается параллельно, и расхождение печатается. Оракул: пар, найденных только
+именем, обязано быть ноль; потеря хотя бы одной прежней пары останавливает
+выгрузку (P18, criteria/declared_before_directkey_2026-08-01.yaml).
+
+Почему контроль, а не удаление: на мосте фракций 31.07 запасной путь оказался
+не нужен вовсе — но узнали это, прогнав его и увидев ноль потерь, а не решив
+заранее. Контроль удаляют ПОСЛЕ того, как он показал ноль.
 """
 from __future__ import annotations
 
@@ -64,6 +82,70 @@ def load_bills() -> dict[str, dict]:
         if n:
             out.setdefault(n, m)          # первое вхождение; дубли имён считаем ниже
     return out
+
+
+def load_bills_by_id() -> dict[int, dict]:
+    """Те же законопроекты, но по идентификатору — вход прямого ключа.
+
+    Отдельная функция, а не второй возврат load_bills(): у них разные
+    потребители. Сшивка по имени — контроль и уйдёт; эта останется.
+    """
+    scan = json.loads(SCAN.read_text(encoding="utf-8"))
+    return {m["id"]: m for m in scan["matched"]}
+
+
+def session_item_types(heads: list[dict]) -> dict[tuple, set]:
+    """(сессия, пункт) → множество типов пункта. Основа прямого ключа.
+
+    Сущность целиком — 168 887 строк по всем каденциям. Берётся диапазон
+    SessionID НАШИХ голосований: это надмножество нужного по построению —
+    любой искомый ключ имеет PlenumSessionID внутри [min, max], поэтому
+    сужение не может потерять ни одной искомой пары.
+
+    Один пункт встречается в сессии несколько раз (Ordinal); множество типов
+    хранится целиком, потому что неоднозначный тип — это отдельный класс, а не
+    повод выбрать любой.
+    """
+    sids = [h["SessionID"] for h in heads if h.get("SessionID")]
+    if not sids:
+        raise RuntimeError("у шапок голосований нет SessionID — прямой ключ невозможен")
+    lo, hi = min(sids), max(sids)
+    print(f"§23 диапазон сессий наших голосований: {lo}–{hi}")
+    items = fetch_all("KNS_PlmSessionItem",
+                      flt=f"PlenumSessionID ge {lo} and PlenumSessionID le {hi}",
+                      select="ItemID,PlenumSessionID,ItemTypeID,ItemTypeDesc")
+    print(f"пунктов повестки в диапазоне: {len(items)}")
+    typ: dict[tuple, set] = collections.defaultdict(set)
+    for it in items:
+        typ[(it["PlenumSessionID"], it["ItemID"])].add(it["ItemTypeID"])
+    return typ
+
+
+def link_head(h: dict, typ: dict[tuple, set],
+              bills_by_id: dict[int, dict]) -> tuple[str, dict | None]:
+    """Прямой ключ для одной шапки голосования: (класс, законопроект или None).
+
+    Классы взаимно исключающие и покрывают ВСЕ шапки — это проверяется в main
+    и здесь же тестируется.
+
+    Несущее — САМО наличие двух отсевов, а не их порядок. Первая редакция
+    докстринга утверждала, что порядок веток несущий; поломка порядка на
+    селф-тесте не покраснела, и утверждение оказалось неверным: при типе,
+    содержащем 2 и что-то ещё, обе ветки дают отказ в сшивке, меняется только
+    ярлык класса. Записано так, потому что переоценка собственной проверки —
+    ровно тот дефект, который этот модуль сегодня и чинил.
+    """
+    ts = typ.get((h.get("SessionID"), h.get("ItemID")))
+    if ts is None:
+        return "нет пункта повестки", None
+    if len(ts) > 1:
+        return "тип пункта неоднозначен", None
+    if 2 not in ts:
+        return "пункт не законопроект", None
+    b = bills_by_id.get(h.get("ItemID"))
+    if b is None:
+        return "законопроект вне переписи", None
+    return "сшито прямым ключом", b
 
 
 def fetch_headers() -> list[dict]:
@@ -164,33 +246,65 @@ def main() -> int:
                     help="сколько сшитых голосований выкачать поимённо (0 = все)")
     a = ap.parse_args()
 
-    bills = load_bills()
-    print(f"наших законопроектов в чек-листе: {len(bills)} (по нормализованному имени)")
+    bills = load_bills()                      # контроль: по имени
+    bills_by_id = load_bills_by_id()          # основной путь: по идентификатору
+    print(f"наших законопроектов в чек-листе: {len(bills_by_id)} "
+          f"(по имени схлопывается до {len(bills)} — дубли имён считаются здесь)")
 
     heads = fetch_headers()
     print(f"голосований 25-го Кнессета: {len(heads)}")
 
     # --- сшивка голосование ↔ законопроект ---------------------------------
-    matched, unmatched_titles = [], 0
+    # ОСНОВНОЙ ПУТЬ: прямой ключ. КОНТРОЛЬ: имя. См. докстринг модуля.
+    typ = session_item_types(heads)
+    matched, cls = [], collections.Counter()
     for h in heads:
-        n = norm_he(h.get("VoteTitle") or "")
-        b = bills.get(n)
-        if b is None:
-            unmatched_titles += 1
-            continue
-        matched.append({**h, "bill_id": b["id"], "bill_name": b["name"],
-                        "groups": b.get("groups")})
+        klass, b = link_head(h, typ, bills_by_id)
+        cls[klass] += 1
+        if b is not None:
+            matched.append({**h, "bill_id": b["id"], "bill_name": b["name"],
+                            "groups": b.get("groups")})
+
+    # Разбиение обязано покрывать ВСЕ заголовки. Неполное разбиение — тихая
+    # потеря, а тихая потеря на этом проекте трижды выглядела как аккуратный
+    # отчёт. Поэтому отказ, а не строчка в выводе.
+    assert sum(cls.values()) == len(heads), (
+        f"классы не покрывают все заголовки: {sum(cls.values())} против {len(heads)}")
+
     bills_hit = {m["bill_id"] for m in matched}
-    print(f"\nСШИВКА ПО НАЗВАНИЮ (VoteTitle ↔ имя законопроекта):")
-    print(f"   голосований сшито: {len(matched)} · не сшито: {unmatched_titles}")
-    print(f"   наших законопроектов найдено: {len(bills_hit)} из {len(bills)}"
-          f" ({len(bills_hit)/max(len(bills),1):.0%})")
+    print("\nСШИВКА ПРЯМЫМ КЛЮЧОМ (SessionID, ItemID → ItemTypeID=2 → BillID):")
+    for k, n in cls.most_common():
+        print(f"   {n:>6}  {k}")
+    print(f"   наших законопроектов найдено: {len(bills_hit)} из {len(bills_by_id)}"
+          f" ({len(bills_hit)/max(len(bills_by_id),1):.0%})")
+
+    # --- КОНТРОЛЬ: прежняя сшивка по имени ---------------------------------
+    by_name_pairs = set()
+    for h in heads:
+        b = bills.get(norm_he(h.get("VoteTitle") or ""))
+        if b is not None:
+            by_name_pairs.add((h["Id"], b["id"]))
+    direct_pairs = {(m["Id"], m["bill_id"]) for m in matched}
+    only_name = by_name_pairs - direct_pairs
+    print(f"\nКОНТРОЛЬ · сшивка по имени: {len(by_name_pairs)} пар · "
+          f"прямым ключом: {len(direct_pairs)} · "
+          f"найдено ТОЛЬКО именем: {len(only_name)}")
+
+    # P18: прямой ключ обязан быть строго богаче, а не другим. Объявлено до
+    # прогона в criteria/declared_before_directkey_2026-08-01.yaml.
+    if only_name:
+        print("§3/P18 ОТКАЗ: прямой ключ потерял пары, которые находило имя. "
+              "Это значит, что ключи не вложены, а расходятся, и вопрос «какой "
+              "из двух прав» не решён. Данные наверх не отдаются.")
+        print(f"   примеры потерянных пар: {sorted(only_name)[:10]}")
+        return 1
+
     if a.expect_matched is not None:
         ok = abs(len(bills_hit) - a.expect_matched) <= max(5, a.expect_matched * 0.2)
         print(f"   объявлено было {a.expect_matched} — "
               f"{'в пределах' if ok else '⚠ ВНЕ объявленного (§23)'}")
     if not matched:
-        print("§23 ОТКАЗ: ни одного совпадения. Сшивка по названию не работает — "
+        print("§23 ОТКАЗ: ни одного совпадения. Прямой ключ не работает — "
               "данные наверх не отдаются.")
         return 1
 
@@ -249,8 +363,12 @@ def main() -> int:
         "at": datetime.now(timezone.utc).isoformat(),
         "knesset": K25_NUM, "window": [K25_START, K25_END],
         "headers_total": len(heads),
+        "link_method": "direct_key:(SessionID,ItemID)->KNS_PlmSessionItem.ItemTypeID=2",
+        "link_classes": dict(cls),
+        "control_by_name_pairs": len(by_name_pairs),
+        "control_only_name_pairs": len(only_name),
         "matched_votes": len(matched), "matched_bills": len(bills_hit),
-        "bills_in_checklist": len(bills),
+        "bills_in_checklist": len(bills_by_id),
         "expected_matched_bills": a.expect_matched,
         "named_total": total_named,
         "unbridged_votes": lost, "unbridged_persons": len(unbridged),
@@ -294,7 +412,36 @@ def selftest() -> int:
                           {"MkId": 99999, "LastName": "אין", "FirstName": "כזה"}) is None, \
         "неизвестное ФИО обязано давать None"
 
-    print("самопроверка fetch_votes пройдена: 8 утверждений")
+    # link_head: прямой ключ. Красное здесь = голосование приписано не тому
+    # закону, либо пункт-не-законопроект молча сошёл за законопроект.
+    # ВСЕ отрицательные случаи лежат В ПЕРЕПИСИ. Первая редакция этого теста
+    # брала их снаружи, и он был зелёным даже когда обе проверки снимали: пункт
+    # не сшивался не потому, что тип неверен, а потому что акта нет в переписи.
+    # Негативный контроль обязан быть сопоставим по мощности с позитивным.
+    typ = {(500, 1042100): {2},          # чистый законопроект
+           (500, 1057405): {2, 7},       # тип неоднозначен, акт В ПЕРЕПИСИ
+           (500, 1057406): {7},          # не законопроект, акт В ПЕРЕПИСИ
+           (500, 900001): {2}}           # чистый тип 2, но акта нет в переписи
+    corpus = {i: {"id": i, "name": f"акт {i}", "groups": None}
+              for i in (1042100, 1057405, 1057406)}
+    assert link_head({"SessionID": 500, "ItemID": 1042100}, typ, corpus) \
+        == ("сшито прямым ключом", corpus[1042100]), "чистый тип 2 обязан сшиваться"
+    assert link_head({"SessionID": 500, "ItemID": 1057405}, typ, corpus)[1] is None, \
+        "неоднозначный тип обязан отсекаться: иначе пункт «и закон, и что-то ещё» " \
+        "приписал бы голосование закону, которого в нём не обсуждали"
+    assert link_head({"SessionID": 500, "ItemID": 1057406}, typ, corpus)[1] is None, \
+        "пункт не-законопроект обязан не сшиваться, даже если ItemID есть в переписи"
+    assert link_head({"SessionID": 500, "ItemID": 900001}, typ, corpus) \
+        == ("законопроект вне переписи", None), "чужой закон не входит в корпус"
+    assert link_head({"SessionID": 999, "ItemID": 1042100}, typ, corpus)[0] \
+        == "нет пункта повестки", "чужая сессия не имеет права дать связь"
+    # покрытие: пять входов дают пять РАЗНЫХ классов, ни один не схлопывается
+    seen = {link_head({"SessionID": s, "ItemID": i}, typ, corpus)[0]
+            for s, i in [(500, 1042100), (500, 1057405), (500, 1057406),
+                         (500, 900001), (999, 1)]}
+    assert len(seen) == 5, f"классы обязаны различаться, получено {seen}"
+
+    print("самопроверка fetch_votes пройдена: 14 утверждений (8 мост, 6 прямой ключ)")
     return 0
 
 
