@@ -34,6 +34,6 @@
 | §22 | Правило прогоняется по изменению, которое его вводит, и сверяется со с | MANUAL | pre-commit, select_pilot.py |
 | §23 | Ожидаемый объём получается ДРУГИМ путём и сверяется до использования д | LIVE | build_periods.py, check_artifacts.py, check_knesset_120.py, check_report_canon.py, classify_direction.py, commit-msg, extract_institutions.py, fetch_agreements.py, fetch_bill_texts.py, fetch_budget.py, fetch_votes.py, guarded_fetch.py, map_commitments.py, ocr_agreements.py, pre-commit, probe_bill_texts.py, probe_faction_join.py, probe_mk_bridge.py, probe_odata_shapes.py, probe_phase0.py, probe_phase0_odata.py, probe_placebo.py, probe_shas_periods.py, probe_vote_links.py, probe_vote_publicity.py, probe_votes_join.py, probe_votes_shape.py, scan_bills.py, select_pilot.py, validate_cards.py, verify_names_wikidata.py |
 | §24 | У каждого правила есть артефакт, отсутствие которого само является нар | LIVE | build_report.py, check_artifacts.py, check_criteria_order.py, check_report_canon.py, classify_direction.py, fetch_bill_texts.py, guarded_fetch.py, post-receive.template, pre-commit, validate_cards.py |
-| §25 | Утверждение о том, как документ читается, проверяется посторонним чело | MANUAL | — |
+| §26 | Утверждение о том, как документ читается, проверяется посторонним чело | MANUAL | — |
 
 Всего правил: 25 · заявлено LIVE: 5 · упомянуто в коде: 25
