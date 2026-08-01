@@ -95,7 +95,33 @@ def load_bills_by_id() -> dict[int, dict]:
     return {m["id"]: m for m in scan["matched"]}
 
 
-def session_item_types(heads: list[dict]) -> dict[tuple, set]:
+def cache_is_valid(meta: dict, flt: str, expected: int) -> tuple[bool, str]:
+    """Годен ли кэш выгрузки. Чистая функция — вся развилка здесь и проверяема.
+
+    Механизм — не срок жизни, а сверка независимым счётчиком. Аренда (lease,
+    Таненбаум §7.4.3) — обещание свежести на время, после которого клиент
+    обязан опросить сервер. Здесь сервер ничего не проталкивает, поэтому
+    времени доверять нечему: кэш недельной давности может быть точен, а
+    часовой — устареть. Вместо срока спрашивается `$count` с тем же фильтром,
+    и это тот же оракул, которому §23 уже доверяет при выгрузке.
+
+    ЧЕСТНАЯ ГРАНИЦА, названная сразу: счётчик ловит добавление и удаление
+    записей, но НЕ правку существующей. Строка, у которой сменился
+    ItemTypeID, оставит счётчик неизменным и пройдёт как свежая. Закрывается
+    сверкой max(LastUpdatedDate) — не сделано, потому что это второй запрос
+    ради класса отказа, которого мы пока не наблюдали. `--no-cache` есть.
+    """
+    if meta.get("flt") != flt:
+        return False, "фильтр другой"
+    got = meta.get("count")
+    if got != expected:
+        return False, f"счётчик разошёлся: в кэше {got}, на сервере {expected}"
+    if not meta.get("rows"):
+        return False, "кэш пуст"
+    return True, f"счётчик сошёлся: {expected}"
+
+
+def session_item_types(heads: list[dict], use_cache: bool = True) -> dict[tuple, set]:
     """(сессия, пункт) → множество типов пункта. Основа прямого ключа.
 
     Сущность целиком — 168 887 строк по всем каденциям. Берётся диапазон
@@ -111,10 +137,32 @@ def session_item_types(heads: list[dict]) -> dict[tuple, set]:
     if not sids:
         raise RuntimeError("у шапок голосований нет SessionID — прямой ключ невозможен")
     lo, hi = min(sids), max(sids)
+    flt = f"PlenumSessionID ge {lo} and PlenumSessionID le {hi}"
     print(f"§23 диапазон сессий наших голосований: {lo}–{hi}")
-    items = fetch_all("KNS_PlmSessionItem",
-                      flt=f"PlenumSessionID ge {lo} and PlenumSessionID le {hi}",
-                      select="ItemID,PlenumSessionID,ItemTypeID,ItemTypeDesc")
+
+    # Кэш: 13 402 записи, десять минут выгрузки, и они не меняются между
+    # прогонами одного дня. За 01.08.2026 эта выгрузка была повторена четыре
+    # раза — сорок минут ожидания одного и того же. Правило годности — в
+    # cache_is_valid, там же его граница.
+    cf = ROOT / "data" / f"plm_session_items_{lo}_{hi}.json"
+    items = None
+    if use_cache:
+        expected = count("KNS_PlmSessionItem", flt)
+        if cf.exists():
+            meta = json.loads(cf.read_text(encoding="utf-8"))
+            ok, why = cache_is_valid(meta, flt, expected)
+            print(f"кэш пунктов повестки: {'ГОДЕН' if ok else 'НЕГОДЕН'} — {why}")
+            if ok:
+                items = meta["rows"]
+        else:
+            print("кэш пунктов повестки: нет файла")
+    if items is None:
+        items = fetch_all("KNS_PlmSessionItem", flt=flt,
+                          select="ItemID,PlenumSessionID,ItemTypeID,ItemTypeDesc")
+        cf.parent.mkdir(parents=True, exist_ok=True)
+        cf.write_text(json.dumps({"flt": flt, "count": len(items), "rows": items},
+                                 ensure_ascii=False), encoding="utf-8")
+        print(f"кэш пунктов повестки записан: {cf.name}")
     print(f"пунктов повестки в диапазоне: {len(items)}")
     typ: dict[tuple, set] = collections.defaultdict(set)
     for it in items:
@@ -307,6 +355,8 @@ def main() -> int:
     ap.add_argument("--expect-matched", type=int, default=None,
                     help="§23: сколько наших законопроектов ожидаем найти среди "
                          "голосований. Объявляется ДО прогона.")
+    ap.add_argument("--no-cache", action="store_true",
+                    help="не доверять кэшу пунктов повестки, выгрузить заново")
     ap.add_argument("--limit-votes", type=int, default=0,
                     help="сколько сшитых голосований выкачать поимённо (0 = все)")
     a = ap.parse_args()
@@ -321,7 +371,7 @@ def main() -> int:
 
     # --- сшивка голосование ↔ законопроект ---------------------------------
     # ОСНОВНОЙ ПУТЬ: прямой ключ. КОНТРОЛЬ: имя. См. докстринг модуля.
-    typ = session_item_types(heads)
+    typ = session_item_types(heads, use_cache=not a.no_cache)
     matched, cls = [], collections.Counter()
     for h in heads:
         klass, b = link_head(h, typ, bills_by_id)
@@ -540,6 +590,24 @@ def selftest() -> int:
     assert sorted(seen) == [11, 12, 13] and len(set(seen)) == 3, \
         f"классы пересеклись или потеряли пару: {seen}"
 
+    # cache_is_valid: кэш выгрузки. Красное здесь = сшивка идёт по неполному
+    # набору пунктов повестки, голосования тихо получают «нет пункта», и у
+    # партии пропадают свидетельства, которых на самом деле хватало.
+    F = "PlenumSessionID ge 1 and PlenumSessionID le 9"
+    good = {"flt": F, "count": 2, "rows": [{"a": 1}, {"a": 2}]}
+    assert cache_is_valid(good, F, 2)[0], "сошедшийся кэш обязан быть годен"
+    assert not cache_is_valid(good, F, 3)[0], \
+        "счётчик разошёлся — кэш обязан быть негоден, иначе устаревание тихое"
+    assert not cache_is_valid(good, "другой фильтр", 2)[0], \
+        "кэш другого фильтра не имеет права сойти за этот"
+    assert not cache_is_valid({"flt": F, "count": 0, "rows": []}, F, 0)[0], \
+        "пустой кэш негоден даже при сошедшемся счётчике: ноль строк — это " \
+        "либо обрыв записи, либо фильтр ни во что, и оба надо перепроверить"
+    assert not cache_is_valid({}, F, 2)[0], "кэш без метаданных негоден"
+    # причина обязана называться, а не просто «негоден»
+    assert "счётчик" in cache_is_valid(good, F, 3)[1], \
+        "отказ без названной причины не даёт понять, что чинить"
+
     # load_adjudication: отсутствие файла даёт пустоту, а не догадку
     import tempfile
     tmp = Path(tempfile.mkdtemp())
@@ -552,8 +620,8 @@ def selftest() -> int:
     assert v == {10: "ключ прав, имя выбрало тёзку", 13: "пункта нет"}, v
     assert 99 not in v, "строка вне блока verdicts не имеет права стать вердиктом"
 
-    print("самопроверка fetch_votes пройдена: 22 утверждения "
-          "(8 мост, 6 прямой ключ, 8 расхождения)")
+    print("самопроверка fetch_votes пройдена: 28 утверждений "
+          "(8 мост, 6 прямой ключ, 8 расхождения, 6 кэш)")
     return 0
 
 
