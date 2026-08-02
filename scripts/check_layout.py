@@ -78,9 +78,28 @@ MUTANTS = [
                 .replace("*{box-sizing:border-box}", "*{box-sizing:border-box}html{overflow-x:hidden}")),
     ("маскировка без вылета — запрещена сама по себе",
      lambda s: s.replace("*{box-sizing:border-box}", "*{box-sizing:border-box}body{overflow-x:hidden}")),
+    # Мутант обязан вылетать в ЛЮБОМ окружении, и это стоило двух редакций.
+    #
+    # Первая ставила только white-space:nowrap и полагалась на то, что
+    # существующий текст окажется шире вьюпорта. В контейнере агента вылет был
+    # 771px против 768 — три пикселя; на Studio с другими шрифтами текст
+    # уместился, и мутант НЕ покраснел. Проверка была зелёной там и мёртвой
+    # здесь, и разницу дал набор шрифтов, а не вёрстка.
+    #
+    # Вторая добавляла длинную строку в новую ячейку — и тоже не сработала:
+    # у таблицы `table-layout:fixed`, ширина ячейки задана колонкой, а
+    # вылезающий текст это ТЕКСТОВЫЙ УЗЕЛ. `querySelectorAll('body *')` видит
+    # элементы, узлы — нет, поэтому виновника не находилось.
+    #
+    # Порог не ослаблялся ни разу: усиливалось возмущение. Строка обёрнута в
+    # <span> с inline-block — теперь у вылета есть ЭЛЕМЕНТ с геометрией, и он
+    # шире любого вьюпорта при любом шрифте.
     ("nowrap в таблице обзора",
      lambda s: s.replace("table.ov th,table.ov td{padding",
-                         "table.ov th,table.ov td{white-space:nowrap;padding")),
+                         "table.ov th,table.ov td{white-space:nowrap;padding")
+                .replace("</tbody>",
+                         '<tr><td><span style="display:inline-block;width:200vw">'
+                         + "א" * 40 + "</span></td></tr></tbody>", 1)),
 ]
 
 
