@@ -15,7 +15,7 @@
 | §3 | Критерии отбора фиксируются ДО первого взгляда на результаты. | LIVE | build_lineage_candidates.py, build_periods.py, check_artifacts.py, check_criteria_order.py, commit-msg, fetch_votes.py, map_commitments.py, post-receive.template, pre-commit, scan_bills.py, select_pilot.py |
 | §4 | Карточка обязана нести отчёт о поиске опровержения. | PARTIAL | check_artifacts.py, classify_direction.py, post-receive.template, pre-commit, validate_cards.py |
 | §5 | Минимум два прочтения, и не все ослабляющие. | PARTIAL | validate_cards.py |
-| §6 | Уровень уверенности обязателен и несёт названную причину. | PARTIAL | probe_bill_texts.py, validate_cards.py |
+| §6 | Уровень уверенности обязателен и несёт названную причину. | PARTIAL | direction_confidence.py, probe_bill_texts.py, validate_cards.py |
 | §7 | Ноль периодов правления ⇒ матрица экспозиции, а не базовая ставка. | MANUAL | check_artifacts.py, fetch_votes.py, guarded_fetch.py, validate_cards.py |
 | §8 | Интерпретация проверяется на отложенном периоде. | PARTIAL | select_pilot.py, validate_cards.py |
 | §9 | Голосования только из `knesset.gov.il/OdataV4/ParliamentInfo`. | MANUAL | build_report.py, fetch_votes.py, guarded_fetch.py, pre-commit |
