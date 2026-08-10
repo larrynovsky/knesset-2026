@@ -1,0 +1,155 @@
+#!/usr/bin/env python3
+"""Уверенность направления акта из двух чисел, а не из одного.
+
+Правило объявлено ДО прогона: criteria/direction_confidence_2026-08-01.yaml.
+Решение владельца 01.08.2026 (вариант В): согласие вендоров перестаёт быть
+рубильником на весь канал и становится уровнем уверенности КАЖДОГО акта.
+
+Почему двух. Разбор 01.08 (docs/explanation/direction_stall_2026-08-01.md)
+нашёл два разных режима отказа, которые одно число смешивало:
+
+    полнота извлечения — вендоры видят РАЗНЫЕ множества норм (6 против 0);
+    чтение нормы       — на ОБЩИХ нормах дают противоположные знаки.
+
+Одно число не говорит, что чинить, и не даёт читателю названной причины,
+которой требует §6.
+
+СОПОСТАВЛЕНИЕ ЦИТАТ — место, которое я уже сломал однажды. Первая редакция
+разбора сравнивала СЫРЫЕ ивритские строки по 40-знаковому префиксу и выдала
+ложный ноль конфликтов: у одного вендора цитата начинается с «(ב) », у
+другого нет. Здесь нормализация `norm_he` (та же, что у цитат карточки) и
+сравнение по ВХОЖДЕНИЮ, потому что вендоры режут цитату по разной длине.
+Оба случая — и обманувший, и заведомо чужой — стоят в самопроверке.
+
+    python3 scripts/direction_confidence.py --selftest
+"""
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from classify_direction import norm_he          # noqa: E402
+
+LEVELS = ("high", "medium", "low", "none")
+
+
+def pair_norms(a: list[dict], o: list[dict]) -> list[tuple[dict, dict]]:
+    """Пары «одна и та же норма у двух вендоров». Вхождение, не равенство."""
+    out = []
+    for x in a:
+        nx = norm_he(x.get("quote_he") or "")
+        if not nx:
+            continue
+        for y in o:
+            ny = norm_he(y.get("quote_he") or "")
+            if ny and (nx in ny or ny in nx):
+                out.append((x, y))
+    return out
+
+
+def measure(a: list[dict], o: list[dict]) -> dict:
+    """Два числа: перекрытие множеств норм и согласие на общих."""
+    pairs = pair_norms(a, o)
+    matched_a = {id(x) for x, _ in pairs}
+    matched_o = {id(y) for _, y in pairs}
+    union = len(a) + len(o) - len(pairs)
+    overlap = len(pairs) / union if union else 0.0
+    agree = sum(1 for x, y in pairs if x.get("sign") == y.get("sign"))
+    reading = agree / len(pairs) if pairs else 0.0
+    return {"n_a": len(a), "n_o": len(o), "shared": len(pairs),
+            "overlap": overlap, "reading": reading,
+            "unmatched_a": len(a) - len(matched_a),
+            "unmatched_o": len(o) - len(matched_o)}
+
+
+def verdict(a: list[dict], o: list[dict]) -> tuple[str, str, dict]:
+    """(уверенность, названная причина, числа). Причина обязательна — §6."""
+    m = measure(a, o)
+    if not a and not o:
+        return "none", "ни один вендор не выделил норм в этом акте", m
+    if not a or not o:
+        return "low", "один из вендоров не нашёл ни одной нормы", m
+    if m["overlap"] >= 0.60 and m["reading"] == 1.0:
+        return "high", "вендоры увидели одни нормы и прочли их одинаково", m
+    if m["overlap"] >= 0.30 and m["reading"] >= 0.75:
+        return "medium", "вендоры в основном согласны: перекрытие " \
+                         f"{m['overlap']:.2f}, чтение {m['reading']:.2f}", m
+    if m["overlap"] < 0.30:
+        return "low", "вендоры извлекли разные множества норм", m
+    return "low", "вендоры разошлись в чтении общих норм", m
+
+
+def channel_escape(verdicts: list[str]) -> tuple[bool, str]:
+    """Порог на канал целиком, объявленный ДО прогона: больше трети low/none."""
+    if not verdicts:
+        return True, "актов нет — направление не измерено ни разу"
+    weak = sum(1 for v in verdicts if v in ("low", "none"))
+    share = weak / len(verdicts)
+    if share > 1 / 3:
+        return True, (f"{weak} из {len(verdicts)} актов ({share:.0%}) несут "
+                      "low или none — канал А не даёт направления")
+    return False, f"слабых {weak} из {len(verdicts)} ({share:.0%}), порог 33% не пройден"
+
+
+def _n(q, s=0):
+    return {"quote_he": q, "sign": s}
+
+
+def selftest() -> int:
+    # Сопоставление, случай 1: разная длина и ведущий маркер пункта. Это тот
+    # случай, на котором разбор 01.08 дал ложный ноль конфликтов, — но чинит
+    # его ВХОЖДЕНИЕ, а не нормализация: на сырых строках он тоже проходит.
+    a = [_n("פרסום מכרז לאיוש משרה בשירות המדינה יבוצע בדרך של מכרז פומבי", 0)]
+    o = [_n("(ב) פרסום מכרז לאיוש משרה בשירות המדינה יבוצע בדרך של מכרז פומבי, תוך", 1)]
+    assert len(pair_norms(a, o)) == 1, \
+        "цитата с «(ב) » обязана сопоставиться с цитатой без неё"
+
+    # Случай 2: РАЗНАЯ ПУНКТУАЦИЯ внутри. Вот ради чего нужна norm_he, и без
+    # этого случая её присутствие ничем не оправдано. Дефис-минус против
+    # ивритского макафа плюс кавычка в начале — вхождение на сырых строках
+    # даёт False, на нормализованных True. Первая редакция самопроверки этого
+    # случая не имела: снятие norm_he её НЕ роняло, то есть проверка
+    # стерегла норму, которую не проверяла.
+    a2 = [_n("האמור בסעיפים קטנים (א) ו-(ב) יחול", 0)]
+    o2 = [_n('"האמור בסעיפים קטנים (א) ו־(ב) יחול, בשינויים המחויבים', 0)]
+    assert len(pair_norms(a2, o2)) == 1, \
+        "одна норма с разной пунктуацией обязана сопоставиться: без " \
+        "нормализации вендоры с «ו-» и «ו־» выглядят как разные нормы"
+    # И заведомо чужие не должны слипаться.
+    assert not pair_norms(
+        [_n("היועץ המשפטי לממשלה נושא באחריות למילוי תפקידו בפני הממשלה")],
+        [_n("פרסום מכרז לאיוש משרה בשירות המדינה")]), \
+        "разные нормы не имеют права стать одной парой"
+
+    # Два режима отказа обязаны давать РАЗНЫЕ причины, а не общий «low».
+    v_recall, r_recall, _ = verdict([_n("אאא", 1), _n("בבב", -1), _n("גגג", 0)],
+                                    [_n("דדד", 1)])
+    assert v_recall == "low" and "разные множества" in r_recall, (v_recall, r_recall)
+    v_read, r_read, _ = verdict([_n("אאא", 1), _n("בבב", -1)],
+                                [_n("אאא", -1), _n("בבב", 1)])
+    assert v_read == "low" and "чтении" in r_read, (v_read, r_read)
+    assert r_recall != r_read, \
+        "полнота и чтение обязаны называться разными причинами: иначе §6 " \
+        "получает уровень без причины, а мы не знаем, что чинить"
+
+    # Пустой вендор — не «согласие», а названный отказ.
+    assert verdict([_n("אאא", 1)], [])[0] == "low"
+    assert verdict([], [])[0] == "none"
+    # Полное совпадение — high; расхождение в одной норме из двух — не high.
+    assert verdict([_n("אאא", 1), _n("בבב", 1)],
+                   [_n("אאא", 1), _n("בבב", 1)])[0] == "high"
+    assert verdict([_n("אאא", 1), _n("בבב", 1)],
+                   [_n("אאא", 1), _n("בבב", -1)])[0] != "high"
+
+    # Порог на канал: объявлен до прогона и обязан срабатывать строго выше трети.
+    assert channel_escape(["high"] * 7 + ["low"] * 3)[0] is False
+    assert channel_escape(["high"] * 6 + ["low"] * 4)[0] is True
+    assert channel_escape([])[0] is True, "нет актов — не «всё хорошо», а отказ"
+
+    print("самопроверка direction_confidence пройдена: 13 утверждений")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(selftest() if "--selftest" in sys.argv else 0)
