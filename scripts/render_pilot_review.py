@@ -23,6 +23,9 @@ import json
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from classify_direction import sign_distribution  # noqa: E402
+
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "data" / "direction_pilot.json"
 OUT = ROOT / "report" / "pilot_review.html"
@@ -147,8 +150,11 @@ def main() -> int:
             tok["in"] += u.get("input_tokens") or u.get("prompt_tokens") or 0
             tok["out"] += u.get("output_tokens") or u.get("completion_tokens") or 0
 
-    dist = {v: collections.Counter(
-        r["verdicts"][v]["overall"].get("sign") for r in scored) for v in d["models"]}
+    # Не своя копия: то же место истины, что в отчёте classify_direction.
+    # Здесь лежал ТОТ ЖЕ дефект — прямое обращение к overall у вендора,
+    # который на этой строке мог упасть. Страница просто ещё не встречала
+    # такого прогона; §21 требует чинить механизм, а не свой экземпляр.
+    dist = {v: sign_distribution(scored, v) for v in d["models"]}
 
     st = d.get("stats", {})
     q_exact = st.get("quote:exact", 0) + st.get("norm_quote:exact", 0)
@@ -189,10 +195,12 @@ table{{border-collapse:collapse;font-size:14px}} td,th{{border:1px solid #ddd;pa
 Этот прогон — первый по настоящему тексту.</div>
 
 <h2>Сводка</h2>
-<table><tr><th>вендор</th><th>−1</th><th>0</th><th>+1</th><th>без знака</th></tr>"""]
-    for v, c in dist.items():
+<table><tr><th>вендор</th><th>−1</th><th>0</th><th>+1</th><th>без знака</th>
+<th>не ответил</th></tr>"""]
+    for v, (c, gap) in dist.items():
         parts.append(f"<tr><td>{e(v)}</td><td>{c[-1]}</td><td>{c[0]}</td>"
-                     f"<td>{c[1]}</td><td>{c[None]}</td></tr>")
+                     f"<td>{c[1]}</td><td>{c[None]}</td>"
+                     f"<td>{gap or ''}</td></tr>")
 
     exp = d.get("expected_disagreements")
     parts.append(f"""</table>

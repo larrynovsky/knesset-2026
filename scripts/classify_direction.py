@@ -41,6 +41,7 @@ from __future__ import annotations
 import argparse
 import collections
 import hashlib
+import inspect
 import json
 import os
 import re
@@ -681,6 +682,27 @@ def quorum(verdicts: dict) -> dict:
             "value": top, "votes": votes, "n_voters": len(votes)}
 
 
+def sign_distribution(rows: list, v: str) -> tuple:
+    """Распределение знаков ОДНОГО вендора и число строк, где он смолчал.
+
+    Зачем отдельной функцией. Набор строк для отчёта отбирается по
+    ОБЪЯВЛЕННОЙ ПАРЕ (anthropic, openai) — так решено в criteria-revision
+    f8a0fc8. Третий вендор на тех же строках мог упасть, и тогда у него нет
+    ключа `overall`. Прямое обращение к нему роняло весь отчёт после того,
+    как все 57 актов уже отработали (11.08).
+
+    Почему не `.get("overall", {})` на месте: это дало бы sign=None, и
+    падение вендора молча стало бы знаком в распределении — смешение
+    «не ответил» с «отказался ставить знак», запрещённое K5. Возвращаем
+    вторым числом размер дыры, чтобы её было видно в отчёте.
+    """
+    seen = [r["verdicts"][v] for r in rows
+            if r.get("verdicts", {}).get(v, {}).get("status") == "ok"
+            and "overall" in r["verdicts"][v]]
+    return (collections.Counter(d["overall"].get("sign") for d in seen),
+            len(rows) - len(seen))
+
+
 def agreement(a: dict, o: dict) -> dict:
     """Три уровня согласия, а не один.
 
@@ -1072,10 +1094,10 @@ def main() -> int:
         print("     уехала на заголовок. Такие строки читать глазами обязательно.")
 
     for v in models:
-        dist = collections.Counter(
-            r["verdicts"][v]["overall"].get("sign") for r in ok_rows)
+        dist, gap = sign_distribution(ok_rows, v)
         print(f"\nраспределение общего знака {v:<10} "
-              f"{dict(sorted(dist.items(), key=lambda x: str(x[0])))}")
+              f"{dict(sorted(dist.items(), key=lambda x: str(x[0])))}"
+              + (f"   (вне замера {gap} строк: вендор не ответил)" if gap else ""))
         tot, top = sum(dist.values()), max(dist.values()) if dist else 0
         if tot and top / tot > 0.95:
             print(f"   ⚠ ВЫРОЖДЕНИЕ: {v} поставил один знак в {top}/{tot} случаях (R2)")
@@ -1321,6 +1343,21 @@ def selftest() -> int:
     assert _gemini_pick(["gemini-flash-latest", "gemini-3.5-flash"]) is None, \
         "нет стабильной pro — падаем, а не берём что попало"
 
+    # --- распределение знаков: отчёт роняли 11.08 на третьем вендоре --------
+    # Строки отобраны по объявленной паре; google на второй из них упал. Раньше
+    # здесь был KeyError после всех 57 актов и НЕ записанного артефакта.
+    _rows = [{"verdicts": {"anthropic": ok, "openai": ok2, "google": ok}},
+             {"verdicts": {"anthropic": ok0, "openai": ok, "google": err}}]
+    assert sign_distribution(_rows, "anthropic") == ({-1: 1, 0: 1}, 0)
+    assert sign_distribution(_rows, "google") == ({-1: 1}, 1), \
+        "упавший вендор обязан выпасть В ДЫРУ, а не получить знак None: "\
+        "иначе сбой вендора молча становится наблюдением (K5)"
+    assert sign_distribution(_rows, "нет-такого") == ({}, 2), \
+        "вендор, которого не спрашивали, даёт пустое распределение, не падение"
+    assert sign_distribution([{"verdicts": {"anthropic": dec}}],
+                             "anthropic") == ({None: 1}, 0), \
+        "отказ по K5 — это ГОЛОС: он в распределении, а не в дыре"
+
     # --- ДОЛГ ПО ПРОМПТУ ЗАКРЫТ 31.07, и оракул отработал ровно как задуман --
     # Владелец 31.07 выбрал вариант А: промпт не трогать, потому что он входит
     # в ключ кэша и правка обнулила бы 131 ответ. Отсрочка была поставлена не
@@ -1342,8 +1379,11 @@ def selftest() -> int:
         "промпт перестал называть условие, при котором basis_note обязателен, "
         "а валидатор его требует — модель наказывается за неназванное")
 
-    print("самопроверка механики v1.2 пройдена: 18 + 12 + 4 утверждения "
-          "(кворум два из трёх, выбор модели, колонка K9)")
+    # Число утверждений считается ПО ИСХОДНИКУ, а не вписано рукой. Вписанное
+    # рукой «18 + 12 + 4» не менялось при добавлении проверок и в итоге
+    # разошлось с действительностью — счётчик, который не считает.
+    n = inspect.getsource(selftest).count("\n    assert ")
+    print(f"самопроверка механики v1.2 пройдена: {n} утверждений")
     return 0
 
 
