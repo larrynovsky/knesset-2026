@@ -53,6 +53,7 @@ SCAN = ROOT / "data" / "bills_scan.json"
 TEXTDIR = ROOT / "data" / "bill_texts"
 OUT = ROOT / "report" / "blind_reading.html"
 BATCH = ROOT / "criteria" / "blind_reading_batch_2026-08-12.json"
+RU = ROOT / "criteria" / "blind_reading_ru_2026-08-12.json"
 
 MAX_READ = 6000        # знаков: дальше чтение перестаёт быть чтением
 PER_GROUP = 2          # не больше двух актов на группу чек-листа
@@ -90,7 +91,7 @@ def pick(selected: list, oracle_bills: set, names: dict, groups: dict,
     return taken
 
 
-def page(batch: list, checklist: str) -> str:
+def page(batch: list, checklist: str, ru: dict | None = None) -> str:
     e = html.escape
     head = f"""<!doctype html><html lang=ru><meta charset=utf-8>
 <title>Чтение вслепую — знак направления</title><style>
@@ -110,12 +111,23 @@ pre{{white-space:pre-wrap;font:13px/1.5 ui-monospace,Menlo,monospace;background:
 «не могу сказать» — это законный ответ, он не считается промахом и нужен
 не меньше остальных.
 <br><br>
-<b>Чего здесь намеренно нет.</b> Ответов моделей. Моего мнения. Перевода —
-перевод сделал бы я, то есть та же модель, которую этот замер и проверяет;
-он протёк бы в ваш ответ незаметно для нас обоих. Чем читать иврит — ваше
-дело, и это вне моего влияния. Если пользовались переводчиком или искали акт
-в открытых источниках, отметьте это: для замера важно, чем именно вы
-пользовались.
+<b>Чего здесь нет.</b> Ответов моделей и моего мнения о знаке.
+
+<br><br>
+<b>О переводе — прочитайте, это не оговорка.</b> Перевод сделал я, то есть
+модель того же семейства, которое этот замер и проверяет. В юридическом
+иврите знак часто сидит в одном слове: «вправе» против «обязан», «с
+согласия» против «после консультации». Модель, у которой уже сложилось
+мнение, выберет оттенок в его пользу незаметно для нас обоих. Чтобы сузить
+этот зазор, решающие слова переведены по глоссарию ниже — одинаково всюду,
+механически, а не по смыслу места. Иврит оставлен рядом с каждым актом:
+любое сомнительное место проверяемо. Если перепроверяли что-то сами —
+переводчиком, поиском, источником — отметьте это в ответе.
+
+<br><br>
+<b>Пояснительные записки.</b> В законопроектах после текста нормы идёт
+записка инициатора. Это его аргументация, а не действующая норма, и она
+написана, чтобы убеждать. Она помечена отдельно. Модель видит её тоже.
 <br><br>
 <b>Куда это пойдёт.</b> Акты, где вы поставите <b>+1</b> или <b>0</b>,
 станут подлогом оракула направления — он сейчас негоден, потому что все шесть
@@ -125,15 +137,32 @@ pre{{white-space:pre-wrap;font:13px/1.5 ui-monospace,Menlo,monospace;background:
 <pre>{e(checklist)}</pre>
 """
     parts = [head]
+    gl = (ru or {}).get("глоссарий") or {}
+    if gl:
+        parts.append("<h2>Глоссарий решающих слов</h2><p>Эти слова переведены "
+                     "одинаково во всех восьми актах, независимо от того, как "
+                     "было бы «красивее» в конкретном месте.</p><pre>"
+                     + e("\n".join(f"{k:<26} → {v}" for k, v in gl.items()))
+                     + "</pre>")
+    ru_by = {a["bill"]: a for a in (ru or {}).get("переводы", [])}
     for i, a in enumerate(batch, 1):
         text = (TEXTDIR / f"{a['bill']}.txt").read_text(encoding="utf-8")
+        tr = ru_by.get(str(a["bill"]))
+        kind = f" · {e(tr['kind'])}" if tr else ""
         parts.append(
-            f"<h2>{i}. акт {a['bill']} · группа {e(a['group'])} · "
-            f"{a['chars']} знаков</h2>\n"
-            f"<div class=he>{e(a['name'])}</div>\n"
-            f"<div class=he>{e(text)}</div>\n"
+            f"<h2>{i}. акт {a['bill']} · группа {e(a['group'])}{kind}</h2>")
+        if tr:
+            parts.append(f"<pre>{e(tr['ru'])}</pre>")
+        else:
+            parts.append("<p><b>перевода нет</b> — этот акт добавился после "
+                         "того, как переводы были записаны</p>")
+        parts.append(
+            f"<details><summary>оригинал на иврите — для проверки "
+            f"сомнительного места ({a['chars']} знаков)</summary>"
+            f"<div class=he>{e(a['name'])}</div>"
+            f"<div class=he>{e(text)}</div></details>\n"
             f"<div class=ans>знак: −1 / 0 / +1 / не могу сказать &nbsp;·&nbsp; "
-            f"пункт чек-листа: ______ &nbsp;·&nbsp; чем пользовались: ______</div>")
+            f"пункт чек-листа: ______ &nbsp;·&nbsp; что перепроверяли: ______</div>")
     parts.append("</html>")
     return "\n".join(parts)
 
@@ -157,6 +186,21 @@ def selftest() -> int:
         "читатель примет за недоделку и переведёт сам, не сказав"
     assert "не могу сказать" in page([], ""), \
         "отказ обязан быть предложен явно — иначе читатель угадывает (K5)"
+
+    # Перевод появился по решению владельца 12.08: страница без перевода
+    # оказалась бесполезна единственному читателю. Утечка от этого не
+    # исчезла, и страница обязана называть её сама — иначе читатель примет
+    # перевод за нейтральный текст, каким он не является.
+    _p = page([], "", {"глоссарий": {"רשאי": "вправе"}, "переводы": []})
+    assert "того же семейства" in _p, \
+        "страница обязана называть, КТО перевёл и почему это не нейтрально"
+    assert "רשאי" in _p and "вправе" in _p, \
+        "глоссарий решающих слов обязан быть виден читателю: он и есть "\
+        "единственная узда на переводчика, у которого может быть мнение"
+    assert "аргументация" in page([], ""), \
+        "пояснительная записка инициатора обязана быть помечена как его "\
+        "аргументация: она написана, чтобы убеждать, и читатель имеет право "\
+        "знать, где кончается норма"
     print(f"самопроверка build_blind_reading пройдена: "
           f"{inspect.getsource(selftest).count('assert ')} утверждений")
     return 0
@@ -184,8 +228,15 @@ def main() -> int:
          "picked_by": "build_blind_reading.py, без доступа к вердиктам",
          "max_read": MAX_READ, "per_group": PER_GROUP, "want": WANT,
          "batch": batch}, ensure_ascii=False, indent=1), encoding="utf-8")
+    ru = json.loads(RU.read_text(encoding="utf-8")) if RU.exists() else None
+    if ru:
+        missing = ({str(a["bill"]) for a in batch}
+                   - {a["bill"] for a in ru.get("переводы", [])})
+        if missing:
+            print(f"⚠ БЕЗ ПЕРЕВОДА {len(missing)}: {', '.join(sorted(missing))}"
+                  " — состав набора разошёлся с файлом переводов")
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(page(batch, checklist_text()), encoding="utf-8")
+    OUT.write_text(page(batch, checklist_text(), ru), encoding="utf-8")
     print(f"отобрано {len(batch)} актов, групп {len({a['group'] for a in batch})}")
     for a in batch:
         print(f"   {a['bill']}  {a['group']:<28} {a['chars']:>5} знаков  {a['name'][:40]}")
