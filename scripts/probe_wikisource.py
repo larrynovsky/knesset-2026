@@ -23,12 +23,18 @@ from __future__ import annotations
 import json
 import ssl
 import sys
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 
 API = "https://he.wikisource.org/w/api.php"
-UA = {"User-Agent": "knesset-research/0.1 (personal document; contact via github)"}
+# Викимедиа просит опознаваемый User-Agent с контактом. Контакт здесь
+# ЗАГЛУШКА: настоящий должен вписать владелец. Оставляю видимым, а не
+# правдоподобным — фальшивый контакт хуже отсутствующего.
+UA = {"User-Agent": "knesset-research/0.1 (personal research; CONTACT-NOT-SET)"}
+PAUSE = 1.0            # секунда между запросами: вежливость, а не оптимизация
 CTX = ssl.create_default_context()
 
 # Страницы взяты из замера docs/explanation/base_text_probe_2026-08-12.md.
@@ -53,11 +59,29 @@ def pick_revision(revs: list, on_date: str) -> dict | None:
     return max(fit, key=lambda r: r["timestamp"]) if fit else None
 
 
-def api(params: dict) -> dict:
+def api(params: dict, tries: int = 4) -> dict:
+    """Вежливый вызов. 429 от Викимедиа — не сбой, а просьба притормозить.
+
+    Первый прогон 12.08 получил 429 на всех пяти страницах подряд: десять
+    запросов очередью без паузы. Викимедиа отдаёт свои данные бесплатно и
+    просит за это ровно двух вещей — паузу и опознаваемый User-Agent.
+    Игнорировать просьбу источника, который тебя пускает, — плохой способ
+    строить конвейер, который будет ходить туда сотнями запросов.
+    """
     q = urllib.parse.urlencode({**params, "format": "json", "formatversion": "2"})
-    req = urllib.request.Request(f"{API}?{q}", headers=UA)
-    with urllib.request.urlopen(req, timeout=60, context=CTX) as r:
-        return json.loads(r.read().decode("utf-8"))
+    for i in range(tries):
+        time.sleep(PAUSE)
+        try:
+            req = urllib.request.Request(f"{API}?{q}", headers=UA)
+            with urllib.request.urlopen(req, timeout=60, context=CTX) as r:
+                return json.loads(r.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            if e.code != 429 or i == tries - 1:
+                raise
+            wait = int(e.headers.get("Retry-After") or 0) or 5 * 2 ** i
+            print(f"      429, ждём {wait} с (просьба источника, не сбой)")
+            time.sleep(wait)
+    raise RuntimeError("недостижимо")
 
 
 def probe(title: str, on_date: str) -> dict:
