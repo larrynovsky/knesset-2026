@@ -39,6 +39,7 @@ ROOT = Path(__file__).resolve().parent.parent
 TEXTDIR = ROOT / "data" / "bill_texts"
 OUT = ROOT / "data" / "law_texts.json"
 DECLARED = ROOT / "criteria" / "declared_before_lawfetch_2026-08-12.yaml"
+DATES = ROOT / "data" / "bill_dates.json"
 
 ALLOWED_HOSTS = {"he.wikisource.org"}
 API = "https://he.wikisource.org/w/api.php"
@@ -235,11 +236,25 @@ def main() -> int:
         print(f"нет {DECLARED.name} — объём не объявлен, выгрузка запрещена (§23)")
         return 2
 
+    # Запасной источник даты — реестр. Порядок не случаен: дата в подписи
+    # принадлежит САМОМУ документу, дата в реестре — записи о нём. Реестр
+    # берётся только там, где текст молчит, и это записывается в статистику
+    # отдельной строкой: замер обязан знать, чем измерен.
+    backup = {}
+    if DATES.exists():
+        backup = json.loads(DATES.read_text(encoding="utf-8")).get("dates", {})
+
     need: dict[str, dict] = {}
     no_date = 0
+    src = {"text": 0, "registry": 0, "none": 0}
     for p in sorted(TEXTDIR.glob("*.txt")):
         txt = p.read_text(encoding="utf-8")
         d = act_date(txt)
+        if d:
+            src["text"] += 1
+        else:
+            d = (backup.get(p.stem) or {}).get("publication")
+            src["registry" if d else "none"] += 1
         for r in refs(txt):
             if r["kind"] != "article" or not r["law"]:
                 continue
@@ -253,6 +268,8 @@ def main() -> int:
 
     print(f"объявлено 71 закон · к выгрузке {len(need)} · "
           f"адресов без даты акта {no_date}")
+    print(f"дата акта: из текста {src['text']} · из реестра {src['registry']}"
+          f" · нет нигде {src['none']}  (реестр — ЗАПАСНОЙ источник)")
 
     rows, full = [], {}
     stats = {"page": 0, "missing": 0, "rev": 0, "art": 0, "key": 0}
