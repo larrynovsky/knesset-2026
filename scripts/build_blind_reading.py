@@ -173,7 +173,14 @@ def main() -> int:
     batch = pick(sel["selected"], {o["bill"] for o in sel["oracle"]},
                  names, groups, basic)
     BATCH.write_text(json.dumps(
-        {"rule": "criteria/oracle_composition_2026-08-12.yaml",
+        {"ГРАНИЦА §3": (
+            "ВИДЕЛ на момент отбора: перепись (имена, группы, признак "
+            "основного закона), тексты актов, состав пилота и список уже "
+            "подложенных. НЕ ВИДЕЛ: ни одного ответа вендора — ни знака, ни "
+            "норм, ни цитат. Запрет держится проверкой исходника в "
+            "самопроверке модуля, а не обещанием. Ответы читателя на момент "
+            "записи этого файла не существуют."),
+         "rule": "criteria/oracle_composition_2026-08-12.yaml",
          "picked_by": "build_blind_reading.py, без доступа к вердиктам",
          "max_read": MAX_READ, "per_group": PER_GROUP, "want": WANT,
          "batch": batch}, ensure_ascii=False, indent=1), encoding="utf-8")
