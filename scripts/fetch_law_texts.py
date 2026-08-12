@@ -31,6 +31,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from classify_direction import norm_he                      # noqa: E402
 from probe_wikisource import CTX, UA, PAUSE, pick_revision  # noqa: E402
 from resolve_law_ref import refs                            # noqa: E402
 
@@ -107,20 +108,61 @@ def flatten(t: str) -> str:
     return t.replace("}}", " ").replace("|", " ")
 
 
-def oracle_hits(anchors: list, base_text: str) -> tuple[int, int]:
+RX_SERVICE = re.compile(r"\b(?:או|וכן|סעיף|סעיפים|פסקה|פסקאות|תוספת)\b")
+
+
+def is_reference_anchor(q: str) -> bool:
+    """Якорь-перечень: акт правит ССЫЛКИ, а не текст.
+
+    «22, 23 או 43ד» и «סעיפים 24 או 43ד» — это списки номеров статей. Искать
+    их в тексте статьи бессмысленно: они проверяют не то, для чего оракул
+    заведён, и попадали в промахи, занижая долю.
+
+    Правило намеренно БЕЗ ЧИСЛОВОГО ПОРОГА: порог, подобранный после
+    просмотра девяти промахов, был бы подгонкой под увиденное. Правило
+    качественное — вычеркнуть номера, пунктуацию и служебные слова; если не
+    осталось ни одного слова хотя бы из трёх ивритских букв, якорь указывает
+    на ссылку, а не на текст.
+    """
+    rest = RX_SERVICE.sub(" ", q)
+    rest = re.sub(r"[^א-ת ]+", " ", rest)
+    return not any(len(w) >= 3 for w in rest.split())
+
+
+def oracle_hits(anchors: list, base_text: str, law_text: str = "") -> dict:
     """Оракул из диффа: якоря ЭТОГО адреса обязаны найтись в ЭТОЙ статье.
 
-    Не нашлись — вытянуто не то: не та статья, не та редакция или не тот
-    закон. Проверка бесплатна и работает на каждом акте без человека.
+    Три исхода, а не два, и это главное отличие от первой редакции:
 
-    Первая редакция принимала весь текст акта и брала из него ВСЕ цитаты
-    против ОДНОЙ статьи: промахи были гарантированы арифметикой, и замер дал
-    17% вместо настоящей доли. Теперь якоря приходят от resolve_law_ref
-    привязанными к своему адресу, и эта функция их только сверяет.
+      hit     — якорь в статье. Вытянуто то, что надо;
+      in_law  — якоря в статье нет, но он ЕСТЬ в законе. Значит вытянут не
+                тот кусок: адрес указывает не на ту статью, либо текст живёт
+                вне разметки статей (преамбула). Дефект РАЗБОРА;
+      miss    — якоря нет нигде. Вытянут не тот закон или не та редакция.
+                Дефект ВЫГРУЗКИ.
+
+    Сливать эти два случая — значит не знать, что чинить. До 12.08 они были
+    слиты.
+
+    Сравнение через norm_he — ту же нормализацию, что у цитат карточки. Она
+    снимает разницу ивритского макафа «־» и дефиса-минуса, на которой проект
+    горел дважды и потерял здесь два якоря из девяти.
     """
-    base = re.sub(r"\s+", " ", flatten(base_text))
-    hit = sum(1 for q in anchors if re.sub(r"\s+", " ", q).strip() in base)
-    return hit, len(anchors)
+    art = norm_he(flatten(base_text))
+    law = norm_he(flatten(law_text)) if law_text else ""
+    r = {"hit": 0, "in_law": 0, "miss": 0, "skipped": 0}
+    for q in anchors:
+        if is_reference_anchor(q):
+            r["skipped"] += 1
+            continue
+        n = norm_he(q)
+        if n and n in art:
+            r["hit"] += 1
+        elif n and law and n in law:
+            r["in_law"] += 1
+        else:
+            r["miss"] += 1
+    return r
 
 
 def selftest() -> int:
@@ -146,15 +188,41 @@ def selftest() -> int:
     assert "פסקה" in a15, "подпункты статьи остаются внутри неё"
     assert article(wt, "99") is None, "нет статьи — None, а не пустая строка"
 
-    assert oracle_hits(["לא ייזקק בית המשפט"], wt) == (1, 1), \
+    assert oracle_hits(["לא ייזקק בית המשפט"], wt)["hit"] == 1, \
         "якорь «до» обязан находиться в базовом тексте"
-    assert oracle_hits(["טקסט שאינו קיים כלל"], wt) == (0, 1), \
+    assert oracle_hits(["טקסט שאינו קיים כלל"], wt)["miss"] == 1, \
         "ненайденный якорь — сигнал, что вытянуто не то, и он обязан "\
         "быть виден числом, а не утонуть"
-    assert oracle_hits([], wt) == (0, 0), \
+    assert oracle_hits([], wt) == {"hit": 0, "in_law": 0, "miss": 0, "skipped": 0}, \
         "адрес без якорей не даёт ни попадания, ни промаха: он вне замера"
     # Разметка не должна прятать якорь: в вики между словами стоят шаблоны.
-    assert oracle_hits(["זכות עמידה"], "{{ח:סעיף|15|זכות עמידה}} טקסט") == (1, 1)
+    assert oracle_hits(["זכות עמידה"], "{{ח:סעיף|15|זכות עמידה}} טקסט")["hit"] == 1
+
+    # --- ТРИ ИСХОДА ВМЕСТО ДВУХ -------------------------------------------
+    # «Нет в статье» и «нет нигде» — разные диагнозы: первый чинится разбором,
+    # второй выгрузкой. До 12.08 они были слиты, и было непонятно, что чинить.
+    r = oracle_hits(["ובהיותו בן חורין"], "{{ח:סעיף|1|כותרת}} טקסט אחר",
+                    "{{ח:פתיח}} ובהיותו בן חורין {{ח:סעיף|1|כותרת}} טקסט אחר")
+    assert r == {"hit": 0, "in_law": 1, "miss": 0, "skipped": 0}, \
+        "якорь есть в законе, но не в статье — это дефект РАЗБОРА, и он "\
+        "обязан отличаться от «нет нигде»"
+    r = oracle_hits(["אין כזה טקסט בשום מקום"], "{{ח:סעיף|1|א}} טקסט", "{{ח:סעיף|1|א}} טקסט")
+    assert r["miss"] == 1 and r["in_law"] == 0, \
+        "нет нигде — дефект ВЫГРУЗКИ, другой диагноз и другое лечение"
+
+    # --- МАКАФ ------------------------------------------------------------
+    assert oracle_hits(["חד-ערכי"], "{{ח:סעיף|2|א}} מזהה חד־ערכי של אדם")["hit"] == 1, \
+        "ивритский макаф «־» и дефис-минус «-» — один и тот же текст; на "\
+        "этом различии проект горел дважды"
+
+    # --- ЯКОРЬ-ПЕРЕЧЕНЬ ----------------------------------------------------
+    for ref in ("22, 23 או 43ד", "סעיפים 24 או 43ד", "(3), 27 או 43ד"):
+        assert is_reference_anchor(ref), f"перечень номеров не текст: {ref}"
+    for txt in ("חד-ערכי", "התפקידים", "לא ייזקק בית המשפט"):
+        assert not is_reference_anchor(txt), f"это текст нормы: {txt}"
+    assert oracle_hits(["22, 23 או 43ד"], wt)["skipped"] == 1, \
+        "якорь-перечень выпадает из замера, а не считается промахом: он "\
+        "проверяет не то, для чего оракул заведён"
     print(f"самопроверка fetch_law_texts пройдена: "
           f"{sum(1 for _ in re.finditer('assert ', inspect.getsource(selftest)))} утверждений")
     return 0
@@ -186,7 +254,8 @@ def main() -> int:
     print(f"объявлено 71 закон · к выгрузке {len(need)} · "
           f"адресов без даты акта {no_date}")
 
-    rows, stats = [], {"page": 0, "missing": 0, "rev": 0, "art": 0, "key": 0}
+    rows, full = [], {}
+    stats = {"page": 0, "missing": 0, "rev": 0, "art": 0, "key": 0}
     for i, (law, info) in enumerate(sorted(need.items()), 1):
         on = min(info["dates"])
         try:
@@ -221,6 +290,7 @@ def main() -> int:
         got = {a: article(wt, a) for a in sorted(info["arts"])}
         found = {a: t for a, t in got.items() if t}
         stats["art"] += len(found)
+        full[law] = wt
         rows.append({"law": law, "status": "ok", "on": on, "revid": at["revid"],
                      "ts": at["timestamp"][:10], "israel_law_id": key and key.group(1),
                      "articles_wanted": sorted(info["arts"]),
@@ -230,7 +300,7 @@ def main() -> int:
               f"статей {len(found)}/{len(info['arts'])} "
               f"ключ {key.group(1) if key else '—'}")
 
-    hit = tot = 0
+    orc = {"hit": 0, "in_law": 0, "miss": 0, "skipped": 0}
     by_law = {r["law"]: r for r in rows if r.get("status") == "ok"}
     for p in sorted(TEXTDIR.glob("*.txt")):
         for r in refs(p.read_text(encoding="utf-8")):
@@ -239,9 +309,9 @@ def main() -> int:
                 continue
             base = (row["articles"] or {}).get(r["article"])
             if base:
-                h, t = oracle_hits(r["anchors"], base)
-                hit += h
-                tot += t
+                for k, v in oracle_hits(r["anchors"], base,
+                                        full.get(r["law"], "")).items():
+                    orc[k] += v
 
     OUT.write_text(json.dumps(
         {"at": datetime.now(timezone.utc).isoformat(), "declared_laws": 71,
@@ -252,10 +322,17 @@ def main() -> int:
           f"(объявлено было не менее 45 — P38)")
     print(f"ключ {{{{ח:מאגר}}}} есть у {stats['key']} из {stats['page']} (P39)")
     print(f"статей вырезано {stats['art']} (P40 — по адресам, см. ниже)")
-    print(f"ОРАКУЛ ДИФФА: цитата «до» найдена {hit} из {tot}"
-          + (f" ({100*hit/tot:.0f}%)" if tot else ""))
-    print("Ненайденная цитата «до» означает: вытянута не та статья, не та")
-    print("редакция или не тот закон. Это НЕ мелочь и не шум.")
+    judged = orc["hit"] + orc["in_law"] + orc["miss"]
+    print(f"\nОРАКУЛ ДИФФА — три исхода, а не два:")
+    print(f"   в статье (годно)        {orc['hit']:>4}"
+          + (f"  ({100*orc['hit']/judged:.0f}%)" if judged else ""))
+    print(f"   в законе, но не в статье {orc['in_law']:>3}  ← дефект РАЗБОРА:"
+          " адрес указывает не туда")
+    print(f"   нет нигде                {orc['miss']:>3}  ← дефект ВЫГРУЗКИ:"
+          " не тот закон или не та редакция")
+    print(f"   якорь-перечень вне замера {orc['skipped']:>2}  (акт правит ссылки,"
+          " а не текст)")
+    print("Сливать «не в статье» и «нет нигде» значит не знать, что чинить.")
     print(f"\n{OUT}")
     return 0
 
