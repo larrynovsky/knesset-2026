@@ -74,12 +74,19 @@ def probe(title: str, on_date: str) -> dict:
            "on_date": on_date, "revid_at_date": at and at["revid"],
            "ts_at_date": at and at["timestamp"][:10]}
     if at:
-        body = api({"action": "query", "prop": "revisions", "titles": title,
+        # revids НЕЛЬЗЯ слать вместе с titles: API их не совмещает, и ответ
+        # приходит без ключа revisions. Первая редакция падала здесь на всех
+        # пяти страницах — то есть ошибка была не в источнике, а в запросе.
+        body = api({"action": "query", "prop": "revisions",
                     "revids": at["revid"], "rvprop": "content", "rvslots": "main"})
         p = (body.get("query", {}).get("pages") or [{}])[0]
-        txt = p["revisions"][0]["slots"]["main"]["content"]
-        out["chars"] = len(txt)
-        out["has_section_markup"] = "{{ח:" in txt or "==" in txt
+        rv = p.get("revisions") or []
+        if not rv:
+            out["content_error"] = str(body.get("error") or body)[:120]
+        else:
+            txt = rv[0]["slots"]["main"]["content"]
+            out["chars"] = len(txt)
+            out["has_section_markup"] = "{{ח:" in txt or "==" in txt
     return out
 
 
