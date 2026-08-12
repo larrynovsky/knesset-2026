@@ -45,7 +45,6 @@ API = "https://he.wikisource.org/w/api.php"
 RX_ACT_DATE = re.compile(r"\((\d{1,2})\.(\d{1,2})\.(\d{4})\)")
 RX_SEC = re.compile(r"\{\{ח:סעיף\*?\|([^|}\n]*)")
 RX_CUT = re.compile(r"\{\{ח:(?:סעיף\*?|קטע\d?|סוף)\|?")
-RX_QUOTE_FROM = re.compile(r"במקום\s+[\"״”]([^\"״”]{4,120})[\"״”]")
 
 
 def check_host(url: str) -> str:
@@ -97,16 +96,31 @@ def article(wikitext: str, num: str) -> str | None:
     return None
 
 
-def oracle_hits(act_text: str, base_text: str) -> tuple[int, int]:
-    """Оракул из диффа: строка «до» ОБЯЗАНА найтись в базовом тексте.
+def flatten(t: str) -> str:
+    """Снять вики-разметку, СОХРАНИВ её параметры.
 
-    Не нашлась — вытянуто не то: не та статья, не та редакция или не тот
-    закон. Проверка бесплатна и работает на каждом акте без человека.
+    Полное удаление шаблонов теряет текст: заголовок статьи живёт ВНУТРИ
+    {{ח:סעיף|15|זכות עמידה}}, и якорь «זכות עמידה» исчезал вместе со скобками.
+    Убираем имя шаблона и разделители, слова оставляем.
     """
-    want = RX_QUOTE_FROM.findall(act_text)
-    base = re.sub(r"\s+", " ", base_text)
-    hit = sum(1 for q in want if re.sub(r"\s+", " ", q).strip() in base)
-    return hit, len(want)
+    t = re.sub(r"\{\{\s*ח:[^|}]*\|?", " ", t)
+    return t.replace("}}", " ").replace("|", " ")
+
+
+def oracle_hits(anchors: list, base_text: str) -> tuple[int, int]:
+    """Оракул из диффа: якоря ЭТОГО адреса обязаны найтись в ЭТОЙ статье.
+
+    Не нашлись — вытянуто не то: не та статья, не та редакция или не тот
+    закон. Проверка бесплатна и работает на каждом акте без человека.
+
+    Первая редакция принимала весь текст акта и брала из него ВСЕ цитаты
+    против ОДНОЙ статьи: промахи были гарантированы арифметикой, и замер дал
+    17% вместо настоящей доли. Теперь якоря приходят от resolve_law_ref
+    привязанными к своему адресу, и эта функция их только сверяет.
+    """
+    base = re.sub(r"\s+", " ", flatten(base_text))
+    hit = sum(1 for q in anchors if re.sub(r"\s+", " ", q).strip() in base)
+    return hit, len(anchors)
 
 
 def selftest() -> int:
@@ -132,12 +146,15 @@ def selftest() -> int:
     assert "פסקה" in a15, "подпункты статьи остаются внутри неё"
     assert article(wt, "99") is None, "нет статьи — None, а не пустая строка"
 
-    hit, tot = oracle_hits('במקום "לא ייזקק בית המשפט" יבוא', wt)
-    assert (hit, tot) == (1, 1), "цитата «до» обязана находиться в базовом тексте"
-    hit, tot = oracle_hits('במקום "טקסט שאינו קיים כלל" יבוא', wt)
-    assert (hit, tot) == (0, 1), \
-        "ненайденная цитата «до» — сигнал, что вытянуто не то, и он обязан "\
+    assert oracle_hits(["לא ייזקק בית המשפט"], wt) == (1, 1), \
+        "якорь «до» обязан находиться в базовом тексте"
+    assert oracle_hits(["טקסט שאינו קיים כלל"], wt) == (0, 1), \
+        "ненайденный якорь — сигнал, что вытянуто не то, и он обязан "\
         "быть виден числом, а не утонуть"
+    assert oracle_hits([], wt) == (0, 0), \
+        "адрес без якорей не даёт ни попадания, ни промаха: он вне замера"
+    # Разметка не должна прятать якорь: в вики между словами стоят шаблоны.
+    assert oracle_hits(["זכות עמידה"], "{{ח:סעיף|15|זכות עמידה}} טקסט") == (1, 1)
     print(f"самопроверка fetch_law_texts пройдена: "
           f"{sum(1 for _ in re.finditer('assert ', inspect.getsource(selftest)))} утверждений")
     return 0
@@ -216,14 +233,13 @@ def main() -> int:
     hit = tot = 0
     by_law = {r["law"]: r for r in rows if r.get("status") == "ok"}
     for p in sorted(TEXTDIR.glob("*.txt")):
-        txt = p.read_text(encoding="utf-8")
-        for r in refs(txt):
+        for r in refs(p.read_text(encoding="utf-8")):
             row = by_law.get(r.get("law") or "")
-            if not row or r["kind"] != "article":
+            if not row or r["kind"] != "article" or not r.get("anchors"):
                 continue
             base = (row["articles"] or {}).get(r["article"])
             if base:
-                h, t = oracle_hits(txt, base)
+                h, t = oracle_hits(r["anchors"], base)
                 hit += h
                 tot += t
 
