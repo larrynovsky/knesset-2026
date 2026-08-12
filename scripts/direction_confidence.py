@@ -29,7 +29,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from classify_direction import norm_he          # noqa: E402
+from classify_direction import n_asserts, norm_he   # noqa: E402
 
 LEVELS = ("high", "medium", "low", "none")
 
@@ -104,6 +104,44 @@ def channel_escape(verdicts: list[str]) -> tuple[bool, str]:
     return False, f"слабых {weak} из {len(verdicts)} ({share:.0%}), порог 33% не пройден"
 
 
+def report(src: Path, pair: tuple = ("anthropic", "openai")) -> int:
+    """Применить правило к прогону. До 12.08 этого не было ВООБЩЕ.
+
+    Числа «high 5 · medium 14 · low 33 · none 2» и вывод «канал А не даёт
+    направления» были получены разовым кодом в сессии и нигде не жили. То
+    есть вердикт, останавливающий целый канал, не воспроизводился из репо
+    (§14) и не имел механизма (§20). Модуль при этом молча возвращал ноль,
+    если его звали без --selftest, — вид работающего инструмента.
+
+    Пара объявлена: правило уверенности касается (anthropic, openai). Третий
+    вендор ждёт своего правила и здесь не считается — иначе замер поменяет
+    прибор задним числом.
+    """
+    import collections
+    import json
+    d = json.loads(src.read_text(encoding="utf-8"))
+    levels, reasons, skipped = [], collections.Counter(), 0
+    for r in d["rows"]:
+        vs = r.get("verdicts", {})
+        if any(vs.get(v, {}).get("status") != "ok" for v in pair):
+            skipped += 1
+            continue
+        lvl, why, _ = verdict(*(vs[v].get("norms", []) for v in pair))
+        levels.append(lvl)
+        reasons[(lvl, why.split(":")[0])] += 1
+    dist = collections.Counter(levels)
+    print(f"источник: {src}   пара: {pair[0]} · {pair[1]}")
+    print(f"актов с ответом обоих: {len(levels)}, "
+          f"вне замера {skipped} (кто-то из пары не ответил)")
+    print("  " + " · ".join(f"{k} {dist.get(k, 0)}" for k in LEVELS))
+    for (lvl, why), n in sorted(reasons.items(), key=lambda x: -x[1]):
+        print(f"   {n:>3}  {lvl:<7} {why}")
+    esc, msg = channel_escape(levels)
+    print(("\n⚠ ПОРОГ ПРОЙДЕН: " if esc else "\nпорог не пройден: ") + msg)
+    print("Порог объявлен ДО прогона: criteria/direction_confidence_2026-08-01.yaml")
+    return 0
+
+
 def _n(q, s=0):
     return {"quote_he": q, "sign": s}
 
@@ -174,9 +212,23 @@ def selftest() -> int:
     assert channel_escape(["high"] * 6 + ["low"] * 4)[0] is True
     assert channel_escape([])[0] is True, "нет актов — не «всё хорошо», а отказ"
 
-    print("самопроверка direction_confidence пройдена: 22 утверждения")
+    print(f"самопроверка direction_confidence пройдена: {n_asserts(selftest)} утверждений")
     return 0
 
 
+def main() -> int:
+    if "--selftest" in sys.argv:
+        return selftest()
+    # Молчаливый ноль без аргументов — то самое «выглядит рабочим». Теперь
+    # звать без источника нельзя: инструмент говорит, чего от него хотят.
+    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    if not args:
+        print("нужен путь к прогону, например:\n"
+              "  python3 scripts/direction_confidence.py data/direction_v2.json\n"
+              "  python3 scripts/direction_confidence.py --selftest")
+        return 2
+    return report(Path(args[0]))
+
+
 if __name__ == "__main__":
-    raise SystemExit(selftest() if "--selftest" in sys.argv else 0)
+    raise SystemExit(main())
