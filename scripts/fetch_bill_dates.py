@@ -69,15 +69,20 @@ def main() -> int:
         print(f"нет {DECLARED.name} — объём не объявлен, выгрузка запрещена (§23)")
         return 2
 
+    # Ключ законопроекта в OData **v4** называется Id, а не BillID: BillID —
+    # это имя из легаси-эндпоинта v3, где и схема другая. Первая редакция
+    # взяла имена полей из v3 и получила HTTP 400 с внятным сообщением
+    # «Could not find a property named 'BillID'». Два эндпоинта с разными
+    # схемами — известная ловушка проекта (инвариант source_is_odatav4).
     rows = fetch_all("KNS_Bill", flt="KnessetNum eq 25",
-                     select="BillID,PublicationDate,LastUpdatedDate,StatusID",
+                     select="Id,PublicationDate,LastUpdatedDate,StatusID",
                      expected=EXPECTED)
     dates = {}
     have_pub = 0
     for r in rows:
         pub = as_date(r.get("PublicationDate"))
         have_pub += bool(pub)
-        dates[str(r["BillID"])] = {
+        dates[str(r["Id"])] = {
             "publication": pub,
             "last_updated": as_date(r.get("LastUpdatedDate")),
             "status": r.get("StatusID"),
