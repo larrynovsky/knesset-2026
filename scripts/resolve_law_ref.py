@@ -1,0 +1,190 @@
+#!/usr/bin/env python3
+"""Ф1 плана: адрес поправки из ивритского текста акта → (закон, статья).
+
+Дифф сам называет, что правит: «בחוק-יסוד: השפיטה, בסעיף 15(ד)». Задача
+модуля — прочитать этот адрес. В сеть не ходит, о Викитексте не знает,
+переживёт смену источника.
+
+ЧТО ОКАЗАЛОСЬ ВАЖНЫМ И НЕОЧЕВИДНЫМ (по восьми актам набора 12.08):
+
+1. АЛИАС. Израильская техника письма вводит закон один раз и дальше зовёт
+   его «לחוק העיקרי»: «בחוק חוזה הביטוח, התשמ״א–1981 (להלן – החוק העיקרי)»,
+   а через строку — «אחרי סעיף 27 לחוק העיקרי יבוא». Без разбора алиасов
+   половина адресов не резолвится, и это не редкий случай, а норма жанра.
+
+2. НЕ ВСЁ — СТАТЬЯ. Встречаются «בתוספת השנייה» (приложение) и «חוק X – בטל»
+   (отмена акта целиком, статьи нет вовсе). Оба обязаны быть отдельным
+   исходом, а не тихим пропуском: молчащий пропуск — тот самый класс, на
+   котором 12.08 выпал подлог оракула.
+
+3. ПОЯСНИТЕЛЬНАЯ ЗАПИСКА НЕ СЧИТАЕТСЯ. После «דברי הסבר» идёт аргументация
+   инициатора, и она полна ссылок на статьи, которые акт НЕ правит. Резать
+   по этому заголовку — не оптимизация, а условие правильности.
+
+Возвращаются ВСЕ исходы, включая нерешённые: конвейеру нужно знать, чего он
+не смог, а не получить короткий чистый список.
+"""
+from __future__ import annotations
+
+import inspect
+import re
+import sys
+
+# «דברי הסבר» — граница между нормой и агитацией. Всё после неё игнорируется.
+EXPLAIN = "דברי הסבר"
+
+# Имя закона: חוק-יסוד: X | חוק X | פקודת X. Обрываем на запятой, скобке,
+# дефисе-тире и переводе строки — дальше идут год, алиас или сама поправка.
+LAW = r"(חוק[־\-]יסוד:\s*[^,\(\n–]+|חוק\s+[^,\(\n–]+|פקודת\s+[^,\(\n–]+)"
+RX_LAW_IN = re.compile(r"\bב" + LAW)
+RX_LAW_TO = re.compile(r"\bל" + LAW)
+RX_ALIAS_DEF = re.compile(r"\(להלן\s*[–\-]\s*([^\)]+)\)")
+# Номер статьи: 27, 3א, 13ד, 89א — цифры и необязательная ивритская буква.
+RX_ART = re.compile(r"\b(?:ב|ל|אחרי\s+|לפני\s+)?סעיף\s+(\d+[א-ת]*)((?:\([^)]{1,6}\))*)")
+RX_APPENDIX = re.compile(r"\bבתוספת\s+(\S+)")
+RX_CANCEL = re.compile(r"^\s*(.+?)\s+[–\-]\s*בטל\s*\.?\s*$", re.M)
+
+
+def alias_key(s: str) -> str:
+    """Ключ алиаса без ведущего артикля.
+
+    Иврит съедает артикль предлогом: алиас объявлен как «החוק העיקרי», а зовут
+    его «לחוק העיקרי» — то есть ל+ה сливаются, и в тексте видно «חוק העיקרי».
+    Сравнивать эти две формы напрямую нельзя, и первая редакция на этом
+    сломалась: «חוק העיקרי» опознавалось как НОВЫЙ закон с таким именем.
+    """
+    n = norm_name(s)
+    return n[1:] if n.startswith("ה") else n
+
+
+def norm_name(s: str) -> str:
+    """Имя закона к сравнимому виду: пробелы, кавычки, дефисы, «ה» артикль."""
+    s = re.sub(r"[׳״\"'״׳]", "\"", s)
+    s = s.replace("־", "-").replace("–", "-")
+    return re.sub(r"\s+", " ", s).strip(" ,.-")
+
+
+def operative(text: str) -> str:
+    """Только нормативная часть. Пояснительная записка — не источник адресов."""
+    i = text.find(EXPLAIN)
+    return text[:i] if i > 0 else text
+
+
+def refs(text: str) -> list[dict]:
+    """Все адреса, которые акт правит. Нерешённые тоже возвращаются."""
+    body = operative(text)
+    out: list[dict] = []
+    aliases: dict[str, str] = {}
+    current: str | None = None
+
+    for m in RX_CANCEL.finditer(body):
+        name = norm_name(m.group(1))
+        if name.startswith(("חוק", "פקודת")):
+            out.append({"law": name, "kind": "whole_act", "article": None,
+                        "raw": m.group(0).strip()})
+
+    for line in body.split("\n"):
+        if not line.strip():
+            continue
+        # 1. Явное имя закона в строке — оно же становится текущим.
+        named = RX_LAW_IN.search(line) or RX_LAW_TO.search(line)
+        if named:
+            got = alias_key(named.group(1))
+            # 2. Сначала алиас, потом новое имя. Порядок несущий: «לחוק
+            # העיקרי» выглядит как имя закона и молча становилось бы им.
+            hit = next((real for al, real in aliases.items()
+                        if got.startswith(al)), None)
+            current = hit or norm_name(named.group(1))
+            for a in RX_ALIAS_DEF.findall(line):
+                aliases[alias_key(a)] = current
+
+        for m in RX_ART.finditer(line):
+            out.append({"law": current, "kind": "article" if current else "unresolved",
+                        "article": m.group(1), "sub": m.group(2) or None,
+                        "raw": m.group(0).strip()})
+        for m in RX_APPENDIX.finditer(line):
+            out.append({"law": current, "kind": "appendix", "article": None,
+                        "sub": m.group(1), "raw": m.group(0).strip()})
+    return out
+
+
+def selftest() -> int:
+    # Все строки ниже — ДОСЛОВНО из восьми актов набора чтения 12.08.
+    a = ("בחוק-יסוד: השפיטה, בסעיף 15(ד), אחרי פסקה (4) יבוא:\n"
+         + EXPLAIN + "\nבסעיף 99 לחוק אחר נאמר")
+    r = refs(a)
+    assert len(r) == 1, f"после «{EXPLAIN}» адреса не считаются: {r}"
+    assert r[0]["law"] == "חוק-יסוד: השפיטה" and r[0]["article"] == "15", r[0]
+    assert r[0]["sub"] == "(ד)", "подпункт обязан сохраняться: правят его, а не статью целиком"
+
+    b = ("בחוק חוזה הביטוח, התשמ\"א–1981 (להלן – החוק העיקרי), בסעיף 27, אחרי\n"
+         "אחרי סעיף 27 לחוק העיקרי יבוא:\n"
+         "בסעיף 28א לחוק העיקרי, במקום \"שלא היו\" יבוא")
+    rb = refs(b)
+    assert [x["article"] for x in rb] == ["27", "27", "28א"], rb
+    assert all(x["law"] == "חוק חוזה הביטוח" for x in rb), \
+        "алиас «לחוק העיקרי» обязан вести к введённому закону: без этого "\
+        "две трети адресов этого акта остались бы без закона"
+
+    c = "בחוק הממשלה, התשס\"א–2001, בסעיף 10(ב)(12), בסופו יבוא"
+    assert refs(c)[0]["sub"] == "(ב)(12)", "двойной подпункт не режется"
+
+    d = "בפקודת המשטרה [נוסח חדש], התשל\"א–1971, אחרי סעיף 89 יבוא:"
+    rd = refs(d)
+    assert rd[0]["law"].startswith("פקודת המשטרה") and rd[0]["article"] == "89", rd
+
+    e = "בחוק בתי משפט לעניינים מינהליים, התש\"ס–2000, בתוספת השנייה, בסופה יבוא:"
+    re_ = refs(e)
+    assert re_[0]["kind"] == "appendix", \
+        "приложение — НЕ статья и обязано быть отдельным исходом, а не пропуском"
+
+    f = "חוק ממשלת חילופים (תיקון חקיקה והוראת שעה), התש\"ף–2020 – בטל."
+    rf = refs(f)
+    assert rf and rf[0]["kind"] == "whole_act" and rf[0]["article"] is None, rf
+
+    g = "בסעיף 6 - במקום \"י\"א בטבת\" יבוא"
+    rg = refs(g)
+    assert rg[0]["kind"] == "unresolved", \
+        "статья без названного закона — НЕ молчание, а названный отказ: "\
+        "именно так выпал подлог оракула 12.08"
+
+    h = "בחוק-יסוד: הממשלה, בסעיף 33(ג1), במקום \"כיהן ראש הממשלה\" יבוא"
+    assert refs(h)[0]["article"] == "33" and refs(h)[0]["sub"] == "(ג1)"
+
+    i = "בחוק יסודות התקציב, התשמ\"ה–1985, בסעיף 3א, אחרי סעיף קטן (ח1) יבוא"
+    ri = refs(i)
+    assert ri[0]["article"] == "3א", "буква в номере статьи не теряется"
+
+    print(f"самопроверка resolve_law_ref пройдена: "
+          f"{sum(1 for _ in re.finditer('assert ', inspect.getsource(selftest)))} утверждений")
+    return 0
+
+
+def main() -> int:
+    if "--selftest" in sys.argv:
+        return selftest()
+    from pathlib import Path
+    d = Path(__file__).resolve().parent.parent / "data" / "bill_texts"
+    files = sorted(d.glob("*.txt")) if d.exists() else []
+    if not files:
+        print("нет data/bill_texts — запускать на Studio (§19, §21)")
+        return 2
+    tot = res = unres = 0
+    kinds: dict[str, int] = {}
+    for p in files:
+        for r in refs(p.read_text(encoding="utf-8")):
+            tot += 1
+            kinds[r["kind"]] = kinds.get(r["kind"], 0) + 1
+            res += r["kind"] != "unresolved"
+            unres += r["kind"] == "unresolved"
+    print(f"актов {len(files)} · адресов {tot} · с законом {res} · без закона {unres}")
+    for k, v in sorted(kinds.items(), key=lambda x: -x[1]):
+        print(f"   {k:<12} {v}")
+    print("\nАдрес без закона — не брак разбора сам по себе: акт может править")
+    print("акт-поправку, которой в открытой базе нет. Разделять эти два случая")
+    print("должен следующий шаг, а не этот.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
