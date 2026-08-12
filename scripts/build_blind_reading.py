@@ -59,8 +59,15 @@ PER_GROUP = 2          # не больше двух актов на группу
 WANT = 8               # размер набора
 
 
-def pick(selected: list, oracle_bills: set, names: dict, groups: dict) -> list:
-    """Отбор по объявленным правилам. Вердиктов не видит по построению."""
+def pick(selected: list, oracle_bills: set, names: dict, groups: dict,
+         basic: dict | None = None) -> list:
+    """Отбор по объявленным правилам. Вердиктов не видит по построению.
+
+    Пустая группа — не дефект: Основные законы попадают в пилот по своему
+    статусу, а не по попаданию в лексикон, и группы у них законно нет. Так и
+    подписывается, потому что прочерк читается как недоделка.
+    """
+    basic = basic or {}
     taken, per = [], {}
     for b in selected:
         if b in oracle_bills:
@@ -71,7 +78,8 @@ def pick(selected: list, oracle_bills: set, names: dict, groups: dict) -> list:
         text = p.read_text(encoding="utf-8")
         if len(text) > MAX_READ or structure_units(text) == 0:
             continue
-        g = sorted(groups.get(b, {}) or {"—": None})[0]
+        fallback = "основной закон" if str(basic.get(b)) == "True" else "без группы"
+        g = sorted(groups.get(b, {}) or {fallback: None})[0]
         if per.get(g, 0) >= PER_GROUP:
             continue
         per[g] = per.get(g, 0) + 1
@@ -161,7 +169,9 @@ def main() -> int:
     scan = json.loads(SCAN.read_text(encoding="utf-8"))
     names = {m["id"]: m["name"] for m in scan["matched"]}
     groups = {m["id"]: m.get("groups") for m in scan["matched"]}
-    batch = pick(sel["selected"], {o["bill"] for o in sel["oracle"]}, names, groups)
+    basic = {m["id"]: m.get("basic_law") for m in scan["matched"]}
+    batch = pick(sel["selected"], {o["bill"] for o in sel["oracle"]},
+                 names, groups, basic)
     BATCH.write_text(json.dumps(
         {"rule": "criteria/oracle_composition_2026-08-12.yaml",
          "picked_by": "build_blind_reading.py, без доступа к вердиктам",
