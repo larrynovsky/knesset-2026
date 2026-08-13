@@ -230,8 +230,18 @@ def check_card(card: dict, name: str, periods: set[str], idx: dict,
     # «источник не отдал данные» и «преемственность не установлена». При таком
     # схлопывании сломанная выгрузка неотличима от отсутствия полномочий, и
     # технический дефект превращается в политический вывод.
+    #
+    # 13.08: блок применяется ТОЛЬКО к единице «партия × период». Продолжение
+    # той же ошибки, что в §1: правило написано для канала Б и навязывало
+    # карточке канала А статус not_exposed на том основании, что у фракции
+    # ноль периодов в правительстве, — при том что предмет такой карточки
+    # ровно противоположный, 162 НАБЛЮДЁННЫХ голосования. Экспозиция
+    # различается по каналам и живёт в матрице покрытия, а не в карточке.
     n = card.get("periods_in_government")
-    if n == 0:
+    if unit == "faction_knesset" and n is not None:
+        bad("§7", "periods_in_government в карточке канала А: поле чужого "
+                  "канала, экспозиция по каналам живёт в матрице покрытия")
+    if unit == "party_period" and n == 0:
         st = card.get("status")
         if st == "no_record":
             bad("§7", "no_record запрещён: схлопывает not_exposed / "
@@ -506,8 +516,7 @@ def selftest() -> int:
     votes_card = {
         "card_version": 1, "card_type": "party", "unit": "faction_knesset",
         "faction_id": 1103, "knesset": 25,
-        "periods_in_government": 0, "status": "not_exposed",
-        "exposure_evidence": "ноль периодов в criteria/periods.yaml",
+        "status": "observed",
         "snapshots": {"votes_25": "2026-07-31"},
         "holdout_checked": {"period": None},
         "revisions": [{"version": 1}],
@@ -544,6 +553,8 @@ def selftest() -> int:
          lambda c: (c.pop("votes"), c.update(conclusion="голосовала против"))),
         ("ни items, ни ссылки на выгрузку (§14)",
          lambda c: c["votes"].pop("items")),
+        ("поле чужого канала в карточке канала А",
+         lambda c: c.update(periods_in_government=0)),
     ]:
         assert run_votes(mut) > 0, f"канал А: подлог «{why}» прошёл незамеченным"
 
