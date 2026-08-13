@@ -303,6 +303,37 @@ def check_card(card: dict, name: str, periods: set[str], idx: dict,
                 bad("§12", f"{where}: нет name_he")
             if not (v.get("name_ru") or "").strip():
                 bad("§12", f"{where}: нет name_ru")
+        # §4 §5 §6 НА УРОВНЕ КАРТОЧКИ. Дыра, найденная тем, что первые две
+        # карточки канала А прошли валидатор целиком: поиск опровержения,
+        # два прочтения и уровень уверенности проверялись ТОЛЬКО внутри
+        # блока обязательств, которого у карточки голосований нет. То есть
+        # три несущих правила свода не сторожили её вовсе, а зелёный отчёт
+        # выглядел ровно так же, как у охраняемой карточки. Это и есть тот
+        # «структурно полный, но пустой по существу» артефакт, о котором
+        # §24 говорит как о честной границе, — только здесь дело хуже:
+        # граница была не названа, а не замечена.
+        rd = card.get("readings") or []
+        if len(rd) < 2:
+            bad("§5", "меньше двух прочтений в карточке канала А")
+        elif all(x.get("type") == "weakening" for x in rd):
+            bad("§5", "все прочтения ослабляющие: равномерный скепсис — такое "
+                      "же искажение, как некритичность")
+        for x in rd:
+            if x.get("type") not in READING_TYPES:
+                bad("§5", f"тип прочтения {x.get('type')!r} вне {READING_TYPES}")
+        cs = card.get("counter_search") or {}
+        if not cs.get("searched_where"):
+            bad("§4", "нет области поиска опровержения: «искал, не нашёл» без "
+                      "названной области — не отчёт")
+        if cs.get("outcome") not in ("found", "nothing", "contradictory"):
+            bad("§4", "outcome обязан быть found | nothing | contradictory")
+        if card.get("confidence") not in CONFIDENCE:
+            bad("§6", f"confidence вне {CONFIDENCE}")
+        if not (card.get("confidence_reason") or "").strip():
+            bad("§6", "уровень уверенности без названной причины — украшение")
+        if not (card.get("what_would_falsify") or "").strip():
+            bad("§4", "нет what_would_falsify")
+
         concl = card.get("conclusion") or ""
         if "голосов" in concl and cav and cav not in concl:
             bad("§А", "вывод опирается на голосования, но не несёт оговорку "
@@ -521,6 +552,11 @@ def selftest() -> int:
         "holdout_checked": {"period": None},
         "revisions": [{"version": 1}],
         "conclusion": f"фракция участвовала в голосованиях {CAV}",
+        "readings": [{"type": "weakening"}, {"type": "reframing"}],
+        "counter_search": {"searched_where": ["votes_25 целиком"],
+                           "outcome": "nothing"},
+        "confidence": "medium", "confidence_reason": "неполнота периода",
+        "what_would_falsify": "если доля участия упадёт на второй теме",
         "votes": {"theme": "rule_of_law", "theme_caveat_ru": CAV,
                   "items": [{"for_option_desc": "להעביר לוועדה",
                              "name_he": "הצעת חוק", "name_ru": "Законопроект"}]},
@@ -536,7 +572,7 @@ def selftest() -> int:
 
     assert run_votes(lambda c: None) == 0, \
         f"карточка канала А без периода обязана проходить: {problems}"
-    for why, mut in [
+    votes_cases = [
         ("нет faction_id", lambda c: c.update(faction_id=None)),
         ("две единицы сразу", lambda c: c.update(period_id="1095-gov37")),
         ("нет темы", lambda c: c["votes"].update(theme="")),
@@ -555,7 +591,26 @@ def selftest() -> int:
          lambda c: c["votes"].pop("items")),
         ("поле чужого канала в карточке канала А",
          lambda c: c.update(periods_in_government=0)),
-    ]:
+        ("одно прочтение (§5)", lambda c: c.update(readings=[{"type": "reframing"}])),
+        ("все прочтения ослабляющие (§5)",
+         lambda c: c.update(readings=[{"type": "weakening"}] * 2)),
+        ("нет области поиска опровержения (§4)",
+         lambda c: c["counter_search"].update(searched_where=[])),
+        ("исход поиска вне перечисления (§4)",
+         lambda c: c["counter_search"].update(outcome="вроде норм")),
+        ("уверенность вне шкалы (§6)", lambda c: c.update(confidence="уверен")),
+        ("уверенность без причины (§6)",
+         lambda c: c.update(confidence_reason="")),
+        ("нечем опровергнуть", lambda c: c.update(what_would_falsify="")),
+    ]
+    # Число провокаций закреплено. Провокация, удалённая молча, — это снятая
+    # защита, и снятие видно только диффом, если счётчик стоит рядом. Ровно
+    # так уже врал счётчик утверждений в classify_direction: считал строки,
+    # а не разбор.
+    assert len(votes_cases) == 18, \
+        f"подлогов канала А стало {len(votes_cases)}, а было 18: провокация " \
+        "не удаляется без правки этого числа"
+    for why, mut in votes_cases:
         assert run_votes(mut) > 0, f"канал А: подлог «{why}» прошёл незамеченным"
 
     cases = [

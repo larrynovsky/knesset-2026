@@ -204,8 +204,15 @@ def check_cards() -> None:
             pass
     for c in cards:
         txt = c.read_text(encoding="utf-8", errors="replace")
-        if "period_id" not in txt:
-            fail(f"§1: {c.relative_to(ROOT)} без period_id")
+        # §1 — единица наблюдения РАЗЛИЧАЕТСЯ по каналам (поправка свода
+        # 01.08): партия × период для денег, фракция × Кнессет для
+        # голосований. Это третье место в проекте, где правило было написано
+        # для канала Б и запрещало канал А; первые два — §1 и §7 в
+        # validate_cards, найдены в тот же день. Проверка отсутствия
+        # оказалась проверкой ОДНОЙ формы, и потому запрещала другую.
+        if "period_id" not in txt and "unit: faction_knesset" not in txt:
+            fail(f"§1: {c.relative_to(ROOT)} без period_id и без "
+                 "объявленной единицы faction_knesset")
         if "counter_search" not in txt:
             fail(f"§4: {c.relative_to(ROOT)} без отчёта о поиске опровержения")
         if not manifest:
