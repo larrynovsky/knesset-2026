@@ -99,19 +99,28 @@ def verdict(a: list[dict], o: list[dict],
         return "none", "ни один вендор не выделил норм в этом акте", m
     if not a or not o:
         return "low", "один из вендоров не нашёл ни одной нормы", m
-    clash = (overall is not None and len(set(overall)) > 1
-             and all(s is not None for s in overall))
-    if m["overlap"] >= 0.60 and m["reading"] == 1.0 and not clash:
-        return "high", "вендоры увидели одни нормы и прочли их одинаково", m
-    if m["overlap"] >= 0.30 and m["reading"] >= 0.75 and not clash:
-        return "medium", "вендоры в основном согласны: перекрытие " \
-                         f"{m['overlap']:.2f}, чтение {m['reading']:.2f}", m
-    if clash:
+    if m["overlap"] >= 0.60 and m["reading"] == 1.0:
+        base = "high", "вендоры увидели одни нормы и прочли их одинаково"
+    elif m["overlap"] >= 0.30 and m["reading"] >= 0.75:
+        base = "medium", ("вендоры в основном согласны: перекрытие "
+                          f"{m['overlap']:.2f}, чтение {m['reading']:.2f}")
+    elif m["overlap"] < 0.30:
+        return "low", "вендоры извлекли разные множества норм", m
+    else:
+        return "low", "вендоры разошлись в чтении общих норм", m
+
+    # Поправка применяется ТОЛЬКО к high|medium — так она и объявлена
+    # (applies_to в criteria). Первая редакция кода ставила проверку раньше
+    # порогов и переклеймила три уже слабых акта: причина «разошлись в знаке»
+    # вытеснила «извлекли разные множества норм». Вытеснила худшим образом —
+    # менее действенной причиной: сойтись в направлении, не увидев одних
+    # норм, вендоры не могли в принципе, и чинить надо извлечение.
+    # Расхождение кода с собственным объявлением поймал прогон, а не я.
+    if (overall is not None and len(set(overall)) > 1
+            and all(s is not None for s in overall)):
         return "low", ("вендоры разошлись в общем знаке акта: "
                        + " против ".join(str(s) for s in overall)), m
-    if m["overlap"] < 0.30:
-        return "low", "вендоры извлекли разные множества норм", m
-    return "low", "вендоры разошлись в чтении общих норм", m
+    return base[0], base[1], m
 
 
 def channel_escape(verdicts: list[str]) -> tuple[bool, str]:
@@ -256,6 +265,15 @@ def selftest() -> int:
     half, _, _ = verdict(*agree_norms, overall=(1, None))
     assert half == base, \
         "один предъявленный знак против непредъявленного — не расхождение"
+    # Уже слабый акт поправка НЕ переклеймляет: причина «разные множества»
+    # действеннее и первичнее. Без этого случая код разошёлся бы с полем
+    # applies_to объявления, а поймал бы это только прогон — как 13.08.
+    weak_clash, weak_why, _ = verdict([_n("אאא", 1), _n("בבב", -1), _n("גגג", 0)],
+                                      [_n("דדד", 1)], overall=(-1, 1))
+    assert (weak_clash, weak_why) == (v_recall, r_recall), \
+        "поправка объявлена для high|medium и не имеет права вытеснять " \
+        "причину у акта, который слаб по извлечению: сойтись в направлении, " \
+        "не увидев одних норм, вендоры не могли в принципе"
 
     # Пустой вендор — не «согласие», а названный отказ.
     assert verdict([_n("אאא", 1)], [])[0] == "low"
