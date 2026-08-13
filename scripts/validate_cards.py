@@ -195,9 +195,22 @@ def check_card(card: dict, name: str, periods: set[str], idx: dict,
     def bad(rule: str, msg: str) -> None:
         fail(f"{name}: {rule} — {msg}")
 
-    # §1 — период из справочника
+    # §1 — единица наблюдения. Поправка свода 01.08 объявила, что единица
+    # РАЗЛИЧАЕТСЯ по каналам: канал Б — партия × период в правительстве,
+    # канал А — фракция × действие × дата. Валидатор до 13.08 знал только
+    # первую и требовал period_id у любой карточки. Следствие: карточку
+    # фракции, никогда не бывшей в правительстве, построить было НЕЛЬЗЯ —
+    # у неё нет периода по устройству предмета. То есть механизм запрещал
+    # ровно тот случай, ради которого §7 написан.
     pid = card.get("period_id")
-    if not pid:
+    unit = card.get("unit") or "party_period"
+    if unit == "faction_knesset":
+        if not card.get("faction_id") or not card.get("knesset"):
+            bad("§1", "unit: faction_knesset требует faction_id и knesset")
+        if pid:
+            bad("§1", "unit: faction_knesset и period_id одновременно — "
+                      "единица наблюдения обязана быть одна")
+    elif not pid:
         bad("§1", "нет period_id")
     elif periods and pid not in periods:
         bad("§1", f"period_id {pid!r} отсутствует в criteria/periods.yaml")
@@ -239,6 +252,55 @@ def check_card(card: dict, name: str, periods: set[str], idx: dict,
     snaps = card.get("snapshots") or {}
     if not snaps:
         bad("§11", "нет snapshots — дата снимка каждого источника обязательна")
+
+    # --- КАНАЛ А. Тематическая оговорка как механизм, а не как намерение.
+    #
+    # Выгрузка голосований — 258 из 7562 за 25-й Кнессет, то есть 3,4%, и это
+    # перепись по ОДНОЙ объявленной теме. Фраза «фракция голосовала так-то»
+    # без оговорки заставляет читателя достроить остальные 96,6% самому.
+    # В реестре замысла это стояло как designed_not_built с 31.07 и было
+    # долгом ровно до тех пор, пока карточек канала А не существовало.
+    #
+    # Оговорка требуется НЕ на карточке, а В САМОМ УТВЕРЖДЕНИИ. Причина
+    # прикладная: утверждения путешествуют отдельно от документов — их
+    # цитируют абзацем, показывают скриншотом, пересказывают. Оговорка,
+    # оставшаяся в шапке карточки, до этих мест не доезжает.
+    votes = card.get("votes")
+    if votes:
+        theme = (votes.get("theme") or "").strip()
+        cav = (votes.get("theme_caveat_ru") or "").strip()
+        if not theme:
+            bad("§А", "votes без theme — тема переписи обязана быть названа")
+        if not cav:
+            bad("§А", "votes без theme_caveat_ru — утверждение о голосованиях "
+                      "без оговорки о теме достраивается читателем")
+        # §14 — карточка держит РЕШЕНИЕ и ССЫЛКУ, а не данные. Полторы сотни
+        # голосований, вписанных в карточку, разошлись бы с выгрузкой молча,
+        # как разошлись бы кэшированные бюджетные числа. Поэтому законны две
+        # формы: ссылка на выгрузку (для настоящих карточек) либо inline-items
+        # (для случаев, где данные не из выгрузки). Ни одной из двух — отказ.
+        if not votes.get("items"):
+            if not (votes.get("source") and votes.get("faction_id")):
+                bad("§14", "votes без items обязан нести source и faction_id: "
+                           "иначе карточка утверждает о голосованиях, не "
+                           "указывая, где их проверить")
+        for i, v in enumerate(votes.get("items") or []):
+            where = f"votes.items[{i}]"
+            if not (v.get("for_option_desc") or "").strip():
+                bad("§10", f"{where}: нет for_option_desc — смысл «за» "
+                           "предполагается, а не читается")
+            if not (v.get("name_he") or "").strip():
+                bad("§12", f"{where}: нет name_he")
+            if not (v.get("name_ru") or "").strip():
+                bad("§12", f"{where}: нет name_ru")
+        concl = card.get("conclusion") or ""
+        if "голосов" in concl and cav and cav not in concl:
+            bad("§А", "вывод опирается на голосования, но не несёт оговорку "
+                      "о теме ПРИ СЕБЕ: оговорка в шапке не путешествует "
+                      "вместе с процитированным абзацем")
+    elif "голосов" in (card.get("conclusion") or ""):
+        bad("§А", "вывод говорит о голосованиях, а блока votes нет — "
+                  "утверждение не опирается на предъявленные данные")
 
     # §15 — журнал правок растёт вместе с версией
     revs = card.get("revisions") or []
@@ -435,6 +497,55 @@ def selftest() -> int:
         return len(problems)
 
     assert run(lambda c: None) == 0, f"чистая карточка не должна падать: {problems}"
+
+    # Карточка канала А: единица — фракция × Кнессет, периода нет по
+    # устройству предмета. Сначала убеждаемся, что ЧИСТАЯ такая карточка
+    # проходит: правило, которое не пропускает законный случай, бесполезнее
+    # отсутствующего, а прежняя редакция §1 не пропускала его вовсе.
+    CAV = "по вопросам правового государства"
+    votes_card = {
+        "card_version": 1, "card_type": "party", "unit": "faction_knesset",
+        "faction_id": 1103, "knesset": 25,
+        "periods_in_government": 0, "status": "not_exposed",
+        "exposure_evidence": "ноль периодов в criteria/periods.yaml",
+        "snapshots": {"votes_25": "2026-07-31"},
+        "holdout_checked": {"period": None},
+        "revisions": [{"version": 1}],
+        "conclusion": f"фракция участвовала в голосованиях {CAV}",
+        "votes": {"theme": "rule_of_law", "theme_caveat_ru": CAV,
+                  "items": [{"for_option_desc": "להעביר לוועדה",
+                             "name_he": "הצעת חוק", "name_ru": "Законопроект"}]},
+    }
+
+    def run_votes(mut) -> int:
+        problems.clear()
+        import copy
+        c = copy.deepcopy(votes_card)
+        mut(c)
+        check_card(c, "v", P, idx, titles)
+        return len(problems)
+
+    assert run_votes(lambda c: None) == 0, \
+        f"карточка канала А без периода обязана проходить: {problems}"
+    for why, mut in [
+        ("нет faction_id", lambda c: c.update(faction_id=None)),
+        ("две единицы сразу", lambda c: c.update(period_id="1095-gov37")),
+        ("нет темы", lambda c: c["votes"].update(theme="")),
+        ("нет оговорки", lambda c: c["votes"].update(theme_caveat_ru="")),
+        ("нет смысла «за» (§10)",
+         lambda c: c["votes"]["items"][0].update(for_option_desc="")),
+        ("нет иврита (§12)",
+         lambda c: c["votes"]["items"][0].update(name_he="")),
+        ("нет перевода (§12)",
+         lambda c: c["votes"]["items"][0].update(name_ru="")),
+        ("оговорка не при утверждении",
+         lambda c: c.update(conclusion="фракция голосовала против")),
+        ("вывод о голосованиях без данных",
+         lambda c: (c.pop("votes"), c.update(conclusion="голосовала против"))),
+        ("ни items, ни ссылки на выгрузку (§14)",
+         lambda c: c["votes"].pop("items")),
+    ]:
+        assert run_votes(mut) > 0, f"канал А: подлог «{why}» прошёл незамеченным"
 
     cases = [
         ("§1", lambda c: c.update(period_id="нетакого")),
