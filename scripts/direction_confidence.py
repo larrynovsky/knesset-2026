@@ -75,18 +75,40 @@ def measure(a: list[dict], o: list[dict]) -> dict:
             "unmatched_o": len(o) - len(matched_o)}
 
 
-def verdict(a: list[dict], o: list[dict]) -> tuple[str, str, dict]:
-    """(уверенность, названная причина, числа). Причина обязательна — §6."""
+def verdict(a: list[dict], o: list[dict],
+            overall: tuple | None = None) -> tuple[str, str, dict]:
+    """(уверенность, названная причина, числа). Причина обязательна — §6.
+
+    ПОПРАВКА 13.08 (criteria-revision в шапке правила). Редакция 01.08 сняла
+    прежний критерий «согласие по общему знаку» и заменила его двумя числами
+    по нормам. Замена была верной по мотиву и потеряла гарантию: вендоры
+    могут сойтись на 75% общих норм и свернуть акт в ПРОТИВОПОЛОЖНЫЕ общие
+    знаки. На живых данных таких актов два, оба числились medium — то есть
+    «уверенно классифицированными» при взаимоисключающих выводах.
+
+    Нашёл не механизм: второй агент, читая прибор. Здесь это и чинится —
+    расхождение по общему знаку опускает уровень до low с НАЗВАННОЙ
+    причиной, а не выбрасывает акт молча (§6, §7: молчание неотличимо от
+    отсутствия предмета).
+
+    `overall=None` означает «знаки не предъявлены» и НЕ означает «согласны»:
+    в этом случае поправка не применяется и уровень считается как прежде.
+    """
     m = measure(a, o)
     if not a and not o:
         return "none", "ни один вендор не выделил норм в этом акте", m
     if not a or not o:
         return "low", "один из вендоров не нашёл ни одной нормы", m
-    if m["overlap"] >= 0.60 and m["reading"] == 1.0:
+    clash = (overall is not None and len(set(overall)) > 1
+             and all(s is not None for s in overall))
+    if m["overlap"] >= 0.60 and m["reading"] == 1.0 and not clash:
         return "high", "вендоры увидели одни нормы и прочли их одинаково", m
-    if m["overlap"] >= 0.30 and m["reading"] >= 0.75:
+    if m["overlap"] >= 0.30 and m["reading"] >= 0.75 and not clash:
         return "medium", "вендоры в основном согласны: перекрытие " \
                          f"{m['overlap']:.2f}, чтение {m['reading']:.2f}", m
+    if clash:
+        return "low", ("вендоры разошлись в общем знаке акта: "
+                       + " против ".join(str(s) for s in overall)), m
     if m["overlap"] < 0.30:
         return "low", "вендоры извлекли разные множества норм", m
     return "low", "вендоры разошлись в чтении общих норм", m
@@ -120,13 +142,19 @@ def report(src: Path, pair: tuple = ("anthropic", "openai")) -> int:
     import collections
     import json
     d = json.loads(src.read_text(encoding="utf-8"))
-    levels, reasons, skipped = [], collections.Counter(), 0
+    levels, reasons, skipped, no_overall = [], collections.Counter(), 0, 0
     for r in d["rows"]:
         vs = r.get("verdicts", {})
         if any(vs.get(v, {}).get("status") != "ok" for v in pair):
             skipped += 1
             continue
-        lvl, why, _ = verdict(*(vs[v].get("norms", []) for v in pair))
+        # Отсутствие блока overall — это «знак не предъявлен», а не «знаки
+        # совпали». Считаем такие строки отдельно и печатаем: иначе поправка
+        # 13.08 молча не применится к части корпуса, и мы этого не увидим.
+        signs = tuple(vs[v].get("overall", {}).get("sign") for v in pair)
+        no_overall += any(s is None for s in signs)
+        lvl, why, _ = verdict(*(vs[v].get("norms", []) for v in pair),
+                              overall=signs)
         levels.append(lvl)
         reasons[(lvl, why.split(":")[0])] += 1
     dist = collections.Counter(levels)
@@ -136,6 +164,9 @@ def report(src: Path, pair: tuple = ("anthropic", "openai")) -> int:
     print("  " + " · ".join(f"{k} {dist.get(k, 0)}" for k in LEVELS))
     for (lvl, why), n in sorted(reasons.items(), key=lambda x: -x[1]):
         print(f"   {n:>3}  {lvl:<7} {why}")
+    if no_overall:
+        print(f"   (у {no_overall} актов общий знак не предъявлен хотя бы "
+              "одним вендором — поправка 13.08 к ним не применялась)")
     esc, msg = channel_escape(levels)
     print(("\n⚠ ПОРОГ ПРОЙДЕН: " if esc else "\nпорог не пройден: ") + msg)
     print("Порог объявлен ДО прогона: criteria/direction_confidence_2026-08-01.yaml")
@@ -197,6 +228,34 @@ def selftest() -> int:
     assert r_recall != r_read, \
         "полнота и чтение обязаны называться разными причинами: иначе §6 " \
         "получает уровень без причины, а мы не знаем, что чинить"
+
+    # --- ПОПРАВКА 13.08: расхождение по ОБЩЕМУ знаку акта. Живой случай,
+    # ради которого она написана: акт 2203822 — перекрытие 0.50, чтение 0.75,
+    # то есть medium по редакции 01.08, при знаках −1 и +1. «Уверенно
+    # классифицирован» при взаимоисключающих выводах.
+    # Четыре общих нормы, три знака совпали: чтение 0.75, перекрытие 1.00 —
+    # ровно нижняя граница medium. Первая редакция этого случая брала пять
+    # норм и давала high: проверка стерегла бы не тот уровень.
+    agree_norms = ([_n("אאא", 1), _n("בבב", -1), _n("גגג", 1), _n("דדד", 1)],
+                   [_n("אאא", 1), _n("בבב", -1), _n("גגג", 1), _n("דדד", -1)])
+    base, base_why, _ = verdict(*agree_norms)
+    assert base == "medium", f"случай-основание перестал быть medium: {base}"
+    lo, lo_why, _ = verdict(*agree_norms, overall=(-1, 1))
+    assert lo == "low", "расхождение по общему знаку обязано опускать уровень"
+    assert "общем знаке" in lo_why, \
+        "причина обязана называть ИМЕННО расхождение знаков, а не общую " \
+        "формулу: §6 требует названной причины, чтобы знать, что чинить"
+    same, same_why, _ = verdict(*agree_norms, overall=(1, 1))
+    assert (same, same_why) == (base, base_why), \
+        "совпадающие знаки не имеют права менять вердикт"
+    none_, none_why, _ = verdict(*agree_norms, overall=None)
+    assert (none_, none_why) == (base, base_why), \
+        "отсутствие знаков — не расхождение: overall=None означает «не " \
+        "предъявлено», и молчаливое понижение спрятало бы нехватку данных " \
+        "внутри содержательной причины"
+    half, _, _ = verdict(*agree_norms, overall=(1, None))
+    assert half == base, \
+        "один предъявленный знак против непредъявленного — не расхождение"
 
     # Пустой вендор — не «согласие», а названный отказ.
     assert verdict([_n("אאא", 1)], [])[0] == "low"
