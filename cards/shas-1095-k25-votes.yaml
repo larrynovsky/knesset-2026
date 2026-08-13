@@ -3,6 +3,7 @@
 # голосование оппозиции периода не имеет, и единица канала Б здесь не годится.
 # Числа не кэшируются (§14): карточка держит решение и ссылку на выгрузку.
 card_version: 1
+data_fingerprint: sha256:54acb4b232c1d4be9d461ab5f7427ddedbd4c973e6a806b66ad9c1b59f347d31
 card_type: party
 unit: faction_knesset
 faction_id: 1095
