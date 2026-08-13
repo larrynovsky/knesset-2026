@@ -142,6 +142,21 @@ def cells(card: dict, idx: dict, titles: list[str]) -> list[tuple[str, object]]:
             out.append((f"absent|{term}", sum(1 for t in titles if term in t)))
         for code in vc.REF_NOCODE.findall(concl):
             out.append((f"nocode|{code}", sum(1 for k in idx if k[0] == code)))
+    # КАНАЛ А. Без этого блока отпечаток карточки голосований — хеш пустой
+    # строки: поле в карточке есть, зелёное, и не сторожит ничего. Такой
+    # механизм хуже отсутствующего, потому что выглядит как защита. Поймано
+    # 13.08 первым же --stamp: обе новые карточки получили e3b0c442… —
+    # sha256 пустоты.
+    #
+    # Единица та же по смыслу: то, от чего зависит проза ИМЕННО этой
+    # карточки. Проза говорит «205 голосований по 138 актам», значит в
+    # отпечаток идут числа переписи и фракция, к которой они относятся.
+    v = card.get("votes")
+    if v:
+        out.append(("votes|faction", v.get("faction_id")))
+        out.append(("votes|theme", v.get("theme")))
+        for k, val in sorted((v.get("census") or {}).items()):
+            out.append((f"votes|census|{k}", val))
     return sorted(out)
 
 
@@ -650,6 +665,21 @@ def selftest() -> int:
         assert "להעביר לוועדה"  in vhtml, \
             "§10: смысл «за» обязан быть на странице, а не только в данных"
         assert "против 5"  in vhtml, "расклад фракции не отрендерен"
+        # Отпечаток карточки голосований обязан быть НЕ хешем пустоты и
+        # обязан краснеть на правке переписи. Без этих двух утверждений поле
+        # data_fingerprint у неё зелёное и не сторожит ничего — ровно то,
+        # что произошло при первом --stamp 13.08.
+        EMPTY = ("sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca4"
+                 "95991b7852b855")
+        fp_v = fingerprint(vcard, {}, [])
+        assert fp_v != EMPTY, \
+            "отпечаток карточки голосований — хеш пустоты: поле есть, " \
+            "защиты нет, и зелёное оно всегда"
+        import copy as _copy
+        moved = _copy.deepcopy(vcard)
+        moved["votes"]["census"]["acts"] = 999
+        assert fingerprint(moved, {}, []) != fp_v, \
+            "отпечаток не краснеет на правке переписи, под которую написана проза"
         vcard["votes"]["census"]["votes"] = 999
         try:
             render_votes_card(vcard)
@@ -660,7 +690,7 @@ def selftest() -> int:
     finally:
         globals()["votes_of"] = orig
 
-    print("самопроверка отчёта пройдена: 14 утверждений + 6 на карточку канала А. Напоминание: "
+    print("самопроверка отчёта пройдена: 14 утверждений + 8 на карточку канала А. Напоминание: "
           "проверено, что документ СОБИРАЕТСЯ и не врёт механически; "
           "осмысленность выводов машиной не проверяется (§24)")
     return 0
