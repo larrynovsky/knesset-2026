@@ -297,7 +297,121 @@ def render_commitment(c: dict, idx, titles, nulls) -> str:
     return "\n".join(p)
 
 
+VOTES_SRC = ROOT / "data" / "votes_25.json"
+NAMES_RU = ROOT / "docs" / "reference" / "vote_names_ru_2026-08-13.json"
+
+
+def votes_of(faction_id: int) -> list[dict]:
+    """Голосования фракции — из ВЫГРУЗКИ, не из карточки (§14).
+
+    Перевод названия берётся из справочника и сверяется якорем he_head: если
+    название в выгрузке изменилось, перевод устарел, и это ОТКАЗ сборки, а не
+    тихо разошедшаяся пара. Тот же механизм, что отпечаток чисел под прозой,
+    только для строк: там расходятся данные и суждение о них, здесь —
+    оригинал и его перевод.
+    """
+    if not VOTES_SRC.exists() or not NAMES_RU.exists():
+        raise SystemExit(f"ОТКАЗ: нет {VOTES_SRC} или {NAMES_RU}. Сборка "
+                         "страницы голосований без выгрузки невозможна; "
+                         "гнать её на MacBook нечем (§21).")
+    tr = json.loads(NAMES_RU.read_text(encoding="utf-8"))["names"]
+    out = []
+    for r in json.loads(VOTES_SRC.read_text(encoding="utf-8"))["rows"]:
+        cell = next((v for k, v in (r.get("by_faction") or {}).items()
+                     if k.split("|", 1)[0] == str(faction_id)), None)
+        if cell is None:
+            continue
+        t = tr.get(str(r["bill_id"]))
+        if not t:
+            raise SystemExit(f"ОТКАЗ §12: у акта {r['bill_id']} нет перевода "
+                             "названия — страница нечитаема для владельца")
+        if not r["bill_name"].startswith(t["he_head"]):
+            raise SystemExit(f"ОТКАЗ §12: перевод акта {r['bill_id']} устарел, "
+                             "название в выгрузке изменилось после перевода")
+        out.append({"date": r["date"][:10], "bill_id": r["bill_id"],
+                    "name_he": r["bill_name"], "name_ru": t["ru"],
+                    "for_option_desc": r.get("for_option_desc") or "",
+                    "position": cell})
+    out.sort(key=lambda x: (x["date"], x["bill_id"]))
+    return out
+
+
+POS_RU = {"for": "за", "against": "против", "abstain": "воздержались",
+          "present": "присутствовали, не голосовали"}
+
+
+def render_votes(card: dict) -> str:
+    """Перепись голосований. Отбора нет: показаны ВСЕ, и потому правила
+    отбора не требуется (§3, Snyder)."""
+    v = card["votes"]
+    cav = v.get("theme_caveat_ru") or ""
+    cen = v.get("census") or {}
+    rows = votes_of(v["faction_id"])
+    p = [f'<div class=cov><b>Перепись голосований — {esc(cav)}.</b> '
+         f'{esc(cen.get("votes"))} голосований по {esc(cen.get("acts"))} актам '
+         f'из {esc(cen.get("acts_in_theme_total"))} актов темы, '
+         f'{esc(cen.get("from"))} — {esc(cen.get("to"))}. '
+         f'Актов темы без участия фракции: {esc(cen.get("acts_without_participation"))}. '
+         f'Отбор внутри темы не производился: показаны все.</div>']
+    if len(rows) != cen.get("votes"):
+        raise SystemExit(f"ОТКАЗ §11: карточка объявляет {cen.get('votes')} "
+                         f"голосований, выгрузка даёт {len(rows)} — проза и "
+                         "данные разошлись")
+    for r in rows:
+        pos = ", ".join(f"{POS_RU.get(k, k)} {n}" for k, n in r["position"].items())
+        p.append(
+            f'<div class=vote><p class=vru>{esc(r["date"])} · {esc(r["name_ru"])}</p>'
+            f'<p class=he lang=he dir=rtl><bdi>{esc(r["name_he"])}</bdi></p>'
+            f'<p class=meta>«За» означало: <span class=he lang=he dir=rtl>'
+            f'<bdi>{esc(r["for_option_desc"])}</bdi></span></p>'
+            f'<p class=meta>Фракция: {esc(pos)}</p></div>')
+    return "\n".join(p)
+
+
+def render_votes_card(card: dict) -> str:
+    """Карточка канала А. Оговорка о теме печатается ДВАЖДЫ и намеренно:
+    в шапке переписи и внутри самого вывода. Утверждения путешествуют
+    отдельно от документов — скриншотом, абзацем, пересказом, — и оговорка,
+    оставшаяся только в шапке, до этих мест не доезжает."""
+    p = [f'<h2 id=c-f{esc(card.get("faction_id"))}>{esc(card.get("party_ru"))} '
+         f'<span class=he lang=he dir=rtl><bdi>{esc(card.get("party_he"))}'
+         f'</bdi></span></h2>']
+    snaps = card.get("snapshots") or {}
+    p.append(f'<p class=meta>{esc(card.get("knesset"))}-й Кнессет, фракция '
+             f'{esc(card.get("faction_id"))} · срез источников: '
+             + esc(", ".join(f"{k} — {v}" for k, v in sorted(snaps.items())))
+             + '</p>')
+    hold = card.get("holdout_checked") or {}
+    if not hold.get("period"):
+        p.append('<p class=meta>Проверка на отложенном периоде: '
+                 f'{esc(hold.get("outcome") or "не проводилась")}</p>')
+    p.append(f'<p class=r><b>Что документ утверждает.</b> '
+             f'{esc(card.get("conclusion"))}</p>')
+    for r in card.get("readings") or []:
+        p.append(f'<p class=r><b>{esc(READING_RU.get(r.get("type"), r.get("type")))}.'
+                 f'</b> {esc(r.get("text"))}</p>')
+    cs = card.get("counter_search") or {}
+    where = "".join(f'<li>{esc(as_text(w))}</li>'
+                    for w in cs.get("searched_where") or [])
+    p.append(f'<p class=r><b>Искал опровержение:</b> {esc(cs.get("outcome"))}</p>'
+             f'<ul class=meta>{where}</ul>')
+    if cs.get("note"):
+        p.append(f'<p class=meta>{esc(cs["note"])}</p>')
+    p.append(f'<p class=r><b>Уверенность:</b> '
+             f'{esc(CONF_RU.get(card.get("confidence")))} — '
+             f'{esc(card.get("confidence_reason"))}</p>')
+    p.append(f'<p class=r><b>Чем это опровергается.</b> '
+             f'{esc(card.get("what_would_falsify"))}</p>')
+    p.append(render_votes(card))
+    revs = "".join(f'<li>версия {esc(r.get("version"))}, {esc(r.get("date"))} — '
+                   f'{esc(r.get("what"))}</li>' for r in card.get("revisions") or [])
+    p.append(f'<p class=meta><b>Журнал правок.</b></p><ul class=meta>{revs}</ul>')
+    return "\n".join(p)
+
+
 def render_card(card: dict, idx, titles, nulls) -> str:
+    if card.get("votes"):
+        return render_votes_card(card)
     p = [f'<h2 id=c-{esc(card.get("period_id"))}>{esc(card.get("party_ru"))} '
          f'<span class=he lang=he dir=rtl><bdi>{esc(card.get("party_he"))}'
          f'</bdi></span></h2>']
@@ -495,7 +609,58 @@ def selftest() -> int:
         for f in fails:
             print(f"  ✗ {f}", file=sys.stderr)
         return 1
-    print("самопроверка отчёта пройдена: 14 утверждений. Напоминание: "
+    # --- карточка канала А. Данных на MacBook нет, поэтому выгрузка
+    # подменяется: проверяется РЕНДЕР, а не чтение файла. Чтение файла
+    # стережёт отказ в самом votes_of, и он краснеет на Studio.
+    vcard = {
+        "card_type": "party", "unit": "faction_knesset", "faction_id": 1103,
+        "knesset": 25, "party_ru": "ХАДАШ-ТААЛ", "party_he": 'חד"ש-תע"ל',
+        "snapshots": {"votes_25": "2026-07-31"},
+        "holdout_checked": {"period": None, "outcome": "не проводилась"},
+        "conclusion": "фракция голосовала по вопросам правового государства",
+        "readings": [{"type": "weakening", "text": "мало"},
+                     {"type": "reframing", "text": "иначе"}],
+        "counter_search": {"searched_where": ["выгрузка целиком"],
+                           "outcome": "nothing"},
+        "confidence": "medium", "confidence_reason": "неполнота периода",
+        "what_would_falsify": "если доля упадёт",
+        "revisions": [{"version": 1, "date": "2026-08-13", "what": "первая"}],
+        "votes": {"theme": "rule_of_law",
+                  "theme_caveat_ru": "по вопросам правового государства",
+                  "faction_id": 1103,
+                  "census": {"votes": 1, "acts": 1, "acts_in_theme_total": 144,
+                             "acts_without_participation": 39,
+                             "from": "2022-12-13", "to": "2026-07-14"}},
+    }
+    row = [{"date": "2022-12-13", "bill_id": 1, "name_he": "הצעת חוק",
+            "name_ru": "Законопроект", "for_option_desc": "להעביר לוועדה",
+            "position": {"against": 5}}]
+    orig = globals()["votes_of"]
+    try:
+        globals()["votes_of"] = lambda fid: list(row)
+        vhtml = render_votes_card(vcard)
+        assert vhtml.count("по вопросам правового государства") >= 2, \
+            "оговорка о теме обязана стоять И в шапке переписи, И в самом " \
+            "утверждении: из шапки она не доедет до процитированного абзаца"
+        assert "<table" not  in vhtml and "<script" not  in vhtml, \
+            "§13: в карточке канала А появилась таблица или скрипт — " \
+            "значит появилось чем сортировать"
+        assert "<bdi>"  in vhtml and 'dir=rtl'  in vhtml, \
+            "ивритское название без bdi/rtl переставляется на экране"
+        assert "להעביר לוועדה"  in vhtml, \
+            "§10: смысл «за» обязан быть на странице, а не только в данных"
+        assert "против 5"  in vhtml, "расклад фракции не отрендерен"
+        vcard["votes"]["census"]["votes"] = 999
+        try:
+            render_votes_card(vcard)
+            raise AssertionError("§11: расхождение переписи с выгрузкой не "
+                                 "остановило сборку — проза и данные разошлись")
+        except SystemExit:
+            pass
+    finally:
+        globals()["votes_of"] = orig
+
+    print("самопроверка отчёта пройдена: 14 утверждений + 6 на карточку канала А. Напоминание: "
           "проверено, что документ СОБИРАЕТСЯ и не врёт механически; "
           "осмысленность выводов машиной не проверяется (§24)")
     return 0
