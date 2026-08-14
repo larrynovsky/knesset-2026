@@ -304,6 +304,13 @@ def main() -> int:
                     help="выборка по форматам поровну, а не подряд — чтобы .doc точно попал")
     ap.add_argument("--from-selection", action="store_true",
                     help="брать ровно состав пилота из data/pilot_selection.json")
+    ap.add_argument("--from-votes", action="store_true",
+                    help="join-first: брать акты, за которые фракции РЕАЛЬНО "
+                         "голосовали (data/votes_25.json). Прежние режимы брали "
+                         "корпус, отобранный другим правилом, и пересечение с "
+                         "голосованиями оказалось 3 акта из 55 — классификация "
+                         "шла по актам, за которые никто из наблюдаемых не "
+                         "голосовал.")
     a = ap.parse_args()
 
     if a.selftest:
@@ -317,6 +324,16 @@ def main() -> int:
         sel = json.loads((ROOT / "data" / "pilot_selection.json").read_text(encoding="utf-8"))
         core = set(sel["selected"])
         print(f"состав пилота из pilot_selection.json: {len(core)}")
+    if a.from_votes:
+        v = json.loads((ROOT / "data" / "votes_25.json").read_text(encoding="utf-8"))
+        core = {r["bill_id"] for r in v["rows"] if r.get("bill_id")}
+        have = len([p for p in (ROOT / "data" / "bill_texts").glob("*.txt")
+                    if p.stem.isdigit() and int(p.stem) in core])
+        # §23: ожидание объявлено ДО выгрузки, вторым путём — по самой
+        # выгрузке голосований, а не по обещанию скрипта.
+        print(f"ОЖИДАНИЕ (§23): актов с голосованиями {len(core)}, "
+              f"текст уже есть у {have}, значит цель — {len(core) - have}. "
+              f"Сколько из них имеют документ нормы, неизвестно: это и меряем.")
     docs = load_docs(a.refresh)
 
     best: dict[int, dict] = {}
