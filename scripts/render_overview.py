@@ -72,7 +72,7 @@ def rows(m: dict) -> tuple[str, int, int]:
     out, total, filled = [], 0, 0
     for r in m["lines"]:
         a, b = r["a"]["status"], r["b"]["status"]
-        who = (f'<td class=who><a href="#c-f{r["anchor_id"]}">{esc(r["line"][:44])}</a>')
+        who = (f'<td class=who><a href="f-{r["anchor_id"]}.html">{esc(r["line"][:44])}</a>')
         if b == "not_exposed":
             who += ('<span class=norec>ни разу не была в правительстве</span>')
         who += "</td>"
@@ -194,8 +194,72 @@ def selftest() -> int:
     assert "лучшая-худшая" in doc, \
         "отрицание ярлыков исчезло из рамки: без него сканирование вне рамки " \
         "проходило бы и на документе, где §13 просто не объявлен читателю"
-    print("самопроверка render_overview: 13 утверждений")
+
+    # --- страница фракции: те же нормы, что у обзора, плюс крошки и §12.
+    fcard = {"party_ru": "Тест", "party_he": "\u05e4", "conclusion": "вывод",
+             "confidence": "low", "confidence_reason": "базовая линия",
+             "what_would_falsify": "если доля изменится",
+             "readings": [{"type": "weakening", "text": "раз"},
+                          {"type": "reframing", "text": "два"}],
+             "counter_search": {"searched_where": ["выгрузка"], "outcome": "nothing",
+                                "note": "искали устройство, не поведение"},
+             "votes": {"theme_caveat_ru": "по вопросам правового государства",
+                       "census": {"votes": 2, "acts": 2, "from": "2022-12-13",
+                                  "to": "2026-07-14",
+                                  "acts_without_participation": 1}}}
+    frow = {"b": {"status": "not_exposed", "note": "соглашения не подписывала"}}
+    fv = [{"date": "2022-12-13", "name_ru": "Законопроект",
+           "name_he": "\u05d4\u05e6\u05e2\u05ea", "for_option_desc": "\u05dc\u05d4\u05e2\u05d1\u05d9\u05e8",
+           "pos": "против 5"}]
+    fp = faction_page(fcard, frow, fv)
+    assert "<script" not in fp, "§13: скрипт на странице фракции"
+    assert 'content="noindex, nofollow"' in fp, "§16: нет noindex на странице фракции"
+    assert fp.index("data-frame=short") < fp.index("<h1"), \
+        "§17: короткая рамка обязана стоять ДО заголовка — читатель, пришедший " \
+        "по прямой ссылке, встречает её раньше всего остального"
+    assert "<bdi>" in fp and "dir=rtl" in fp, "§12: иврит без bdi/rtl переставляется"
+    assert "\u05dc\u05d4\u05e2\u05d1\u05d9\u05e8" in fp, "§10: смысл «за» не дошёл до страницы"
+    assert "искали, не нашли" in fp, "§7: не экспонирована — не «не дошли»"
+    assert fp.count("по вопросам правового государства") >= 1, \
+        "оговорка о теме не дошла до страницы фракции"
+    print("самопроверка render_overview: 20 утверждений")
     return 0
+
+
+def load_cards() -> dict:
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from validate_cards import load_yaml_ish
+    out = {}
+    for f in sorted((ROOT / "cards").glob("*.yaml")):
+        c = load_yaml_ish(f)
+        if c.get("unit") == "faction_knesset":
+            out[int(c["faction_id"])] = c
+    return out
+
+
+def votes_for(fid: int) -> list:
+    """Голосования фракции с переводом названия. Отказ, а не пустота."""
+    src = ROOT / "data" / "votes_25.json"
+    tr = json.loads((ROOT / "docs" / "reference"
+                     / "vote_names_ru_2026-08-13.json").read_text(encoding="utf-8"))["names"]
+    POS = {"for": "за", "against": "против", "abstain": "воздержались",
+           "present": "присутствовали, не голосовали"}
+    out = []
+    for r in json.loads(src.read_text(encoding="utf-8"))["rows"]:
+        cell = next((v for k, v in (r.get("by_faction") or {}).items()
+                     if k.split("|", 1)[0] == str(fid)), None)
+        if cell is None:
+            continue
+        t = tr.get(str(r["bill_id"]))
+        if not t or not r["bill_name"].startswith(t["he_head"]):
+            raise SystemExit(f"ОТКАЗ §12: перевод акта {r['bill_id']} отсутствует "
+                             "или устарел — страница нечитаема для владельца")
+        out.append({"date": r["date"][:10], "name_ru": t["ru"],
+                    "name_he": r["bill_name"],
+                    "for_option_desc": r.get("for_option_desc") or "",
+                    "pos": ", ".join(f"{POS.get(k, k)} {n}" for k, n in cell.items())})
+    out.sort(key=lambda x: x["date"])
+    return out
 
 
 def main() -> int:
@@ -203,12 +267,109 @@ def main() -> int:
         return selftest()
     if not MATRIX.exists():
         print(f"нет {MATRIX} — сначала scripts/coverage_matrix.py"); return 2
-    doc, total, filled = build(json.loads(MATRIX.read_text(encoding="utf-8")))
+    m = json.loads(MATRIX.read_text(encoding="utf-8"))
+    doc, total, filled = build(m)
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(doc, encoding="utf-8")
-    print(f"обзор собран: {OUT}, {len(doc)} знаков")
+    cards, pages = load_cards(), 0
+    for r in m["lines"]:
+        c = cards.get(r["anchor_id"])
+        if not c:
+            continue
+        page = faction_page(c, r, votes_for(r["anchor_id"]))
+        (OUT.parent / f"f-{r['anchor_id']}.html").write_text(page, encoding="utf-8")
+        pages += 1
+    print(f"обзор + {pages} страниц фракций -> {OUT.parent}")
     print(f"ЗАМЕР: клеток {total}, заполнено {filled}, пусто {total - filled}")
     return 0
+
+
+
+
+# ────────────────────────────────────── страницы фракций (форма f-*.html)
+SHORT_FRAME = ('<p class=frame data-frame=short>Темы выбрал автор · оценок и '
+               'баллов нет · данные — поимённые голосования Кнессета · автор — '
+               'частное лицо, без финансирования. '
+               '<a href="index.html#frame">Полная рамка</a></p>')
+CERT = {"high": "⊕⊕⊕⊕ высокая", "medium": "⊕⊕⊕◯ средняя",
+        "low": "⊕⊕◯◯ низкая", "none": "◯◯◯◯ нет"}
+READ_RU = {"weakening": "ослабляющее прочтение",
+           "strengthening": "усиливающее прочтение",
+           "reframing": "переформатирующее прочтение"}
+
+
+def det(summary: str, cert: str, inner: str, open_: bool = False) -> str:
+    o = " open" if open_ else ""
+    return (f'<details class=cell{o}><summary>{summary}'
+            f'<span class=cert>{esc(cert)}</span></summary>'
+            f'<div class=inner>{inner}</div></details>')
+
+
+def faction_page(card: dict, row: dict, votes: list) -> str:
+    """Страница фракции. Клетка оси — details, как в макете; перепись
+    голосований уходит ВНУТРЬ раскрытия, а не вываливается на страницу."""
+    ru, he = card.get("party_ru"), card.get("party_he")
+    v = card.get("votes") or {}
+    cen = v.get("census") or {}
+    cav = v.get("theme_caveat_ru", "")
+    inner1 = (f'<p><b>почему пусто</b> направление голосований мы считать пока '
+              f'не умеем: классификация встала на объявленном пороге. Пустота '
+              f'здесь про нас, а не про фракцию.</p>'
+              f'<p><b>на чём стояла бы</b> перепись {esc(cen.get("votes"))} '
+              f'голосований по {esc(cen.get("acts"))} актам, {esc(cav)}, '
+              f'{esc(cen.get("from"))} — {esc(cen.get("to"))}. Актов темы без '
+              f'участия фракции: {esc(cen.get("acts_without_participation"))}.</p>')
+    cells = [det("Суд, парламент, свободы — "
+                 '<b class=tx-miss>мы сюда не дошли</b>',
+                 "насколько мы в этом уверены: значения нет", inner1, True)]
+    if row["b"]["status"] == "not_exposed":
+        s2, c2 = ('Деньги — <b class=tx-none>искали, не нашли</b>',
+                  "не экспонирована: канал покрывает только подписавших соглашение")
+    else:
+        s2, c2 = ('Деньги — <b class=tx-miss>мы сюда не дошли</b>',
+                  "сопоставление обязательств не построено")
+    cells.append(det(s2, c2, f'<p>{esc(row["b"]["note"])}</p>'))
+    body = [f'<p class=lead>{esc(card.get("conclusion"))}</p>']
+    for r in card.get("readings") or []:
+        body.append(f'<p><b>{esc(READ_RU.get(r.get("type"), ""))}.</b> '
+                    f'{esc(r.get("text"))}</p>')
+    cs = card.get("counter_search") or {}
+    where = "".join(f"<li>{esc(w.get('источник') if isinstance(w, dict) else w)}</li>"
+                    for w in cs.get("searched_where") or [])
+    body.append(f'<div class=note><p><b>Искали, чем это опровергнуть:</b> '
+                f'{esc(cs.get("outcome"))}</p><ul class=dim>{where}</ul>'
+                f'<p class=dim>{esc(cs.get("note", ""))}</p>'
+                f'<p><b>Уверенность:</b> {esc(CERT.get(card.get("confidence")))} — '
+                f'{esc(card.get("confidence_reason"))}</p>'
+                f'<p><b>Чем это опровергается.</b> '
+                f'{esc(card.get("what_would_falsify"))}</p></div>')
+    acts = "".join(
+        f'<tr><td data-l="дата">{esc(x["date"])}</td>'
+        f'<td data-l="акт">{esc(x["name_ru"])}'
+        f'<span class="he" lang=he dir=rtl><bdi>{esc(x["name_he"])}</bdi></span></td>'
+        f'<td data-l="«за» означало"><span class=he lang=he dir=rtl>'
+        f'<bdi>{esc(x["for_option_desc"])}</bdi></span></td>'
+        f'<td data-l="фракция">{esc(x["pos"])}</td></tr>' for x in votes)
+    body.append(det(f"Все {len(votes)} голосований этой фракции — {esc(cav)}",
+                    "перепись целиком, отбора внутри темы не делалось",
+                    '<table class=acts><thead><tr><th scope=col>дата</th>'
+                    '<th scope=col>акт</th><th scope=col>«за» означало</th>'
+                    f'<th scope=col>фракция</th></tr></thead><tbody>{acts}'
+                    '</tbody></table>'))
+    return f"""<!doctype html>
+<html lang=ru><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>{esc(ru)} — 25-й Кнессет</title>
+<style>{css_from_mockup()}</style></head><body>
+<nav class=crumbs><a href="index.html">Все фракции</a> · {esc(ru)}</nav>
+{SHORT_FRAME}
+<h1>{esc(ru)} <span class=he lang=he dir=rtl><bdi>{esc(he)}</bdi></span></h1>
+{''.join(cells)}
+{''.join(body)}
+<div class=foot><p>Первый выпуск на живых данных, 13.08.2026. Форма принята
+01.08.2026. Снимок голосований: 2026-07-31.</p></div>
+</body></html>"""
 
 
 if __name__ == "__main__":
