@@ -2,6 +2,7 @@
 # Человеческого разбора конкретных голосований в этой карточке НЕТ.
 # Правки руками ведут к расхождению с генератором — правь генератор.
 card_version: 1
+data_fingerprint: sha256:6701409c9d44328d32bdb5de43dd0ffc7608df99bba208ddb9d0c0117f931dc7
 baseline: true
 card_type: party
 unit: faction_knesset
