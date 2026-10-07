@@ -157,9 +157,39 @@ def checklist_text() -> str:
     return block(r"^checklist:\n(.*?)\n# =====")
 
 
-def codebook_text() -> str:
-    """Кодбук передаётся модели дословно: это правила ЧТЕНИЯ, а не пожелание."""
-    return block(r"^direction_codebook:\n(.*?)\n^intensity:")
+K11_OPEN = "# >>> K11-ONLY-IN-1.3"
+K11_CLOSE = "# <<< K11-ONLY-IN-1.3"
+
+
+def codebook_text(k11: bool = False) -> str:
+    """Кодбук передаётся модели дословно: это правила ЧТЕНИЯ, а не пожелание.
+
+    K11 ЖИВЁТ В ЭТОМ ЖЕ ФАЙЛЕ и потому по умолчанию уезжал бы в промпт
+    вместе со всем кодбуком — то есть прогон 1.2 перестал бы быть 1.2, а
+    флаг --codebook13 перестал бы что-либо значить. Нашёл Кодекс в аудите
+    пилота 07.10; я этого не увидел, потому что моя самопроверка смотрела
+    на ШАБЛОН PROMPT, а не на СОБРАННЫЙ промпт, куда кодбук подставляется.
+    Третий раз за день оракул смотрел не на тот объект.
+
+    Поэтому блок вырезается, если флаг не поднят, и самопроверка требует
+    побайтового равенства с кодбуком до коммита, который K11 ввёл.
+    """
+    t = block(r"^direction_codebook:\n(.*?)\n^intensity:")
+    if k11:
+        return t
+    out, skip = [], False
+    for ln in t.splitlines():
+        if ln.strip().startswith(K11_OPEN):
+            skip = True
+        if not skip:
+            out.append(ln)
+        if ln.strip().startswith(K11_CLOSE):
+            skip = False
+    if skip:
+        raise SystemExit("ОТКАЗ: блок K11 открыт и не закрыт — кодбук 1.2 "
+                         "собрать нельзя, а молча собрать 1.3 под именем 1.2 "
+                         "значит потерять воспроизводимость прогона")
+    return "\n".join(out)
 
 
 # Кодбук 1.3 (K11, criteria-revision 7647175). Дополнение к промпту, а не
@@ -936,7 +966,7 @@ def control() -> int:
     models = {v: pick_model(v) for v in ("anthropic", "openai", "google")}
     print(f"КОНТРОЛЬ Ф27 · модели: {models}")
     print("ожидания закоммичены ДО прогона вместе с текстами норм\n")
-    chk, cod = checklist_text(), codebook_text()
+    chk, cod = checklist_text(), codebook_text(k11=a.codebook13)
 
     fails = []
     for c in CONTROLS:
@@ -1083,7 +1113,7 @@ def main() -> int:
                      "трёх требует трёх вендоров; с двумя большинства нет")
     models = {v: pick_model(v) for v in ("anthropic", "openai", "google")}
     print(f"модели (спрошены у вендоров, не угаданы): {models}")
-    chk, cod = checklist_text(), codebook_text()
+    chk, cod = checklist_text(), codebook_text(k11=a.codebook13)
 
     rows, stats = [], collections.Counter()
     for i, b in enumerate(targets, 1):
@@ -1615,6 +1645,31 @@ def selftest() -> int:
     # отсутствие поля — записи кодбука 1.2, они НЕ становятся неприменимыми
     assert parse(_base % '')["applicable"] is True, \
         "ответ без поля applicable задним числом объявлен неприменимым"
+    # ── 1.2 ОБЯЗАН ОСТАТЬСЯ 1.2 ──────────────────────────────────────────
+    # K11 лежит в том же файле, что весь кодбук, и по умолчанию уехал бы в
+    # промпт вместе с ним: тогда флаг ничего не значит, а прогон 1.2
+    # перестаёт быть воспроизводимым. Проверяется НЕ шаблон PROMPT, а
+    # собранный кодбук — именно на этой разнице я и промахнулся.
+    cb12, cb13 = codebook_text(), codebook_text(k11=True)
+    assert "K11" not in cb12, "K11 уехал в кодбук 1.2 — флаг обессмыслен"
+    assert "K11" in cb13, "флаг поднят, а K11 в кодбук не попал"
+    import subprocess as _sp
+    _old = _sp.run(["git", "show", "7647175^:criteria/keyvotes.yaml"],
+                   capture_output=True, text=True, cwd=str(ROOT)).stdout
+    if _old:
+        _m = re.search(r"^direction_codebook:\n(.*?)\n^intensity:", _old,
+                       re.S | re.M)
+        assert _m, "кодбук в коммите до K11 не найден — сверить не с чем"
+        # Сравнение построчное: блок пересобирается join'ом, и хвостовой
+        # перевод строки нормализуется. Содержательное расхождение любой
+        # строки эта проверка ловит.
+        assert _m.group(1).splitlines() == cb12.splitlines(), \
+            "кодбук 1.2 разошёлся с тем, что было до введения K11"
+    # собранный промпт без флага не несёт правила 1.3
+    _asm = PROMPT.format(checklist=checklist_text(), codebook=cb12,
+                         name="x", text="y")
+    assert "K11" not in _asm and "applicable" not in _asm, \
+        "правило 1.3 просочилось в СОБРАННЫЙ промпт 1.2"
     # дополнение к промпту существует и говорит ровно про это
     for w in ("applicable", "K11", "ни один пункт"):
         assert w in ADDENDUM_1_3, f"дополнение 1.3 не несёт {w!r}"
