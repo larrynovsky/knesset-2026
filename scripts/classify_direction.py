@@ -162,6 +162,40 @@ def codebook_text() -> str:
     return block(r"^direction_codebook:\n(.*?)\n^intensity:")
 
 
+# Кодбук 1.3 (K11, criteria-revision 7647175). Дополнение к промпту, а не
+# новый промпт: меняется ровно одна вещь. Включается флагом, по умолчанию
+# выключено — иначе перезапуск прогона 1.2 молча сменил бы кодбук на ходу
+# и смешал два состава в одном файле.
+ADDENDUM_1_3 = """
+НЕПРИМЕНИМОСТЬ — ЭТО НЕ НОЛЬ И НЕ ПРОЧЕРК (K11, добавлено 07.10.2026).
+Ноль утверждает про ЗАКОН: предмет оси затронут, баланс не меняется.
+Прочерк (null) утверждает про ТЕБЯ: предмет затронут, но ты не выбрал знак.
+Есть третий случай, и до сегодня ему не было места: ни один пункт чек-листа
+этим законом НЕ ЗАТРОНУТ ВОВСЕ. Это утверждение про ЧЕК-ЛИСТ, а не про закон,
+и оно обязано стоять отдельно.
+
+Замер, из-за которого правило появилось: на 130 актах прогона 07.10 вендоры
+спорили о направлении в 5 случаях, а в 22 один давал знак, второй ноль — и в
+15 из них второй писал «прошёл по всем пунктам, ни один не подошёл». То есть
+ноль собирал в себя «закон ничего не меняет» и «чек-лист сюда не
+дотягивается», а это разные вещи, и вторая обязана менять чек-лист, не
+вердикт о партии.
+
+Поэтому в overall добавлено поле "applicable":
+  "applicable": true  — хотя бы один пункт чек-листа закон затрагивает.
+                        Дальше всё как раньше: знак −1, 0, +1 или null.
+  "applicable": false — НИ ОДИН пункт не затронут. Тогда ОБЯЗАТЕЛЬНО:
+                        "sign": null, "norms": [], и заполненный
+                        "no_norms_reason" — какие пункты проверены и почему
+                        ни один не подошёл.
+Ответ с "applicable": false и непустым norms отвергается: это противоречие
+внутри одного ответа, а не осторожность.
+
+Что НЕ является неприменимостью: закон про предмет оси, который ничего в
+балансе не меняет (это ноль); закон, где эффект двунаправленный (это null);
+закон, текста которого не хватило (это null с причиной в confidence_reason).
+"""
+
 PROMPT = """Ты классифицируешь ИЗРАИЛЬСКИЙ ЗАКОНОПРОЕКТ по одной оси: меняет ли он
 сдержки исполнительной власти. Работаешь по чек-листу и кодбуку ниже — они
 неизменяемы, это зафиксированные критерии проекта.
@@ -579,6 +613,19 @@ def parse(txt: str) -> dict | None:
     # вендора, тексты не обрезаны. Пометка, а не отказ.
     d["norms_empty_unexplained"] = bool(
         not norms and not str(d.get("no_norms_reason") or "").strip())
+    # K11. Поля может не быть вовсе — записи кодбука 1.2 его не несут, и
+    # отсутствие трактуется как «применимо»: иначе старые ответы задним
+    # числом стали бы неприменимыми. А вот ПРОТИВОРЕЧИЕ внутри ответа —
+    # отказ: «ни один пункт не затронут» вместе с найденными нормами
+    # означает, что модель статус не поняла, и принимать такое молча
+    # значит мерить не то, что объявлено.
+    app = ov.get("applicable")
+    if app is False:
+        if norms or s is not None:
+            return None
+        if not str(d.get("no_norms_reason") or "").strip():
+            return None
+    d["applicable"] = True if app is None else bool(app)
     return d
 
 
@@ -982,6 +1029,10 @@ def main() -> int:
                     help="состав прогона (по умолчанию data/pilot_selection.json). "
                          "Оракул берётся из того же файла: подложенные акты с "
                          "известным знаком — проверка, что вендор не угадывает.")
+    ap.add_argument("--codebook13", action="store_true",
+                    help="кодбук 1.3: статус «неприменимо» (K11). По умолчанию "
+                         "ВЫКЛЮЧЕНО — перезапуск прогона 1.2 обязан "
+                         "воспроизводить 1.2, а не сменить кодбук на ходу")
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--control", action="store_true",
                     help="Ф27: подложенные нормы с известным знаком")
@@ -1057,7 +1108,10 @@ def main() -> int:
             rows.append(row)
             continue
 
-        prompt = PROMPT.format(checklist=chk, codebook=cod, name=name, text=text_cut)
+        prompt = PROMPT.format(checklist=chk, codebook=cod, name=name,
+                               text=text_cut)
+        if a.codebook13:
+            prompt += ADDENDUM_1_3
         for v, model in models.items():
             try:
                 txt, usage = cached_call(v, model, prompt, b)
@@ -1248,7 +1302,7 @@ def main() -> int:
 
     out_path.write_text(json.dumps(
         {"at": datetime.now(timezone.utc).isoformat(), "models": models,
-         "codebook_version": "1.2",
+         "codebook_version": "1.3" if a.codebook13 else "1.2",
          "quorum_kinds": dict(kinds),
          "selected": len(sel["selected"]), "attempted": len(targets),
          "no_text": no_text, "stats": dict(stats),
@@ -1534,6 +1588,38 @@ def selftest() -> int:
     assert "и +1, и −1" in PROMPT, (
         "промпт перестал называть условие, при котором basis_note обязателен, "
         "а валидатор его требует — модель наказывается за неназванное")
+
+    # ── K11: НЕПРИМЕНИМОСТЬ (кодбук 1.3) ────────────────────────────────
+    OVF = {"sign": None, "applicable": False, "quote_he": "", "quote_ru": "",
+           "confidence": "high", "confidence_reason": "чек-лист не затронут",
+           "argument_against": "", "basis_note": ""}
+    ok13 = json.dumps({"overall": OVF, "norms": [],
+                       "no_norms_reason": "прошёл все пункты A–G, ни один не подошёл"})
+    r = parse(ok13)
+    assert r is not None and r["applicable"] is False, \
+        "осознанная неприменимость обязана приниматься (K11)"
+    assert parse(json.dumps({"overall": OVF, "norms": []})) is None, \
+        "неприменимость без названной причины — пропуск, а не отказ (K11)"
+    contra = json.dumps({"overall": OVF, "norms": [
+        {"checklist_item": "A3", "sign": -1, "quote_he": "х", "quote_ru": "х",
+         "what_changes": "даёт право"}],
+        "no_norms_reason": "ни один не подошёл"})
+    assert parse(contra) is None, \
+        "«ни один пункт не затронут» вместе с найденной нормой — противоречие " \
+        "внутри одного ответа, и принимать его молча значит мерить не то"
+    withsign = json.dumps({"overall": dict(OVF, sign=0), "norms": [],
+                           "no_norms_reason": "ни один не подошёл"})
+    assert parse(withsign) is None, \
+        "неприменимость со знаком обязана отвергаться: ноль утверждает про " \
+        "закон, неприменимость — про чек-лист"
+    # отсутствие поля — записи кодбука 1.2, они НЕ становятся неприменимыми
+    assert parse(_base % '')["applicable"] is True, \
+        "ответ без поля applicable задним числом объявлен неприменимым"
+    # дополнение к промпту существует и говорит ровно про это
+    for w in ("applicable", "K11", "ни один пункт"):
+        assert w in ADDENDUM_1_3, f"дополнение 1.3 не несёт {w!r}"
+    assert "applicable" not in PROMPT, \
+        "поле 1.3 просочилось в базовый промпт — тогда флаг ничего не значит"
 
     print(f"самопроверка механики v1.2 пройдена: {n_asserts(selftest)} утверждений")
     return 0
