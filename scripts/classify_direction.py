@@ -978,6 +978,10 @@ def main() -> int:
                     help="объявленное ДО прогона ожидание (§23). "
                          "Расхождение с фактом печатается, но не блокирует.")
     ap.add_argument("--out", default=None, help="путь результата (по умолчанию direction_pilot.json)")
+    ap.add_argument("--selection", default=None,
+                    help="состав прогона (по умолчанию data/pilot_selection.json). "
+                         "Оракул берётся из того же файла: подложенные акты с "
+                         "известным знаком — проверка, что вендор не угадывает.")
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--control", action="store_true",
                     help="Ф27: подложенные нормы с известным знаком")
@@ -990,7 +994,9 @@ def main() -> int:
     out_path = Path(a.out) if a.out else OUT
     load_secrets()
 
-    sel = json.loads(SELECTION.read_text(encoding="utf-8"))
+    sel_path = Path(a.selection) if a.selection else SELECTION
+    sel = json.loads(sel_path.read_text(encoding="utf-8"))
+    print(f"состав из {sel_path}")
     scan = json.loads((ROOT / "data" / "bills_scan.json").read_text(encoding="utf-8"))
     names = {m["id"]: m["name"] for m in scan["matched"]}
     oracle = {o["bill"]: o for o in sel["oracle"]}
