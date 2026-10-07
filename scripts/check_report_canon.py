@@ -27,6 +27,7 @@
     python3 scripts/check_report_canon.py <каталог> --selftest
 """
 import re, sys, pathlib, html as _h
+import hashlib, shutil, subprocess, tempfile
 
 # ─────────────────────────────────────────────────────────────── канон отчёта
 CLOSED = ["укрепляла", "ослабляла", "и туда и обратно",
@@ -318,12 +319,216 @@ def selftest(src):
     print(f"САМОПРОВЕРКА ПРОЙДЕНА: {len(CHECKS)} проверок, {total} подложенных нарушений, все пойманы")
     return 0
 
+
+# §14, §24: состав принятого макета проверяется независимо от генератора.
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+
+# В макете восемь страниц, но четыре из них — ПРИМЕРЫ на живых именах:
+# `f-likud.html`, `f-yahadut.html`, `f-hayamin.html`, `f-generic.html` и
+# `c-likud-inst-in.html`. Сборка выпускает `f-<id фракции>.html` и
+# `c-<...>.html` по данным, и файла с именем `f-likud.html` не будет никогда.
+# Первая редакция этой проверки требовала СОВПАДЕНИЯ ИМЁН и потому была
+# красной вечно — то есть хуже отсутствующей: вечно красную проверку
+# перестают читать, и это ровно тот механизм, из-за которого 01.08
+# предупреждение о неработающей сверке бюджетных чисел проскроллили
+# тринадцать раз. Поэтому одиночные страницы сверяются по имени, а
+# страницы-по-сущности — по виду, с требованием хотя бы одной.
+KINDS = {"f-": "страница фракции", "c-": "страница карточки"}
+
+
+def check_outputs(site, mock):
+    expected = {p.relative_to(mock).as_posix() for p in mock.rglob("*.html")}
+    actual = {p.relative_to(site).as_posix() for p in site.rglob("*.html")}
+    if not expected:
+        raise ValueError("ОТКАЗ §14: макет пуст — сверять состав не с чем")
+    singles = {n for n in expected if not any(n.startswith(k) for k in KINDS)}
+    missing = sorted(singles - actual)
+    for pref, label in KINDS.items():
+        if any(n.startswith(pref) for n in expected) \
+                and not any(n.startswith(pref) for n in actual):
+            missing.append(f"{label} (ни одной {pref}*.html)")
+    if missing:
+        raise ValueError("ОТКАЗ §14: страницы принятого макета отсутствуют "
+                         "в сборке: " + ", ".join(missing))
+    # Дополнительные страницы фракций разрешены: набор зависит от данных.
+    unexpected = {name for name in actual - expected
+                  if not any(name.startswith(k) for k in KINDS)}
+    if unexpected:
+        raise ValueError("ОТКАЗ §14: посторонние HTML в сборке: "
+                         + ", ".join(sorted(unexpected)))
+    for p in site.rglob("*"):
+        if p.is_symlink() or (p.is_file() and p.suffix != ".html"
+                              and p.relative_to(site).as_posix() != "robots.txt"):
+            raise ValueError(f"ОТКАЗ §14: посторонний файл в сборке: {p.name}")
+    robots = site / "robots.txt"
+    if not robots.is_file() or re.search(r"^\s*Disallow\s*:", robots.read_text(), re.M | re.I):
+        raise ValueError("ОТКАЗ §16: robots.txt отсутствует или запрещает обход")
+
+
+def build_site(root, destination):
+    # Пустой каталог исключает маскировку недобора остатками прежней сборки.
+    destination.mkdir()
+    command = ("import sys; import render_overview as r; "
+               "from pathlib import Path; r.OUT=Path(sys.argv[1])/'index.html'; "
+               "sys.exit(r.main())")
+    subprocess.run([sys.executable, "-c", command, str(destination)],
+                   cwd=root / "scripts", check=True)
+    (destination / "robots.txt").write_text("User-agent: *\nAllow: /\n", encoding="utf-8")
+    check_outputs(destination, root / "design/mockup_v5")
+    src = {p.relative_to(destination).as_posix(): p.read_text(encoding="utf-8")
+           for p in destination.rglob("*.html")}
+    if report(run(src)):
+        raise ValueError("ОТКАЗ: сборка нарушает канон")
+
+
+def hashes(directory):
+    return {p.relative_to(directory).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted(directory.rglob("*")) if p.is_file()}
+
+
+def compare_builds(first, second):
+    if hashes(first) != hashes(second):
+        raise ValueError("ОТКАЗ §14: состав или sha256 файлов двух сборок различается")
+
+
+def reproduce(root):
+    with tempfile.TemporaryDirectory(prefix="knesset-reproduce-") as tmp:
+        snapshot = pathlib.Path(tmp) / "snapshot"
+        # Только входы текущего render_overview; копия не является согласованным
+        # срезом источников (§11) или архивом прежней публикации.
+        for name in ("scripts", "cards", "design/mockup_v5", "docs/reference"):
+            shutil.copytree(root / name, snapshot / name,
+                            ignore=shutil.ignore_patterns("__pycache__"))
+        (snapshot / "data").mkdir()
+        for name in ("coverage_matrix.json", "votes_25.json"):
+            shutil.copyfile(root / "data" / name, snapshot / "data" / name)
+        first, second = pathlib.Path(tmp) / "first", pathlib.Path(tmp) / "second"
+        build_site(snapshot, first)
+        build_site(snapshot, second)
+        compare_builds(first, second)
+        print(f"§14: две сборки render_overview совпали: {len(hashes(first))} файлов; "
+              "проверена детерминированность на локальной копии входов")
+
+
+def selftest_reproduce():
+    with tempfile.TemporaryDirectory(prefix="knesset-repro-test-") as tmp:
+        root = pathlib.Path(tmp)
+        mock, site = root / "mock", root / "site"
+        mock.mkdir(); site.mkdir()
+        for name in ("index.html", "f-example.html"):
+            (mock / name).write_text("example")
+            (site / name).write_text("example")
+        (site / "robots.txt").write_text("User-agent: *\nAllow: /\n")
+        check_outputs(site, mock)
+        other = root / "other"
+        shutil.copytree(site, other)
+        compare_builds(site, other)
+        # Каждый подлог меняет настоящий файл и вызывает рабочий оракул.
+        for label, path, content, oracle in (
+            ("добавленная страница макета", mock / "new.html", "new",
+             lambda: check_outputs(site, mock)),
+            ("изменённая страница фракции", other / "f-example.html", "changed",
+             lambda: compare_builds(site, other)),
+            ("лишний файл во второй сборке", other / "extra.txt", "extra",
+             lambda: compare_builds(site, other)),
+            ("посторонний файл для публикации", site / "private.json", "{}",
+             lambda: check_outputs(site, mock)),
+            ("посторонняя HTML-страница", site / "private.html", "private",
+             lambda: check_outputs(site, mock)),
+        ):
+            before = path.read_bytes() if path.exists() else None
+            path.write_text(content)
+            try:
+                try:
+                    oracle()
+                except ValueError as e:
+                    print(f"КРАСНЫЙ ({label}): {e}")
+                else:
+                    raise AssertionError(f"мёртвый оракул: {label}")
+            finally:
+                if before is None: path.unlink()
+                else: path.write_bytes(before)
+        # Интеграция того же пути сборки: управляемый renderer выдаёт макет.
+        # Это контроль обёртки, не доказательство работы реального renderer.
+        fixture = root / "fixture"
+        for name in ("scripts", "cards", "docs/reference", "data"):
+            (fixture / name).mkdir(parents=True)
+        shutil.copytree(ROOT / "design/mockup_v5", fixture / "design/mockup_v5")
+        for name in ("coverage_matrix.json", "votes_25.json"):
+            (fixture / "data" / name).write_text("{}")
+        renderer = fixture / "scripts/render_overview.py"
+        renderer.write_text(
+            "from pathlib import Path\nimport shutil\n"
+            "def main():\n"
+            "    mock = Path(__file__).resolve().parents[1]/'design/mockup_v5'\n"
+            "    for p in mock.glob('*.html'): shutil.copyfile(p, OUT.parent/p.name)\n"
+            "    return 0\n")
+        reproduce(fixture)
+        # Теперь источник формы расширился, а генератор новую страницу теряет.
+        renderer.write_text(renderer.read_text().replace(
+            "mock.glob('*.html')", "[p for p in mock.glob('*.html') if p.name != 'new.html']"))
+        (fixture / "design/mockup_v5/new.html").write_text("new")
+        try:
+            reproduce(fixture)
+        except ValueError as e:
+            assert "new.html" in str(e), str(e)
+            print(f"КРАСНЫЙ (две сборки, страница потеряна генератором): {e}")
+        else:
+            raise AssertionError("reproduce пропустил потерянную страницу")
+        (fixture / "design/mockup_v5/new.html").unlink()
+        renderer.write_text(renderer.read_text().replace(
+            "    return 0", "    import time\n"
+            "    p = OUT.parent/'f-likud.html'\n"
+            "    p.write_text(p.read_text() + '<!--' + str(time.time_ns()) + '-->')\n"
+            "    return 0"))
+        try:
+            reproduce(fixture)
+        except ValueError as e:
+            assert "sha256" in str(e), str(e)
+            print(f"КРАСНЫЙ (недетерминированный renderer): {e}")
+        else:
+            raise AssertionError("reproduce пропустил недетерминированную страницу фракции")
+    print("САМОПРОВЕРКА §14 ПРОЙДЕНА")
+    return 0
+
 if __name__ == "__main__":
+    try:
+        if "--selftest-reproduce" in sys.argv:
+            sys.exit(selftest_reproduce())
+        if "--reproduce" in sys.argv:
+            reproduce(ROOT)
+            sys.exit(0)
+        if "--build" in sys.argv:
+            with tempfile.TemporaryDirectory(prefix=".site-build-", dir=ROOT) as tmp:
+                output = pathlib.Path(tmp) / "site"
+                build_site(ROOT, output)
+                target = ROOT / "site"
+                if target.is_symlink():
+                    raise ValueError("ОТКАЗ: site/ — символическая ссылка")
+                previous = pathlib.Path(tmp) / "previous"
+                if target.exists(): target.rename(previous)
+                try:
+                    output.rename(target)
+                except OSError:
+                    if previous.exists(): previous.rename(target)
+                    raise
+            sys.exit(0)
+    except (ValueError, OSError, subprocess.CalledProcessError) as e:
+        print(f"ОТКАЗ сборки: {e}", file=sys.stderr)
+        sys.exit(1)
+
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     d = pathlib.Path(args[0] if args else "site")
     files = sorted(d.glob("*.html"))
     if not files:
         print(f"ОТКАЗ: в {d} нет ни одного HTML — проверять нечего")
         sys.exit(2)
+    try:
+        if d.resolve() != (ROOT / "design/mockup_v5").resolve():
+            check_outputs(d, ROOT / "design/mockup_v5")
+    except ValueError as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)
     src = {f.name: f.read_text(encoding="utf-8") for f in files}
     sys.exit(selftest(src) if "--selftest" in sys.argv else (1 if report(run(src)) else 0))

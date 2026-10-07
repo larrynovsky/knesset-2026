@@ -17,11 +17,13 @@
 from __future__ import annotations
 
 import json
+import http.client
 import socket
 import ssl
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -48,10 +50,36 @@ class ShortRead(RuntimeError):
     """Выгрузка вернула не столько, сколько обещал независимый счётчик."""
 
 
-def _get(url: str, timeout: int = 60) -> dict:
-    req = urllib.request.Request(url, headers=UA)
-    with urllib.request.urlopen(req, timeout=timeout, context=CTX) as r:
-        return json.loads(r.read())
+# Повтор на обрыве сети. Это НЕ оптимизация: 07.10.2026 выгрузка поимённых
+# умерла на 994-м голосовании из 1809 на RemoteDisconnected, и час работы
+# пропал целиком, потому что строки жили только в памяти. Лестница
+# минимализма прямо исключает экономию на «обработке ошибок, теряющей
+# данные» — это ровно тот случай. Повторяется только обрыв и 5xx: на 4xx
+# повтор бессмыслен и маскирует неверный запрос.
+RETRY_ON = (http.client.RemoteDisconnected, http.client.IncompleteRead,
+            ConnectionResetError, TimeoutError, socket.timeout)
+
+
+def _get(url: str, timeout: int = 60, attempts: int = 4) -> dict:
+    last: Exception | None = None
+    for k in range(attempts):
+        try:
+            req = urllib.request.Request(url, headers=UA)
+            with urllib.request.urlopen(req, timeout=timeout, context=CTX) as r:
+                return json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            if e.code < 500:
+                raise
+            last = e
+        except (urllib.error.URLError, *RETRY_ON) as e:
+            inner = getattr(e, "reason", None)
+            if isinstance(e, urllib.error.URLError) and not isinstance(
+                    inner, (*RETRY_ON, OSError)):
+                raise
+            last = e
+        if k + 1 < attempts:
+            time.sleep(2 ** k)
+    raise ShortRead(f"сеть не отдала {url[:80]}… за {attempts} попыток: {last!r}")
 
 
 def count(entity: str, flt: str = "") -> int:
@@ -469,5 +497,58 @@ if __name__ == "__main__":
     assert unsynced() == ["X|"], "изменившиеся цифры не пойманы"
     _ROOT, MANIFEST = _real_root, _real_manifest
     print("  OK: потеря обнаружена, flush её закрыл")
+
+    # ---- повтор на обрыве: обязан пережить обрыв и НЕ прятать 4xx --------
+    print("повтор на обрыве сети: обрыв переживается, 404 — нет...")
+    _real_open = urllib.request.urlopen
+    _calls = {"n": 0}
+
+    class _Fake:
+        def __init__(self, payload): self._p = payload
+        def read(self): return json.dumps(self._p).encode()
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    def _flaky(req, **kw):
+        _calls["n"] += 1
+        if _calls["n"] < 3:
+            raise http.client.RemoteDisconnected("оборвано")
+        return _Fake({"ok": True})
+
+    urllib.request.urlopen = _flaky
+    try:
+        assert _get("https://example.invalid/x") == {"ok": True}, \
+            "повтор не довёл запрос до успеха"
+        assert _calls["n"] == 3, f"попыток {_calls['n']}, а обрывов было два"
+        _calls["n"] = 0
+
+        def _always(req, **kw):
+            _calls["n"] += 1
+            raise http.client.RemoteDisconnected("оборвано")
+
+        urllib.request.urlopen = _always
+        try:
+            _get("https://example.invalid/x", attempts=2)
+            print("  ПРОВАЛ: бесконечный обрыв не стал отказом")
+            raise SystemExit(1)
+        except ShortRead:
+            assert _calls["n"] == 2, "повторов больше объявленного"
+
+        def _404(req, **kw):
+            _calls["n"] += 1
+            raise urllib.error.HTTPError("u", 404, "no", {}, None)
+
+        _calls["n"] = 0
+        urllib.request.urlopen = _404
+        try:
+            _get("https://example.invalid/x")
+            print("  ПРОВАЛ: 404 проглочен повтором")
+            raise SystemExit(1)
+        except urllib.error.HTTPError:
+            assert _calls["n"] == 1, \
+                "404 повторялся — повтор маскирует неверный запрос"
+        print("  OK: обрыв пережит, лимит соблюдён, 404 не повторяется")
+    finally:
+        urllib.request.urlopen = _real_open
 
     print("самопроверка пройдена")

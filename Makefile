@@ -1,26 +1,7 @@
-# knesset — воспроизводимость (§14) одной командой.
-#
-# §14 говорит: любая цифра в отчёте получается прогоном скриптов репозитория
-# из чистого клона. До сегодняшнего дня это не проверялось ни разу — здесь
-# оно становится командой, которая краснеет.
-#
-# Что `reproduce` НЕ доказывает, и это надо знать заранее:
-#   * он зависит от доступности obudget. Источник лёг — цель красная, хотя
-#     репозиторий цел. Это не ложное срабатывание: невоспроизводимо сегодня
-#     значит невоспроизводимо сегодня;
-#   * он не перепрогоняет OCR соглашений. Цитаты хранятся в карточке как
-#     данные, а §14 разрешает ручной шаг, записанный как данные. Числа —
-#     единственное, что берётся из выгрузки, и они здесь и проверяются;
-#   * он доказывает, что документ СОБИРАЕТСЯ и повторяется, а не что выводы
-#     в нём осмысленны. Осмысленность машиной неотличима (§24).
-#
-# На Studio ssh не видит Homebrew:
-#   make PY=/opt/homebrew/bin/python3.11 reproduce
-
+# §14: детерминированность локальной сборки, не восстановление источников.
 PY ?= python3
-SHA := shasum -a 256
 
-.PHONY: help check check-net fetch fetch-report validate report stamp reproduce layout selftest
+.PHONY: help check check-net fetch fetch-report validate report stamp reproduce layout selftest repro-selftest
 
 help:
 	@echo "check      — самопроверки без сети (валидатор карточки, генератор, §3, §24)"
@@ -31,11 +12,12 @@ help:
 	@echo "validate   — контракт карточки на реальных данных"
 	@echo "report     — собрать site/"
 	@echo "stamp      — пересчитать отпечатки карточек (осознанное действие)"
-	@echo "reproduce  — §14: выгрузка -> проверки -> две сборки -> сверка"
+	@echo "reproduce  — §14: локальный снимок -> две сборки render_overview -> сверка всех файлов"
 
 check:
 	$(PY) scripts/validate_cards.py --selftest
-	$(PY) scripts/build_report.py --selftest
+	$(PY) scripts/render_overview.py --selftest
+	$(PY) scripts/check_report_canon.py --selftest-reproduce
 	$(PY) scripts/check_criteria_order.py
 	$(PY) scripts/check_artifacts.py
 
@@ -54,7 +36,7 @@ validate:
 	$(PY) scripts/validate_cards.py
 
 report:
-	$(PY) scripts/build_report.py
+	$(PY) scripts/check_report_canon.py --build
 
 stamp:
 	$(PY) scripts/build_report.py --stamp
@@ -74,22 +56,15 @@ layout:
 # браузер. Названо вслух, чтобы не считалось сторожем.
 selftest:
 	$(PY) scripts/validate_cards.py --selftest
-	$(PY) scripts/build_report.py --selftest
+	$(PY) scripts/render_overview.py --selftest
+	$(PY) scripts/check_report_canon.py --selftest-reproduce
 	$(PY) scripts/check_report_canon.py site --selftest
 	$(PY) scripts/check_layout.py site --selftest
 
-# Две сборки подряд на одних данных обязаны совпасть побайтово. Расхождение
-# означает, что в документ просочилось что-то, чего нет во входе, — время
-# сборки, порядок обхода словаря, случайность. Такой отчёт нельзя ни
-# проверить, ни сравнить с предыдущим.
-# Перевыгружается ТОЛЬКО raw_budget: отчёт читает его и ничего больше.
-# Тянуть сюда budget_changes значило бы поставить воспроизводимость
-# документа в зависимость от источника, которого в документе нет, — 31.07
-# obudget перестал отвечать на count(1) по этой таблице, и §23 отказал.
-reproduce: check fetch-report validate report
-	$(SHA) site/index.html > .repro.sha
-	$(PY) scripts/build_report.py
-	@$(SHA) site/index.html | diff - .repro.sha > /dev/null \
-	  && echo "§14: две сборки на одних данных совпали побайтово" \
-	  || { echo "ОТКАЗ §14: сборка недетерминирована" >&2; exit 1; }
-	@rm -f .repro.sha
+# Никакой сети и записи в data/. Входы копируются один раз; это не архив публикации.
+# Последовательные вызовы внутри скрипта безопасны и при make -j.
+reproduce:
+	$(PY) scripts/check_report_canon.py --reproduce
+
+repro-selftest:
+	$(PY) scripts/check_report_canon.py --selftest-reproduce

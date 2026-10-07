@@ -701,6 +701,11 @@ def main() -> int:
     if "--selftest" in sys.argv:
         return selftest()
 
+    if "--stamp" not in sys.argv:
+        raise Refuse("старый генератор выведен из сборки сайта (§14); "
+                     "используйте make report (render_overview). "
+                     "site/ не изменён; post-receive должен вызывать make report")
+
     paths = sorted(CARDS.glob("*.yaml")) if CARDS.exists() else []
     if not paths:
         raise Refuse("карточек нет — публиковать нечего")

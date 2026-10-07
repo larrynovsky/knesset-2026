@@ -70,7 +70,11 @@ OUT = ROOT / "data" / "votes_25.json"
 # KNS_PlenumVote НЕ имеет поля KnessetNum — режется по дате, и это ловушка,
 # а не удобство: сдвиг границы на день тихо меняет корпус.
 K25_START = "2022-11-15T00:00:00Z"
-K25_END = "2026-07-18T00:00:00Z"
+# Горизонт ставится там, где кончились данные, а не там, где кончился
+# календарь. Счётчик источника 07.10.2026: после 18.07 — 22 голосования, все
+# одним заседанием 28.07; после 01.09 — ноль. Прежняя граница 2026-07-18
+# отрезала последнее заседание 25-го Кнессета.
+K25_END = "2026-09-01T00:00:00Z"
 K25_NUM = 25
 
 
@@ -234,6 +238,59 @@ def classify_divergence(by_name_pairs: set, direct: dict,
     return out
 
 
+def dump_divergences(root: Path, cls3: dict[str, list], heads: list[dict],
+                     by_id: dict[int, dict], typ: dict[tuple, set]) -> int:
+    """Материал для человеческих вердиктов: 42 случая с обеих сторон ключа.
+
+    Гейт §3 в main требует вердикт по каждому содержательному расхождению и
+    каждой потере. Вынести вердикт, не видя случая, нельзя — а увидеть его
+    было нечем: разбор печатал только числа по классам. Эта ветка печатает
+    сами случаи и заодно отвечает на P22–P24, объявленные 01.08.2026 в
+    criteria/declared_before_divergence_2026-08-01.yaml ДО этого разбора.
+
+    Ничего не решает за человека: вердикт в выводе пустой.
+    """
+    hb = {h["Id"]: h for h in heads}
+    sids = [h["SessionID"] for h in heads if h.get("SessionID")]
+    lo, hi = min(sids), max(sids)
+    rows = json.loads((root / "data" / f"plm_session_items_{lo}_{hi}.json")
+                      .read_text(encoding="utf-8"))["rows"]
+    pair_n: collections.Counter = collections.Counter(
+        (r["PlenumSessionID"], r["ItemID"]) for r in rows)
+
+    cases = [(v, n, d, "содержательное") for v, n, d in cls3["содержательное"]]
+    cases += [(v, n, d, "потеря") for v, n, d in cls3["потеря"]]
+    assert len(cases) == len(cls3["содержательное"]) + len(cls3["потеря"]), (
+        "случаи потерялись между классами и выводом")
+
+    same_law = uniq = 0
+    out = []
+    for vid, nb, db, klass in cases:
+        h = hb[vid]
+        nm, dm = by_id[nb], (by_id[db] if db is not None else None)
+        one = pair_n[(h.get("SessionID"), h.get("ItemID"))] == 1
+        uniq += one
+        law = dm is not None and law_head(nm["name"]) == law_head(dm["name"])
+        same_law += law
+        out.append({"vote_id": vid, "class": klass, "date": h["VoteDateTime"][:10],
+                    "vote_title": h.get("VoteTitle"), "session": h.get("SessionID"),
+                    "item": h.get("ItemID"), "by_name": {"id": nb, "name": nm["name"]},
+                    "direct": None if dm is None else {"id": db, "name": dm["name"]},
+                    "same_law_head": law, "pair_unique": one, "verdict": ""})
+
+    n39 = len(cls3["содержательное"])
+    print(f"\nP22 · один закон, разные поправки: {same_law} из {n39} "
+          f"({same_law / max(n39, 1):.0%}) — объявлено «половина и более»")
+    print(f"P23 · пара (сессия, пункт) единственна: {uniq} из {len(cases)} "
+          f"({uniq / max(len(cases), 1):.0%}) — объявлено «80% и более»")
+    print(f"P24 · потерь прямого ключа: {len(cls3['потеря'])}")
+    dst = root / "data" / "vote_link_divergences.json"
+    dst.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"\n{len(out)} случаев -> {dst}")
+    print("Вердикты пустые: решает человек, не этот код.")
+    return 0
+
+
 def load_adjudication(root: Path) -> dict[int, str]:
     """Вердикты по содержательным расхождениям: vote_id → вердикт.
 
@@ -339,10 +396,35 @@ def resolve_person(by_person: dict, by_name: dict, rec: dict) -> int | None:
     return cands.copy().pop() if len(cands) == 1 else None
 
 
-def fetch_named_votes(vote_id: int) -> list[dict]:
-    """Поимённые по одному голосованию. §23: ожидание берётся счётчиком."""
-    return fetch_all("KNS_PlenumVoteResult", flt=f"VoteID eq {vote_id}",
+NAMED_CACHE = ROOT / "data" / "named_votes_cache"
+
+
+def fetch_named_votes(vote_id: int, use_cache: bool = True) -> list[dict]:
+    """Поимённые по одному голосованию. §23: ожидание берётся счётчиком.
+
+    КЭШ ПО ГОЛОСОВАНИЮ, ЧТОБЫ ОБРЫВ НЕ СТОИЛ ЧАСА. 07.10.2026 выгрузка
+    умерла на 994-м голосовании из 1809, и все 994 пропали: они жили только
+    в памяти. Повтор в guarded_fetch закрывает одиночный обрыв, но не падение
+    процесса, не Ctrl-C и не разряженный ноутбук.
+
+    Граница, которую надо знать: кэш делает возобновлённый прогон СМЕСЬЮ
+    моментов. Для поимённых результатов прошедшего голосования это почти
+    безопасно — голосование состоялось, перекличка по нему не меняется. Почти,
+    а не точно: 07.10 тот же источник потерял 5 голосований из нашего окна
+    задним числом. Поэтому у каждой записи стоит `at`, прогон печатает возраст
+    самой старой взятой из кэша, а `--no-vote-cache` выключает кэш целиком.
+    """
+    f = NAMED_CACHE / f"{vote_id}.json"
+    if use_cache and f.exists():
+        d = json.loads(f.read_text(encoding="utf-8"))
+        return d["rows"]
+    rows = fetch_all("KNS_PlenumVoteResult", flt=f"VoteID eq {vote_id}",
                      select="MkId,VoteID,VoteDate,ResultCode,ResultDesc,LastName,FirstName")
+    NAMED_CACHE.mkdir(parents=True, exist_ok=True)
+    f.write_text(json.dumps({"vote_id": vote_id, "rows": rows,
+                             "at": datetime.now(timezone.utc).isoformat()},
+                            ensure_ascii=False), encoding="utf-8")
+    return rows
 
 
 # Коды результата 25-го Кнессета (SOURCES): 6 присутствовал · 7 за · 8 против
@@ -359,6 +441,11 @@ def main() -> int:
                     help="не доверять кэшу пунктов повестки, выгрузить заново")
     ap.add_argument("--limit-votes", type=int, default=0,
                     help="сколько сшитых голосований выкачать поимённо (0 = все)")
+    ap.add_argument("--no-vote-cache", action="store_true",
+                    help="не брать поимённые из кэша по голосованию, качать заново")
+    ap.add_argument("--dump-divergences", action="store_true",
+                    help="напечатать сами расхождения и выйти: материал для "
+                         "вердиктов, которых требует гейт §3. Ничего не решает.")
     a = ap.parse_args()
 
     bills = load_bills()                      # контроль: по имени
@@ -414,6 +501,9 @@ def main() -> int:
     for k, v in cls3.items():
         print(f"   {len(v):>4}  {k}")
 
+    if a.dump_divergences:
+        return dump_divergences(ROOT, cls3, heads, bills_by_id, typ)
+
     verdicts = load_adjudication(ROOT)
     need = [t for t in cls3["содержательное"] + cls3["потеря"]
             if t[0] not in verdicts]
@@ -444,8 +534,12 @@ def main() -> int:
     print(f"выкачиваю поимённые по {len(targets)} голосованиям…\n")
 
     rows, unbridged = [], collections.Counter()
+    from_cache = []
     for i, h in enumerate(targets, 1):
-        named = fetch_named_votes(h["Id"])
+        cf = NAMED_CACHE / f"{h['Id']}.json"
+        if not a.no_vote_cache and cf.exists():
+            from_cache.append(json.loads(cf.read_text(encoding="utf-8"))["at"])
+        named = fetch_named_votes(h["Id"], use_cache=not a.no_vote_cache)
         by_fac: dict = collections.defaultdict(collections.Counter)
         for r in named:
             pid = resolve_person(by_person, by_name, r)
@@ -487,6 +581,12 @@ def main() -> int:
     for key, n in facs.most_common():
         print(f"   {key:44} голосов {n}")
 
+    if from_cache:
+        oldest = min(from_cache)
+        print(f"\nиз кэша по голосованию взято {len(from_cache)} из "
+              f"{len(targets)}; самая старая запись — {oldest[:19]}. "
+              f"Возобновлённый прогон — смесь моментов, и это видно здесь, "
+              f"а не в примечании (--no-vote-cache выключает кэш).")
     OUT.write_text(json.dumps({
         "at": datetime.now(timezone.utc).isoformat(),
         "knesset": K25_NUM, "window": [K25_START, K25_END],

@@ -15,9 +15,9 @@
 но структурно полный артефакт пройдёт — и это принято, потому что
 осмысленность машинно неотличима.
 
-Побочный продукт — docs/reference/ENFORCEMENT.md: таблица «§ → механизм»,
-СГЕНЕРИРОВАННАЯ из кода, а не написанная рукой. Свод заявляет Enforcement сам
-о себе; сгенерированная таблица показывает, правда ли это.
+Побочный продукт — docs/reference/ENFORCEMENT.md: заявленный Enforcement
+и упоминания правил в коде. Упоминание не подтверждает работу механизма
+(инвариант mention_is_not_mechanism в subsystem_intent.yaml).
 
 Выход: 0 — чисто · 1 — нарушения · 2 — внутренняя ошибка (блок, не warn).
 """
@@ -104,7 +104,7 @@ def rules_mentioned_in_code() -> dict[str, set[str]]:
 
 # ------------------------------------------------------ A. свод против кода
 def check_enforcement_claims(rules: dict, hits: dict) -> None:
-    """Самая важная проверка: заявленный LIVE обязан иметь код, который его знает."""
+    """LIVE требует упоминания; обратное неверно и механизм не доказан."""
     for num, r in sorted(rules.items(), key=lambda x: int(x[0])):
         claimed, mentioned = r["enforcement"], hits.get(num, set())
         if claimed == "?":
@@ -115,9 +115,8 @@ def check_enforcement_claims(rules: dict, hits: dict) -> None:
         elif claimed == "LIVE" and not mentioned:
             fail(f"§{num} заявлен LIVE, но НИ ОДИН файл в scripts/ его не упоминает — "
                  f"свод врёт о себе ({r['title']})")
-        elif claimed == "MANUAL" and mentioned:
-            note(f"§{num} заявлен MANUAL, но код его знает ({', '.join(sorted(mentioned))}) — "
-                 "свод отстал, поднять до PARTIAL/LIVE")
+        # MANUAL с упоминаниями допустим: это не свидетельство механизма.
+        # Список остаётся в ENFORCEMENT.md, без шума на каждом коммите.
 
 
 # --------------------------------------------- B. обход guarded_fetch (§23)
@@ -272,17 +271,19 @@ def check_hooks_installed() -> None:
 def write_enforcement(rules: dict, hits: dict) -> None:
     ENFORCEMENT.parent.mkdir(parents=True, exist_ok=True)
     lines = [
-        "# ENFORCEMENT — что реально стоит на страже",
+        "# ENFORCEMENT — заявления свода и упоминания в коде",
         "",
         "**Файл СГЕНЕРИРОВАН** `scripts/check_artifacts.py`. Руками не править:",
         "правка будет затёрта, а расхождение с кодом — это и есть то, что файл ловит.",
         "",
-        "Столбец «заявлено» берётся из `CLAUDE.md`, столбец «код знает» — из",
-        "упоминаний `§N` в `scripts/`. Расхождение означает, что свод говорит о себе",
-        "неправду. Совпадение НЕ означает, что механизм хорош: он ловит отсутствие",
-        "носителя, а не его качество (§24).",
+        "Столбец «заявлено» берётся из `CLAUDE.md`, «файлы с упоминанием» — из",
+        "текстового поиска `§N` в `scripts/`, включая комментарии и ссылки на чужие своды.",
+        "Упоминание не механизм (инвариант `mention_is_not_mechanism` в",
+        "`subsystem_intent.yaml`): оно не доказывает ни наличие проверки, ни её работу.",
+        "MANUAL с упоминаниями допустим; оснований повышать Enforcement здесь нет.",
+        "Проверка (A) блокирует LIVE без упоминаний, но их наличие не подтверждает LIVE.",
         "",
-        "| § | правило | заявлено | код знает |",
+        "| § | правило | заявлено | файлы с упоминанием |",
         "|---|---|---|---|",
     ]
     for num, r in sorted(rules.items(), key=lambda x: int(x[0])):
@@ -295,6 +296,33 @@ def write_enforcement(rules: dict, hits: dict) -> None:
 
 
 def main() -> int:
+    if "--selftest" in sys.argv:
+        # Настоящий файл с одним комментарием: сканер видит текст, не защиту.
+        from tempfile import TemporaryDirectory
+        from unittest.mock import patch
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "mention_only.py").write_text("# §22\n", encoding="utf-8")
+            with patch.multiple(sys.modules[__name__], SCRIPTS=root,
+                                ENFORCEMENT=root / "ENFORCEMENT.md",
+                                problems=[], notes=[]):
+                rules = {"22": {"title": "только комментарий", "enforcement": "MANUAL"}}
+                hits = rules_mentioned_in_code()
+                assert hits == {"22": {"mention_only.py"}}, hits
+                check_enforcement_claims(rules, hits)
+                assert not problems and not notes, (problems, notes)
+                assert rules["22"]["enforcement"] == "MANUAL"
+                write_enforcement(rules, hits)
+                doc = ENFORCEMENT.read_text(encoding="utf-8")
+                assert "| MANUAL | mention_only.py |" in doc
+                assert "Упоминание не механизм" in doc
+                assert "код знает" not in doc
+                rules["22"]["enforcement"] = "LIVE"
+                check_enforcement_claims(rules, {})
+                assert len(problems) == 1, "LIVE без упоминания должен краснеть"
+        print("check_artifacts selftest: комментарий не механизм; LIVE без упоминания — отказ")
+        return 0
     rules = parse_rules()
     if not rules:
         fail("не разобрал ни одного § из CLAUDE.md — сломан парсер или формат свода")
