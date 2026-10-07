@@ -137,7 +137,8 @@ def load_yaml_ish(path: Path) -> dict:
             if len(sub_lines) > 1:
                 raise ValueError(
                     f"элемент списка {sub_lines[0][1][:40]!r} продолжается "
-                    "следующими строками — объяви его через `- >-`")
+                    "следующими строками — объедини значение в одну строку, "
+                    "например `- первая строка вторая строка`")
             return scalar(sub_lines[0][1]), i
         val, _ = parse(sub_lines, 0, sub_lines[0][0])
         return val, i
@@ -148,8 +149,11 @@ def load_yaml_ish(path: Path) -> dict:
             return None
         if s in ("true", "false"):
             return s == "true"
-        if re.fullmatch(r"-?\d+", s):
+        # Ведущие нули несущие: 0022010203 — код, а не количество.
+        if re.fullmatch(r"-?(?:0|[1-9][0-9]*)", s):
             return int(s)
+        if re.fullmatch(r"[+-]?(?:0|[1-9][0-9]*)\.[0-9]+", s):
+            return float(s)
         if s.startswith("[") and not s.endswith("]"):
             # Тот же класс: список в потоковой форме, разорванный переносом.
             # `[553, 557,` разбирался как СТРОКА, и шесть номеров из
@@ -275,6 +279,29 @@ def check_card(card: dict, name: str, periods: set[str], idx: dict,
     # прикладная: утверждения путешествуют отдельно от документов — их
     # цитируют абзацем, показывают скриншотом, пересказывают. Оговорка,
     # оставшаяся в шапке карточки, до этих мест не доезжает.
+    # ── Решение по оси: закрытые списки, иначе клетка покажет что угодно ──
+    ax = card.get("axis_institutions")
+    if ax:
+        ARROWS = ("up", "down", "both", "none", "miss")
+        GRADES = ("high", "moderate", "low", "very_low")
+        if ax.get("arrow") not in ARROWS:
+            bad("§13", f"axis_institutions.arrow: {ax.get('arrow')!r} вне "
+                       f"закрытого списка {ARROWS} — принятый макет других "
+                       f"значений в клетке не несёт")
+        if ax.get("level") not in GRADES:
+            bad("§6", f"axis_institutions.level: {ax.get('level')!r} вне "
+                      f"{GRADES} — уровень определённости объявлен четырьмя")
+        if ax.get("arrow") in ("up", "down", "both") \
+                and not (ax.get("text") or "").strip():
+            bad("§6", "стрелка есть, а формулировки при ней нет: читатель "
+                      "увидит знак без того, на чём он стоит")
+        if not card.get("votes"):
+            bad("§А", "решение по оси без блока votes: стрелка стоит на "
+                      "голосованиях, которых карточка не предъявляет")
+        if card.get("status") == "lineage_unresolved":
+            bad("§7", "стрелка у строки без установленной связи с фракцией — "
+                      "наследование чужих голосований запрещено")
+
     votes = card.get("votes")
     if votes:
         theme = (votes.get("theme") or "").strip()
@@ -602,13 +629,28 @@ def selftest() -> int:
         ("уверенность без причины (§6)",
          lambda c: c.update(confidence_reason="")),
         ("нечем опровергнуть", lambda c: c.update(what_would_falsify="")),
+        # Решение по оси: пять значений клетки и четыре уровня — закрытые
+        # списки. Шестое значение нарисовалось бы в макете чем угодно.
+        ("стрелка вне пяти значений",
+         lambda c: c.update(axis_institutions={
+             "arrow": "сильно вниз", "level": "moderate", "text": "т"})),
+        ("уровень вне четырёх",
+         lambda c: c.update(axis_institutions={
+             "arrow": "down", "level": "очень высокая", "text": "т"})),
+        ("стрелка без формулировки",
+         lambda c: c.update(axis_institutions={
+             "arrow": "down", "level": "moderate", "text": "  "})),
+        ("стрелка у строки без связи с фракцией",
+         lambda c: (c.update(status="lineage_unresolved"),
+                    c.update(axis_institutions={
+                        "arrow": "down", "level": "moderate", "text": "т"}))),
     ]
     # Число провокаций закреплено. Провокация, удалённая молча, — это снятая
     # защита, и снятие видно только диффом, если счётчик стоит рядом. Ровно
     # так уже врал счётчик утверждений в classify_direction: считал строки,
     # а не разбор.
-    assert len(votes_cases) == 18, \
-        f"подлогов канала А стало {len(votes_cases)}, а было 18: провокация " \
+    assert len(votes_cases) == 22, \
+        f"подлогов канала А стало {len(votes_cases)}, а было 22: провокация " \
         "не удаляется без правки этого числа"
     for why, mut in votes_cases:
         assert run_votes(mut) > 0, f"канал А: подлог «{why}» прошёл незамеченным"
@@ -680,6 +722,7 @@ def selftest() -> int:
         ("многострочный скаляр без >-", "a: начало\n  продолжение\n"),
         ("разорванный потоковый список", "a: [1, 2,\n   3]\n"),
         ("элемент списка с продолжением", "a:\n  - раз\n    два\n"),
+        ("блочный скаляр элемента списка", "a:\n  - >-\n    первая строка\n    вторая строка\n"),
     ]
     for pname, text in parser_cases:
         f = Path(tempfile.mkdtemp()) / "c.yaml"
@@ -689,8 +732,30 @@ def selftest() -> int:
             print(f"САМОПРОВЕРКА ПРОВАЛЕНА: разборщик проглотил {pname!r}",
                   file=sys.stderr)
             return 1
-        except ValueError:
-            pass
+        except ValueError as exc:
+            if pname == "блочный скаляр элемента списка":
+                advice = re.findall(r"`([^`]+)`", str(exc))
+                assert len(advice) == 1, "нет однозначного примера в подсказке"
+                f.write_text("a:\n  " + advice[0] + "\n", encoding="utf-8")
+                assert load_yaml_ish(f) == {"a": ["первая строка вторая строка"]}, \
+                    "подсказка разборщика не сохраняет полный элемент списка"
+    # Положительные числа и похожие на них строки: проверяем и тип, и значение.
+    with tempfile.TemporaryDirectory() as td:
+        f = Path(td) / "scalar.yaml"
+        for raw, expected in [
+            ("0.800", 0.8), ("-12.50", -12.5), ("+0.25", 0.25),
+            ("0.0", 0.0), ("2026-10-07", "2026-10-07"),
+            ("1.2.3", "1.2.3"), ("25", 25), ("0", 0), ("-25", -25),
+            ("0022010203", "0022010203"), ("00.800", "00.800"),
+            ("-01.2", "-01.2"), ("+01.2", "+01.2"),
+            ('"0.800"', "0.800"), ("'0022010203'", "0022010203"),
+        ]:
+            f.write_text(f"knesset: {raw}\nitems:\n  - {raw}\n", encoding="utf-8")
+            d = load_yaml_ish(f)
+            for actual in (d["knesset"], d["items"][0]):
+                assert type(actual) is type(expected) and actual == expected, \
+                    f"скаляр {raw!r}: получено {actual!r} ({type(actual).__name__}), " \
+                    f"ожидалось {expected!r} ({type(expected).__name__})"
     assert load_yaml_ish_ok(), "разборщик перестал понимать корректный YAML"
 
     bad = [name for name, mut in cases if run(mut) == 0]

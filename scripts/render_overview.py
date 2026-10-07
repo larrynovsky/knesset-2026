@@ -61,14 +61,15 @@ FRAME = """<div class=note id=frame data-frame=full>
 произошло; вывод — ваш.</p>
 <p class=dim><b>Это первый выпуск на живых данных.</b> Почти все клетки ниже
 пусты, и пустота эта — про нас, а не про партии: направление голосований мы
-считать пока не умеем. Что известно про каждую фракцию, лежит в карточках.</p>
+считать пока не умеем. Что известно про каждую фракцию — на её странице.</p>
 <p class=dim style="margin-bottom:0"><b>Автор — частное лицо,</b> проект никто
 не финансирует и ни с кем не согласовывал. Ошибки тут авторские.</p>
 </div>"""
 
 
-def rows(m: dict) -> tuple[str, int, int]:
+def rows(m: dict, cards: dict | None = None) -> tuple[str, int, int]:
     """Строки обзора. Возвращает разметку, число клеток и число заполненных."""
+    cards = cards or {}
     out, total, filled = [], 0, 0
     for r in m["lines"]:
         a, b = r["a"]["status"], r["b"]["status"]
@@ -76,12 +77,19 @@ def rows(m: dict) -> tuple[str, int, int]:
         if b == "not_exposed":
             who += ('<span class=norec>ни разу не была в правительстве</span>')
         who += "</td>"
-        # Колонка «суд, парламент, свободы»: направление. Его нет ни у одной
-        # строки — классификация встала. Единственное честное значение — miss.
-        # Исключение: строка без связи с фракцией не «не дошли», а неизвестно
-        # чья, и это другое состояние.
-        k1 = "miss" if a == "observed" else "miss"
-        c1 = cell(k1, "голосования по теме правового государства")
+        # Колонка «суд, парламент, свободы»: направление берётся из РЕШЕНИЯ
+        # карточки, а не считается здесь — генератор ничего не выводит сам.
+        # Строка без установленной связи с фракцией стрелки не получает НИ
+        # ПРИ КАКОМ решении: там неизвестно, чья это фракция, и наследование
+        # запрещено (§7, lineage_unresolved — отдельное состояние, а не
+        # «мы не дошли»).
+        ax = (cards.get(r["anchor_id"]) or {}).get("axis_institutions") or {}
+        k1 = ax.get("arrow", "miss") if a == "observed" else "miss"
+        if k1 not in CELL:
+            raise SystemExit(f"ОТКАЗ: стрелка {k1!r} вне закрытого списка "
+                             f"{tuple(CELL)} — макет других значений не несёт")
+        lab1 = ax.get("text") or "голосования по теме правового государства"
+        c1 = cell(k1, lab1)
         total += 1
         if k1 not in ("miss", "none"):
             filled += 1
@@ -100,8 +108,8 @@ def rows(m: dict) -> tuple[str, int, int]:
     return "\n".join(out), total, filled
 
 
-def build(m: dict) -> tuple[str, int, int]:
-    body, total, filled = rows(m)
+def build(m: dict, cards: dict | None = None) -> tuple[str, int, int]:
+    body, total, filled = rows(m, cards)
     miss = total - filled
     doc = f"""<!doctype html>
 <html lang=ru><head><meta charset="utf-8">
@@ -142,6 +150,29 @@ def build(m: dict) -> tuple[str, int, int]:
     return doc, total, filled
 
 
+def jargon(page: str) -> str | None:
+    """Наш внутренний язык на странице читателя: фрагмент или None.
+
+    Список слов и правило живут в scripts/check_report_canon.py — он
+    существует с 01.08.2026 и зовётся только из Makefile, то есть защищал
+    вызов, а не правило (§24). Первый за два месяца прогон 07.10 нашёл
+    90 попаданий на всех пятнадцати страницах фракций: генератор написан
+    13.08, уже ПОСЛЕ проверки, и ни разу ею не проверялся. Поэтому страж
+    стоит здесь, где разметка рождается, и зовётся из main на каждой
+    настоящей странице, а не только на образцах самопроверки.
+    """
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from check_report_canon import FORBIDDEN
+    t = re.sub(r"<style>.*?</style>", " ", page, flags=re.S)
+    t = re.sub(r"<!--.*?-->", " ", t, flags=re.S)
+    t = re.sub(r"<[^>]+>", " ", t).lower()
+    for rule in FORBIDDEN:
+        m = re.search(rule, t)
+        if m:
+            return f"«{t[max(0, m.start() - 30):m.end() + 30].strip()}» по правилу {rule!r}"
+    return None
+
+
 def selftest() -> int:
     m = {"lines": [
         {"anchor_id": 1, "line": "правившая",
@@ -153,6 +184,27 @@ def selftest() -> int:
         "source": {"votes_at": "2026-07-31"}}
     doc, total, filled = build(m)
     assert total == 6, f"клеток {total}, а строк три по две колонки"
+    assert filled == 0, "без решения в карточке клетка не имеет права заполниться"
+
+    # ── СТРЕЛКА ИЗ КАРТОЧКИ ДОХОДИТ ДО КЛЕТКИ, И ТОЛЬКО ОТТУДА ────────────
+    cards_ok = {1: {"axis_institutions": {"arrow": "down", "level": "moderate",
+                                          "text": "вероятно ослабляла; у нас 23 актов из 40"}}}
+    doc2, total2, filled2 = build(m, cards_ok)
+    assert (total2, filled2) == (6, 1), f"решение не доехало до клетки: {filled2}"
+    assert "вероятно ослабляла" in doc2, "формулировка карточки не дошла до обзора"
+    assert "↓" in doc2, "знак стрелки не дошёл до клетки"
+    # строка без связи с фракцией стрелки не получает НИ ПРИ КАКОМ решении
+    cards_lin = {3: {"axis_institutions": {"arrow": "up", "level": "high",
+                                           "text": "укрепляла"}}}
+    doc3, _, filled3 = build(m, cards_lin)
+    assert filled3 == 0, \
+        "строка со статусом lineage_unresolved получила стрелку — §7 обойдён"
+    # значение вне закрытого списка макета — отказ, а не тихая отрисовка
+    try:
+        build(m, {1: {"axis_institutions": {"arrow": "сильно вниз"}}})
+        raise AssertionError("значение вне пяти принятых проехало в клетку")
+    except SystemExit as e:
+        assert "вне закрытого списка" in str(e)
     assert "<script" not in doc, "§13: в выводе появился JavaScript"
     assert 'content="noindex, nofollow"' in doc, "§16: нет noindex"
     assert doc.index("data-frame=full") < doc.index("<table"), \
@@ -222,7 +274,45 @@ def selftest() -> int:
     assert "искали, не нашли" in fp, "§7: не экспонирована — не «не дошли»"
     assert fp.count("по вопросам правового государства") >= 1, \
         "оговорка о теме не дошла до страницы фракции"
-    print("самопроверка render_overview: 20 утверждений")
+
+    # Наш внутренний язык на странице читателя. Правило и список слов живут в
+    # scripts/check_report_canon.py — он существует с 01.08 и имеет вызов
+    # только в Makefile, то есть защищал вызов, а не правило (§24). Утром
+    # 07.10 его первый за два месяца прогон нашёл 90 попаданий на всех
+    # пятнадцати страницах фракций. Проверка переносится ТУДА, ГДЕ РОЖДАЕТСЯ
+    # разметка, чтобы её нельзя было не позвать.
+    # страница фракции со стрелкой: уровень и формулировка обязаны доехать,
+    # а внутренний язык — не появиться вместе с ними
+    fcard2 = dict(fcard)
+    fcard2["axis_institutions"] = {
+        "arrow": "down", "level": "moderate", "acts": 23, "theme_total": 40,
+        "down": 19, "up": 4,
+        "text": "вероятно ослабляла; у нас 23 актов из 40"}
+    fp2 = faction_page(fcard2, frow, fv)
+    assert "вероятно ослабляла" in fp2 and "умеренная" in fp2, \
+        "решение или уровень не дошли до страницы фракции"
+    # Стиль вырезается ПЕРЕД проверкой: в комментарии палитры принятого
+    # макета стоит «штриховка = мы сюда не дошли» — про фактуру, не про
+    # клетку. Первая редакция этой провокации покраснела на нём, то есть
+    # проверка ловила макет вместо вывода. Тот же класс промаха уже был
+    # дважды за 01.08 и один раз за 13.08 — грубая проверка запрещает то,
+    # что защищает.
+    axis_cell = re.sub(r"<style>.*?</style>", " ", fp2, flags=re.S) \
+        .split("</details>")[0]
+    assert "мы сюда не дошли" not in axis_cell, \
+        "клетка со стрелкой всё ещё говорит «не дошли»"
+    assert "ослабляла" in axis_cell, "знак стрелки не дошёл до клетки оси"
+    assert jargon(fp2) is None, "внутренний язык приехал вместе со стрелкой"
+
+    assert jargon(doc) is None and jargon(fp) is None, "жаргон на образцах"
+    # МУТАНТ: страж обязан краснеть. Зелёный страж и мёртвый страж выглядят
+    # одинаково, отличить их по выводу нельзя — только подлогом.
+    assert jargon(fp.replace("<h1", "<p>Так решил валидатор.</p><h1", 1)) \
+        is not None, "страж внутреннего языка мёртв: подложенный «валидатор» не найден"
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from classify_direction import n_asserts
+    print(f"самопроверка render_overview: {n_asserts(selftest)} утверждений "
+          "(включая мутант стража внутреннего языка)")
     return 0
 
 
@@ -268,15 +358,24 @@ def main() -> int:
     if not MATRIX.exists():
         print(f"нет {MATRIX} — сначала scripts/coverage_matrix.py"); return 2
     m = json.loads(MATRIX.read_text(encoding="utf-8"))
-    doc, total, filled = build(m)
+    cards = load_cards()
+    doc, total, filled = build(m, cards)
+    bad = jargon(doc)
+    if bad:
+        print(f"ОТКАЗ: внутренний язык в обзоре: {bad}")
+        return 1
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(doc, encoding="utf-8")
-    cards, pages = load_cards(), 0
+    pages = 0
     for r in m["lines"]:
         c = cards.get(r["anchor_id"])
         if not c:
             continue
         page = faction_page(c, r, votes_for(r["anchor_id"]))
+        bad = jargon(page)
+        if bad:
+            print(f"ОТКАЗ: внутренний язык на f-{r['anchor_id']}.html: {bad}")
+            return 1
         (OUT.parent / f"f-{r['anchor_id']}.html").write_text(page, encoding="utf-8")
         pages += 1
     print(f"обзор + {pages} страниц фракций -> {OUT.parent}")
@@ -293,6 +392,10 @@ SHORT_FRAME = ('<p class=frame data-frame=short>Темы выбрал автор
                '<a href="index.html#frame">Полная рамка</a></p>')
 CERT = {"high": "⊕⊕⊕⊕ высокая", "medium": "⊕⊕⊕◯ средняя",
         "low": "⊕⊕◯◯ низкая", "none": "◯◯◯◯ нет"}
+# Четыре уровня GRADE из объявленного правила стрелки. Отдельно от CERT:
+# тот про уверенность карточки целиком, этот — про одну клетку оси.
+CERT_GRADE = {"high": "⊕⊕⊕⊕ высокая", "moderate": "⊕⊕⊕◯ умеренная",
+              "low": "⊕⊕◯◯ низкая", "very_low": "⊕◯◯◯ очень низкая"}
 READ_RU = {"weakening": "ослабляющее прочтение",
            "strengthening": "усиливающее прочтение",
            "reframing": "переформатирующее прочтение"}
@@ -306,22 +409,39 @@ def det(summary: str, cert: str, inner: str, open_: bool = False) -> str:
 
 
 def faction_page(card: dict, row: dict, votes: list) -> str:
-    """Страница фракции. Клетка оси — details, как в макете; перепись
+    """Страница фракции. Клетка оси — details, как в макете; счёт
     голосований уходит ВНУТРЬ раскрытия, а не вываливается на страницу."""
     ru, he = card.get("party_ru"), card.get("party_he")
     v = card.get("votes") or {}
     cen = v.get("census") or {}
     cav = v.get("theme_caveat_ru", "")
-    inner1 = (f'<p><b>почему пусто</b> направление голосований мы считать пока '
-              f'не умеем: классификация встала на объявленном пороге. Пустота '
-              f'здесь про нас, а не про фракцию.</p>'
-              f'<p><b>на чём стояла бы</b> перепись {esc(cen.get("votes"))} '
-              f'голосований по {esc(cen.get("acts"))} актам, {esc(cav)}, '
-              f'{esc(cen.get("from"))} — {esc(cen.get("to"))}. Актов темы без '
-              f'участия фракции: {esc(cen.get("acts_without_participation"))}.</p>')
-    cells = [det("Суд, парламент, свободы — "
-                 '<b class=tx-miss>мы сюда не дошли</b>',
-                 "насколько мы в этом уверены: значения нет", inner1, True)]
+    ax = card.get("axis_institutions") or {}
+    if ax.get("arrow") in ("up", "down", "both"):
+        inner1 = (f'<p><b>что мы увидели</b> {esc(ax.get("text"))}</p>'
+                  f'<p><b>из чего</b> {esc(ax.get("acts"))} актов из '
+                  f'{esc(ax.get("theme_total"))}, в сторону ослабления '
+                  f'{esc(ax.get("down"))}, в сторону укрепления '
+                  f'{esc(ax.get("up"))}.</p>'
+              f'<p><b>на чём стояла бы</b> на {esc(cen.get("votes"))} '
+              f'голосованиях по {esc(cen.get("acts"))} актам, {esc(cav)}, '
+                  f'{esc(cen.get("from"))} — {esc(cen.get("to"))}. Актов темы без '
+                  f'участия фракции: {esc(cen.get("acts_without_participation"))}.</p>')
+        head1 = (f'Суд, парламент, свободы — '
+                 f'<b>{CELL[ax["arrow"]][0]} {CELL[ax["arrow"]][1]}</b>')
+        cert1 = ("насколько мы в этом уверены: "
+                 + CERT_GRADE.get(ax.get("level"), "значения нет"))
+    else:
+        inner1 = (f'<p><b>почему пусто</b> направление голосований мы считать '
+                  f'пока не умеем: классификация встала на объявленном '
+                  f'пороге. Пустота здесь про нас, а не про фракцию.</p>'
+                  f'<p><b>на чём стояла бы</b> на {esc(cen.get("votes"))} '
+                  f'голосованиях по {esc(cen.get("acts"))} актам, {esc(cav)}, '
+                  f'{esc(cen.get("from"))} — {esc(cen.get("to"))}. Актов темы без '
+                  f'участия фракции: {esc(cen.get("acts_without_participation"))}.</p>')
+        head1 = ('Суд, парламент, свободы — '
+                 '<b class=tx-miss>мы сюда не дошли</b>')
+        cert1 = "насколько мы в этом уверены: значения нет"
+    cells = [det(head1, cert1, inner1, True)]
     if row["b"]["status"] == "not_exposed":
         s2, c2 = ('Деньги — <b class=tx-none>искали, не нашли</b>',
                   "не экспонирована: канал покрывает только подписавших соглашение")
@@ -351,7 +471,8 @@ def faction_page(card: dict, row: dict, votes: list) -> str:
         f'<bdi>{esc(x["for_option_desc"])}</bdi></span></td>'
         f'<td data-l="фракция">{esc(x["pos"])}</td></tr>' for x in votes)
     body.append(det(f"Все {len(votes)} голосований этой фракции — {esc(cav)}",
-                    "перепись целиком, отбора внутри темы не делалось",
+                    "здесь все голосования, которые мы учли; "
+                    "внутри темы мы ничего не отбирали",
                     '<table class=acts><thead><tr><th scope=col>дата</th>'
                     '<th scope=col>акт</th><th scope=col>«за» означало</th>'
                     f'<th scope=col>фракция</th></tr></thead><tbody>{acts}'
