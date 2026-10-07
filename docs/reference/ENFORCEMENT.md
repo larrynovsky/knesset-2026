@@ -21,14 +21,14 @@ MANUAL с упоминаниями допустим; оснований повы
 | §7 | Ноль периодов правления ⇒ матрица экспозиции, а не базовая ставка. | PARTIAL | check_artifacts.py, coverage_matrix.py, direction_confidence.py, fetch_votes.py, guarded_fetch.py, render_overview.py, validate_cards.py |
 | §8 | Интерпретация проверяется на отложенном периоде. | PARTIAL | select_pilot.py, validate_cards.py |
 | §9 | Голосования только из `knesset.gov.il/OdataV4/ParliamentInfo`. | PARTIAL | build_report.py, fetch_votes.py, guarded_fetch.py, pre-commit, render_overview.py |
-| §10 | Смысл «за» не предполагается, а читается. | PARTIAL | build_report.py, direction_confidence.py, fetch_votes.py, render_overview.py, slice_party_theme.py, validate_cards.py |
+| §10 | Смысл «за» не предполагается, а читается. | PARTIAL | build_report.py, direction_confidence.py, fetch_votes.py, render_card_page.py, render_overview.py, slice_party_theme.py, validate_cards.py |
 | §11 | Единый срез. | PARTIAL | build_line_cards.py, build_report.py, check_report_canon.py, fetch_budget.py, map_commitments.py, probe_phase0.py, validate_cards.py |
-| §12 | Ивритский оригинал хранится рядом с переводом. | PARTIAL | build_report.py, classify_direction.py, fetch_agreements.py, map_commitments.py, ocr_agreements.py, post-receive.template, pre-commit, render_mapping_review.py, render_overview.py, validate_cards.py |
-| §13 | В публикации нет суммарного балла, рейтинга и оценочных ярлыков. | PARTIAL | build_lineage_rule.py, build_report.py, render_axes.py, render_mapping_review.py, render_overview.py, validate_cards.py |
+| §12 | Ивритский оригинал хранится рядом с переводом. | PARTIAL | build_report.py, classify_direction.py, fetch_agreements.py, map_commitments.py, ocr_agreements.py, post-receive.template, pre-commit, render_card_page.py, render_mapping_review.py, render_overview.py, validate_cards.py |
+| §13 | В публикации нет суммарного балла, рейтинга и оценочных ярлыков. | PARTIAL | build_lineage_rule.py, build_report.py, render_axes.py, render_card_page.py, render_mapping_review.py, render_overview.py, validate_cards.py |
 | §14 | Воспроизводимость публикации требует сохранённых входов; локальная про | PARTIAL | build_report.py, check_report_canon.py, classify_direction.py, coverage_matrix.py, direction_confidence.py, extract_institutions.py, fetch_agreements.py, fetch_budget.py, ocr_agreements.py, probe_bill_texts.py, select_pilot.py, select_structdiff_pilot.py, validate_cards.py |
 | §15 | Исправление публикуется, а не заменяет тихо. | PARTIAL | build_report.py, check_artifacts.py, probe_placebo.py, validate_cards.py |
-| §16 | Доступно, но не продвигается. Массовость — триггер, а не разрешённое с | LIVE | build_report.py, check_report_canon.py, render_axes.py, render_overview.py |
-| §17 | Рамка объявлена на первом экране. | LIVE | build_report.py, render_axes.py, render_overview.py |
+| §16 | Доступно, но не продвигается. Массовость — триггер, а не разрешённое с | LIVE | build_report.py, check_report_canon.py, render_axes.py, render_card_page.py, render_overview.py |
+| §17 | Рамка объявлена на первом экране. | LIVE | build_report.py, render_axes.py, render_card_page.py, render_overview.py |
 | §18 | Секреты вне репозитория. | PARTIAL | classify_direction.py, pre-commit |
 | §19 | Пишет только MacBook, canonical — Studio. | PARTIAL | build_line_cards.py, build_report.py, fetch_budget.py, guarded_fetch.py, map_commitments.py, pre-commit, resolve_law_ref.py |
 | §20 | Не называть сделанным то, у чего нет краснеющего механизма. | PARTIAL | check_artifacts.py, check_criteria_order.py, check_knesset_120.py, classify_direction.py, direction_confidence.py, map_commitments.py, post-receive.template, pre-commit, select_pilot.py, validate_cards.py, verify_names_wikidata.py |

@@ -67,6 +67,12 @@ def axis_block(ax: dict | None) -> str:
     """
     if not ax:
         return ""
+    if "alpha" not in ax:
+        raise SystemExit(
+            "ОТКАЗ: решение по оси без согласия, при котором оно получено. "
+            "Правило объявляет отказ публикации при альфе ниже порога, а "
+            "проверить его на готовой карточке можно только если число "
+            "лежит РЯДОМ со стрелкой. Отсутствие числа — не разрешение.")
     return f"""
 axis_institutions:
   arrow: {ax['arrow']}
@@ -76,6 +82,7 @@ axis_institutions:
   coverage: {ax['coverage']}
   down: {ax['down']}
   up: {ax['up']}
+  alpha: {ax['alpha']}
   text: >-
     {ax['text']}
 """
@@ -219,7 +226,8 @@ def arrows(votes: dict, directions_path: Path | None) -> dict:
     out = {}
     for fac, entry in per.items():
         fid = int(str(fac).split("|")[0])
-        out[fid] = cell(entry, len(theme), a, RU.get(fid, str(fid)), rule)
+        out[fid] = dict(cell(entry, len(theme), a, RU.get(fid, str(fid)), rule),
+                        alpha=round(a, 4))
     return out
 
 
@@ -310,7 +318,7 @@ def selftest() -> int:
     assert "99 голосованиях" in card_yaml(1, "פ", cen2, True, "", SNAP), \
         "числа карточки не следуют за переписью"
     # Блок решения по оси: есть решение — есть блок, нет — нет блока.
-    axd = {"arrow": "down", "level": "moderate", "acts": 23,
+    axd = {"arrow": "down", "level": "moderate", "acts": 23, "alpha": 0.81,
            "theme_total": 40, "coverage": 0.575, "down": 19, "up": 4,
            "text": "вероятно ослабляла; у нас 23 актов из 40"}
     with_ax = card_yaml(1, "פ", cen, True, "", SNAP, axd)

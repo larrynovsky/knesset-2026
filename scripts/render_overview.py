@@ -67,6 +67,25 @@ FRAME = """<div class=note id=frame data-frame=full>
 </div>"""
 
 
+def alpha_ok(ax: dict) -> bool:
+    """Можно ли ПУБЛИКОВАТЬ эту стрелку: согласие при ней, а не при расчёте.
+
+    Отказ по альфе стоял в direction_confidence.cell, то есть на границе
+    ВЫЧИСЛЕНИЯ. Готовая карточка проходила мимо: кто её посчитал и при каком
+    согласии, рендер не спрашивал. Правило объявляло «стрелка не публикуется
+    вовсе», а публикация была единственным местом без проверки. Нашёл Кодекс
+    в состязательном ревью 07.10, проверено своим входом.
+
+    Карточка БЕЗ поля alpha отвергается: отсутствие числа — не разрешение.
+    """
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from direction_confidence import arrow_rule
+    try:
+        return float(ax.get("alpha")) >= float(arrow_rule()["tentative"])
+    except (TypeError, ValueError):
+        return False
+
+
 def rows(m: dict, cards: dict | None = None) -> tuple[str, int, int]:
     """Строки обзора. Возвращает разметку, число клеток и число заполненных."""
     cards = cards or {}
@@ -88,6 +107,8 @@ def rows(m: dict, cards: dict | None = None) -> tuple[str, int, int]:
         # утверждает направление теми же словами, что стрелка; взятый у
         # строки без установленной связи, он обходит запрет через подпись.
         if a != "observed":
+            ax = {}
+        if ax.get("arrow") in ("up", "down", "both") and not alpha_ok(ax):
             ax = {}
         k1 = ax.get("arrow", "miss")
         if k1 not in CELL:
@@ -220,7 +241,9 @@ def selftest() -> int:
 
     # ── СТРЕЛКА ИЗ КАРТОЧКИ ДОХОДИТ ДО КЛЕТКИ, И ТОЛЬКО ОТТУДА ────────────
     cards_ok = {1: {"axis_institutions": {"arrow": "down", "level": "moderate",
-                                          "text": "вероятно ослабляла; у нас 23 актов из 40"}}}
+                                          "alpha": 0.81,
+                                          "alpha": 0.81,
+        "text": "вероятно ослабляла; у нас 23 актов из 40"}}}
     doc2, total2, filled2 = build(m, cards_ok)
     assert (total2, filled2) == (6, 1), f"решение не доехало до клетки: {filled2}"
     assert "вероятно ослабляла" in doc2, "формулировка карточки не дошла до обзора"
@@ -315,7 +338,7 @@ def selftest() -> int:
     # обе потребительские функции запрет не исполняли. Нашёл Кодекс,
     # проверено здесь своим входом.
     ax_live = {"arrow": "down", "level": "high", "acts": 20, "theme_total": 20,
-               "coverage": 1.0, "down": 20, "up": 0,
+               "coverage": 1.0, "down": 20, "up": 0, "alpha": 0.81,
                "text": "Тест по вопросам правового государства: ослабляла"}
     # Метка вместо слова «ослабляла»: это слово стоит в легенде КАЖДОЙ
     # страницы, и проверка по нему краснела бы на пояснении значков — то
@@ -337,6 +360,35 @@ def selftest() -> int:
     mo, _, fl_o = rows(mk_m("observed"), {1110: fcard_ax})
     assert MARK in mo and fl_o == 1, \
         "обзор потерял решение у строки, где связь установлена"
+    # ── ГРАНИЦА ПУБЛИКАЦИИ, А НЕ ТОЛЬКО ВЫЧИСЛЕНИЯ ──────────────────────
+    # Правило объявило «при альфе ниже порога стрелка не публикуется
+    # вовсе». Отказ стоял в расчёте; готовая карточка проходила мимо, и
+    # публикация была единственным местом без проверки.
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from direction_confidence import arrow_rule
+    TENT = float(arrow_rule()["tentative"])
+    for bad, why in ((0.10, "альфа 0.10"), (TENT - 0.001, "чуть ниже порога"),
+                     (None, "альфы нет вовсе")):
+        axb = dict(ax_live)
+        if bad is None:
+            axb.pop("alpha")
+        else:
+            axb["alpha"] = bad
+        cb = dict(fcard, axis_institutions=axb)
+        mb, _, fb = rows(mk_m("observed"), {1110: cb})
+        assert MARK not in mb and fb == 0, f"опубликована стрелка: {why}"
+        fpb = faction_page(cb, {"a": {"status": "observed"}, "b": frow["b"]}, fv)
+        assert MARK not in fpb, f"страница фракции опубликовала стрелку: {why}"
+    axe = dict(ax_live, alpha=TENT)
+    _, _, fe = rows(mk_m("observed"), {1110: dict(fcard, axis_institutions=axe)})
+    assert fe == 1, "ровно на пороге стрелка обязана публиковаться"
+    # ── §7: ПРОЗА ТОЖЕ НЕ УТВЕРЖДАЕТ НАПРАВЛЕНИЕ ────────────────────────
+    cpr = dict(fcard_ax, conclusion="ослабляла и ещё как",
+               readings=[{"type": "weakening", "text": "МЕТКА-ПРОЗЫ"}])
+    fpu = faction_page(cpr, unres, fv)
+    assert "МЕТКА-ПРОЗЫ" not in fpu and "ослабляла и ещё как" not in fpu, \
+        "проза карточки утверждает направление у строки без связи"
+    assert "не установили" in fpu, "состояние §7 не названо читателю"
     assert 'href="c-1110-inst.html"' in fp, \
         "со страницы фракции нет пути к разбору по правилам отсева"
     assert "<script" not in fp, "§13: скрипт на странице фракции"
@@ -362,6 +414,7 @@ def selftest() -> int:
     fcard2["axis_institutions"] = {
         "arrow": "down", "level": "moderate", "acts": 23, "theme_total": 40,
         "down": 19, "up": 4,
+        "alpha": 0.81,
         "text": "вероятно ослабляла; у нас 23 актов из 40"}
     fp2 = faction_page(fcard2, frow, fv)
     assert "вероятно ослабляла" in fp2 and "умеренная" in fp2, \
@@ -503,6 +556,17 @@ def faction_page(card: dict, row: dict, votes: list) -> str:
     # coverage_matrix, и до 07.10 эта страница запрет не исполняла.
     if row["a"]["status"] != "observed":
         ax = {}
+    if ax.get("arrow") in ("up", "down", "both") and not alpha_ok(ax):
+        ax = {}
+    # §7: у строки без установленной связи нечего утверждать и прозой — она
+    # утверждает направление теми же словами, что стрелка. Запрет касался
+    # только блока оси, и проза его обходила.
+    if row["a"]["status"] != "observed":
+        card = dict(card, conclusion=(
+            "кто стоит за этой строкой бюллетеня, мы не установили: "
+            "преемственность не разрешена, и приписать ей поступки чьей-то "
+            "фракции значило бы угадать. Это другое состояние, чем «мы сюда "
+            "не дошли»."), readings=[])
     if ax.get("arrow") in ("up", "down", "both"):
         inner1 = (f'<p><b>что мы увидели</b> {esc(ax.get("text"))}</p>'
                   f'<p><b>из чего</b> {esc(ax.get("acts"))} актов из '
