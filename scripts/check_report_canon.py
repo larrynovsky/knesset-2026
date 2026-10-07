@@ -382,6 +382,11 @@ def build_site(root, destination):
             "sys.exit(a.main())")
     subprocess.run([sys.executable, "-c", axes, str(destination)],
                    cwd=root / "scripts", check=True)
+    cards = ("import sys; import render_card_page as c; "
+             "from pathlib import Path; c.OUT_DIR=Path(sys.argv[1]); "
+             "sys.exit(c.main())")
+    subprocess.run([sys.executable, "-c", cards, str(destination)],
+                   cwd=root / "scripts", check=True)
     (destination / "robots.txt").write_text("User-agent: *\nAllow: /\n", encoding="utf-8")
     check_outputs(destination, root / "design/mockup_v5")
     src = {p.relative_to(destination).as_posix(): p.read_text(encoding="utf-8")

@@ -290,7 +290,8 @@ def selftest() -> int:
         "проходило бы и на документе, где §13 просто не объявлен читателю"
 
     # --- страница фракции: те же нормы, что у обзора, плюс крошки и §12.
-    fcard = {"party_ru": "Тест", "party_he": "\u05e4", "conclusion": "вывод",
+    fcard = {"faction_id": 1110,
+             "party_ru": "Тест", "party_he": "\u05e4", "conclusion": "вывод",
              "confidence": "low", "confidence_reason": "базовая линия",
              "what_would_falsify": "если доля изменится",
              "readings": [{"type": "weakening", "text": "раз"},
@@ -336,6 +337,8 @@ def selftest() -> int:
     mo, _, fl_o = rows(mk_m("observed"), {1110: fcard_ax})
     assert MARK in mo and fl_o == 1, \
         "обзор потерял решение у строки, где связь установлена"
+    assert 'href="c-1110-inst.html"' in fp, \
+        "со страницы фракции нет пути к разбору по правилам отсева"
     assert "<script" not in fp, "§13: скрипт на странице фракции"
     assert 'content="noindex, nofollow"' in fp, "§16: нет noindex на странице фракции"
     assert fp.index("data-frame=short") < fp.index("<h1"), \
@@ -525,6 +528,11 @@ def faction_page(card: dict, row: dict, votes: list) -> str:
         head1 = ('Суд, парламент, свободы — '
                  '<b class=tx-miss>мы сюда не дошли</b>')
         cert1 = "насколько мы в этом уверены: значения нет"
+    # Путь к разбору: без него страница решения не находится ниоткуда, а
+    # именно там сказано, сколько голосований отсеялось и каким правилом.
+    inner1 += (f'<p><a href="c-{card.get("faction_id")}-inst.html">Что из '
+               f'голосований вообще считается</a> — разбор по правилам '
+               f'отсева.</p>')
     cells = [det(head1, cert1, inner1, True)]
     if row["b"]["status"] == "not_exposed":
         s2, c2 = ('Деньги — <b class=tx-none>искали, не нашли</b>',
