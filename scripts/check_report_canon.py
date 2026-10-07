@@ -374,6 +374,14 @@ def build_site(root, destination):
                "sys.exit(r.main())")
     subprocess.run([sys.executable, "-c", command, str(destination)],
                    cwd=root / "scripts", check=True)
+    # Страница тем собирается ЗДЕСЬ же, а не руками: собранная руками, она
+    # пережила бы любое изменение criteria/themes.yaml и тихо устарела — а
+    # проверка состава всё равно считала бы её на месте.
+    axes = ("import sys; import render_axes as a; "
+            "from pathlib import Path; a.OUT=Path(sys.argv[1])/'axes.html'; "
+            "sys.exit(a.main())")
+    subprocess.run([sys.executable, "-c", axes, str(destination)],
+                   cwd=root / "scripts", check=True)
     (destination / "robots.txt").write_text("User-agent: *\nAllow: /\n", encoding="utf-8")
     check_outputs(destination, root / "design/mockup_v5")
     src = {p.relative_to(destination).as_posix(): p.read_text(encoding="utf-8")

@@ -113,6 +113,32 @@ def rows(m: dict, cards: dict | None = None) -> tuple[str, int, int]:
     return "\n".join(out), total, filled
 
 
+def other_themes() -> str:
+    """Блок «ещё три темы» со ссылкой на страницу осей.
+
+    Рамка объявляет четыре темы, а таблица показывает одну — читателю это
+    надо сказать на том же экране, а не оставить догадываться. Состояние
+    каждой темы берётся там же, где живёт само объявление: второго дома
+    рамке не положено, поэтому и состояние считает render_axes.
+    """
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from render_axes import axis_state, counts_from_repo, load_themes
+    themes = load_themes()
+    counts = counts_from_repo()
+    rest = [t for t in sorted(themes["themes"], key=lambda t: t["rank"])
+            if t.get("role") != "РЕШАЮЩАЯ"]
+    li = "".join(f'<li><b>{esc(t["title_ru"])}</b> — '
+                 f'{esc(axis_state(t, counts)[1])}</li>' for t in rest)
+    return (f'<h2>Ещё {len(rest)} темы</h2>'
+            f'<p>Они не менее важные — просто по ним мы не вычёркиваем. '
+            f'Разница ровно в этом. Если бы вычёркивали по всем '
+            f'{len(rest) + 1}, промах нашёлся бы у каждого списка, и '
+            f'вычеркнуть пришлось бы весь бюллетень целиком.</p>'
+            f'<ul class=dim>{li}</ul>'
+            f'<p><a href="axes.html">Что мы меряем и почему именно это</a> — '
+            f'там про каждую тему отдельно.</p>')
+
+
 def build(m: dict, cards: dict | None = None) -> tuple[str, int, int]:
     body, total, filled = rows(m, cards)
     miss = total - filled
@@ -148,6 +174,7 @@ def build(m: dict, cards: dict | None = None) -> tuple[str, int, int]:
 <th scope=col class=c-eq>деньги</th></tr></thead><tbody>
 {body}
 </tbody></table>
+{other_themes()}
 <div class=foot><p>Первый выпуск на живых данных, 13.08.2026.
 Форма принята 01.08.2026 (design/mockup_v5). Снимок голосований:
 {esc(m.get("source", {}).get("votes_at", "не объявлен"))}.</p></div>
@@ -197,6 +224,16 @@ def selftest() -> int:
     doc2, total2, filled2 = build(m, cards_ok)
     assert (total2, filled2) == (6, 1), f"решение не доехало до клетки: {filled2}"
     assert "вероятно ослабляла" in doc2, "формулировка карточки не дошла до обзора"
+    # ── РАМКА ОБЪЯВЛЯЕТ ЧЕТЫРЕ ТЕМЫ, ТАБЛИЦА ПОКАЗЫВАЕТ ОДНУ ─────────────
+    # Если страница осей есть, а из обзора на неё не попасть, читатель её не
+    # найдёт — и решит, что тема в документе одна. Проверяется НАЛИЧИЕ пути,
+    # не понятность текста: понятность мерит только слепое чтение (§26).
+    assert 'href="axes.html"' in doc2, "из обзора нет пути к странице тем"
+    from render_axes import load_themes
+    for t in load_themes()["themes"]:
+        if t.get("role") != "РЕШАЮЩАЯ":
+            assert t["title_ru"] in doc2, \
+                f"тема {t['id']} объявлена, но в обзоре не названа"
     assert "↓" in doc2, "знак стрелки не дошёл до клетки"
     # строка без связи с фракцией стрелки не получает НИ ПРИ КАКОМ решении
     cards_lin = {3: {"axis_institutions": {"arrow": "up", "level": "high",
