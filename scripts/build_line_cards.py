@@ -240,7 +240,16 @@ def emit(directions: Path | None = None) -> int:
                      .read_text(encoding="utf-8"))
     per = load_yaml_ish(ROOT / "criteria" / "periods.yaml")
     gov = {p["faction_id"] for p in per["periods"]}
-    have = {f.name for f in (ROOT / "cards").glob("*.yaml")}
+    # Рукописные карточки не перегенерируются, базовые — перегенерируются.
+    # Прежнее правило «есть файл с этим id — пропустить» годилось для первой
+    # генерации и запрещало ВТОРУЮ: после перевыгрузки числа в базовых
+    # карточках устарели бы, а скрипт отказался бы их обновить. Признак —
+    # пометка baseline в самой карточке, а не имя файла.
+    hand = set()
+    for f in (ROOT / "cards").glob("*.yaml"):
+        c = load_yaml_ish(f)
+        if c.get("unit") == "faction_knesset" and not c.get("baseline"):
+            hand.add(int(c["faction_id"]))
     snap = votes["at"][:19]   # §11: снимок берётся из данных, не из константы
     ax_all = arrows(votes, directions)
     out, skipped = {}, []
@@ -251,8 +260,8 @@ def emit(directions: Path | None = None) -> int:
             skipped.append((fid, he, "голосований под этим id нет — "
                                      "связь строки с фракцией не установлена"))
             continue
-        if any(str(fid) in n for n in have):
-            skipped.append((fid, he, "карточка уже написана руками"))
+        if fid in hand:
+            skipped.append((fid, he, "карточка написана руками — не трогаем"))
             continue
         name = slug(RU.get(fid, "line"), fid) + ".yaml"
         out[name] = card_yaml(fid, he, cen, fid in gov, "", snap,

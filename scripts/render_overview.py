@@ -330,8 +330,14 @@ def load_cards() -> dict:
 def votes_for(fid: int) -> list:
     """Голосования фракции с переводом названия. Отказ, а не пустота."""
     src = ROOT / "data" / "votes_25.json"
-    tr = json.loads((ROOT / "docs" / "reference"
-                     / "vote_names_ru_2026-08-13.json").read_text(encoding="utf-8"))["names"]
+    # Берётся САМЫЙ ПОЗДНИЙ справочник переводов, а не прибитая дата: после
+    # перевыгрузки состав актов меняется, и зашитое имя файла означало бы
+    # отказ §12 на каждом новом акте при том, что перевод уже написан.
+    trs = sorted((ROOT / "docs" / "reference").glob("vote_names_ru_*.json"))
+    if not trs:
+        raise SystemExit("ОТКАЗ §12: справочника переводов названий нет — "
+                         "страница была бы нечитаема для владельца")
+    tr = json.loads(trs[-1].read_text(encoding="utf-8"))["names"]
     POS = {"for": "за", "against": "против", "abstain": "воздержались",
            "present": "присутствовали, не голосовали"}
     out = []
