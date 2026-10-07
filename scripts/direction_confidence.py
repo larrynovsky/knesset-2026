@@ -430,6 +430,52 @@ def selftest() -> int:
     c5 = cell({"down": 3, "up": 0, "acts": 3, "mixed_acts": 0}, 4, 0.95, "X", RB)
     assert c5["arrow"] == "both", \
         "три акта в одну сторону выданы за направление — это шум, не поведение"
+
+    # ── ОТКАЗ ПО СОГЛАСИЮ (falsification.согласие_ниже_порога) ────────────
+    # Правило объявило не «оговорку при низком согласии», а «стрелка не
+    # публикуется вовсе». До 07.10 код публиковал знак с формулировкой «мы в
+    # этом не уверены» — это другое обещание, и читателю оно даёт стрелку там,
+    # где правило её запретило. Расхождение нашёл Кодекс в состязательном
+    # ревью, проверено здесь своим входом.
+    E20 = {"down": 20, "up": 0, "acts": 20, "mixed_acts": 0}
+    c6 = cell(E20, 20, 0.10, "X", RB)
+    assert c6["arrow"] == "miss", "альфа 0.10 опубликовала стрелку"
+    assert c6["level"] == "very_low" and "согласие" in c6["text"], c6
+    c7 = cell(E20, 20, RB["tentative"] - 0.001, "X", RB)
+    assert c7["arrow"] == "miss", "порог согласия нестрогий — чуть ниже прошло"
+    c8 = cell(E20, 20, RB["tentative"], "X", RB)
+    assert c8["arrow"] == "down", \
+        "ровно на объявленном пороге стрелка обязана публиковаться"
+
+    # §6: у низшего уровня причина НАЗВАНА. «сказать нечего: » без причины —
+    # это отсутствие причины, выданное за причину.
+    c9 = cell(E20, 1000, 0.95, "X", RB)
+    assert c9["level"] == "very_low" and "охват" in c9["text"], c9
+    assert not c9["text"].rstrip().endswith(":"), \
+        f"причина пуста там, где правило требует её назвать: {c9['text']!r}"
+
+    # ── ОГОВОРКА ТЕМЫ ПРИ СТРЕЛКЕ (not_transferred.тема) ─────────────────
+    for lvl in ("high", "moderate", "low"):
+        assert THEME_CAVEAT in say(lvl, "down", "X", 20, 30, ""), \
+            f"уровень {lvl} утверждает направление без оговорки темы"
+    assert THEME_CAVEAT in ARROW_CRIT.read_text(encoding="utf-8"), \
+        "копия оговорки в коде разошлась с объявлением — дом правила один"
+
+    # ── §10 ПРОВЕРЯЕТСЯ ДО ОТСЕВОВ ───────────────────────────────────────
+    # Неизвестная опция обязана останавливать стрелку всегда. Раньше её
+    # проверку обходили две ветки: единогласие и акт без направления.
+    for rows_x, why_x in (
+            ([v(1, 100, "чего-то такого в таблице нет",
+                {"A": {"for": 119, "against": 1}})], "единогласие"),
+            ([v(1, 100, "чего-то такого в таблице нет",
+                {"A": {"for": 60, "against": 0}, "Z": {"for": 0, "against": 60}})],
+             "акт без направления")):
+        try:
+            compose(rows_x, {}, TBL, RB)
+        except SystemExit:
+            pass
+        else:
+            raise AssertionError(f"неизвестная опция проскочила через {why_x}")
     print(f"самопроверка direction_confidence пройдена: {n_asserts(selftest)} утверждений")
     return 0
 
@@ -655,9 +701,15 @@ def level(a: float, coverage: float, rule: dict) -> str:
     return max(by_a, by_c, key=GRADE.index)
 
 
-SAY = {"high": "{party} по этой оси: {move}",
-       "moderate": "вероятно {move}; у нас {n} актов из {m}",
-       "low": "свидетельства расходятся; что мы видим — {move}, "
+# Оговорка темы. not_transferred.тема требует, чтобы она стояла ПРИ
+# стрелке, а не в подвале: без неё клетка читается как «партия такая».
+# Дом правила — YAML; здесь копия, и copy_matches_rule в самопроверке
+# краснеет, если копия разойдётся с объявлением.
+THEME_CAVEAT = "по вопросам правового государства"
+
+SAY = {"high": "{party} {theme}: {move}",
+       "moderate": "вероятно {move} {theme}; у нас {n} актов из {m}",
+       "low": "свидетельства расходятся; что мы видим — {move} {theme}, "
               "и мы в этом не уверены",
        "very_low": "сказать нечего: {why}"}
 MOVE = {"up": "укрепляла", "down": "ослабляла",
@@ -670,7 +722,8 @@ def say(lvl: str, mv: str, party: str, n: int, m: int, why: str) -> str:
     Шаблон выбирается уровнем, а не автором: иначе формулировка поползёт к
     уверенной при любом замере, и поползёт незаметно.
     """
-    return SAY[lvl].format(party=party, move=MOVE[mv], n=n, m=m, why=why)
+    return SAY[lvl].format(party=party, move=MOVE[mv], n=n, m=m, why=why,
+                           theme=THEME_CAVEAT)
 
 
 def rice(fors: int, against: int) -> float:
@@ -717,6 +770,10 @@ def compose(rows: list[dict], directions: dict, table: dict,
         if bid is not None:
             acts_theme.add(bid)
         bf = r.get("by_faction") or {}
+        # §10 проверяется ДО любых отсевов: опция, которой нет в таблице,
+        # обязана останавливать стрелку, а не проскакивать потому, что
+        # строку всё равно выбросило единогласие или отсутствие знака акта.
+        vs = sign_of(r.get("for_option_desc"), table)
         f_all = sum(int(c.get("for", 0)) for c in bf.values())
         a_all = sum(int(c.get("against", 0)) for c in bf.values())
         if lopsided(f_all, a_all, rule["drop_below"]):
@@ -727,7 +784,6 @@ def compose(rows: list[dict], directions: dict, table: dict,
         if act is None:
             stat["акт без направления"] += 1
             continue
-        vs = sign_of(r.get("for_option_desc"), table)
         for fac, c in bf.items():
             pos = faction_position(c, rule["split_below"])
             if pos is None:
@@ -753,13 +809,27 @@ def cell(entry: dict, theme_total: int, a: float, party: str,
          rule: dict) -> dict:
     """Значение клетки, уровень и готовая формулировка для одной фракции."""
     n = entry["acts"]
-    mv = arrow(entry["down"], n, rule["min_acts"])
     cov = n / theme_total if theme_total else 0.0
-    if mv == "miss":
-        lvl, why = "very_low", (f"актов меньше {rule['min_acts']}: "
-                                f"{n} из {theme_total}")
+    # falsification.согласие_ниже_порога: альфа ниже tentative — стрелка НЕ
+    # публикуется вовсе. Отказ стоит ДО вычисления стрелки: поставленный
+    # после, он превращается в оговорку при уже опубликованном знаке, а
+    # объявлено было не «с оговоркой», а «не публикуется».
+    if a < rule["tentative"]:
+        mv, lvl = "miss", "very_low"
+        why = (f"согласие вендоров {a:.3f} ниже объявленного "
+               f"{rule['tentative']}: мерить нечем")
     else:
-        lvl, why = level(a, cov, rule), ""
+        mv = arrow(entry["down"], n, rule["min_acts"])
+        if mv == "miss":
+            lvl, why = "very_low", (f"актов меньше {rule['min_acts']}: "
+                                    f"{n} из {theme_total}")
+        else:
+            lvl = level(a, cov, rule)
+            # §6: у низшего уровня обязана быть НАЗВАННАЯ причина. Пустая
+            # строка давала читателю «сказать нечего: » — отсутствие причины
+            # там, где правило требует её назвать.
+            why = (f"охват {n} из {theme_total}: меньше половины актов темы"
+                   if lvl == "very_low" else "")
     return {"arrow": mv, "level": lvl, "acts": n, "theme_total": theme_total,
             "coverage": round(cov, 3), "down": entry["down"], "up": entry["up"],
             "text": say(lvl, mv, party, n, theme_total, why)}

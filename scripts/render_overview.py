@@ -84,7 +84,12 @@ def rows(m: dict, cards: dict | None = None) -> tuple[str, int, int]:
         # запрещено (§7, lineage_unresolved — отдельное состояние, а не
         # «мы не дошли»).
         ax = (cards.get(r["anchor_id"]) or {}).get("axis_institutions") or {}
-        k1 = ax.get("arrow", "miss") if a == "observed" else "miss"
+        # Запрет наследования касается НЕ ТОЛЬКО значка. Текст решения
+        # утверждает направление теми же словами, что стрелка; взятый у
+        # строки без установленной связи, он обходит запрет через подпись.
+        if a != "observed":
+            ax = {}
+        k1 = ax.get("arrow", "miss")
         if k1 not in CELL:
             raise SystemExit(f"ОТКАЗ: стрелка {k1!r} вне закрытого списка "
                              f"{tuple(CELL)} — макет других значений не несёт")
@@ -259,11 +264,41 @@ def selftest() -> int:
                        "census": {"votes": 2, "acts": 2, "from": "2022-12-13",
                                   "to": "2026-07-14",
                                   "acts_without_participation": 1}}}
-    frow = {"b": {"status": "not_exposed", "note": "соглашения не подписывала"}}
+    frow = {"a": {"status": "observed"},
+            "b": {"status": "not_exposed", "note": "соглашения не подписывала"}}
     fv = [{"date": "2022-12-13", "name_ru": "Законопроект",
            "name_he": "\u05d4\u05e6\u05e2\u05ea", "for_option_desc": "\u05dc\u05d4\u05e2\u05d1\u05d9\u05e8",
            "pos": "против 5"}]
     fp = faction_page(fcard, frow, fv)
+    # ── §7: СТРОКА БЕЗ СВЯЗИ НЕ ПОЛУЧАЕТ СТРЕЛКУ НИ ОТ КАКОЙ КАРТОЧКИ ────
+    # not_transferred.связь запрещает заполнять клетку у lineage_unresolved:
+    # там неизвестно, ЧЬЯ это фракция. Валидатор смотрит card.status, а
+    # источник статуса здесь другой — строка coverage_matrix, и до 07.10
+    # обе потребительские функции запрет не исполняли. Нашёл Кодекс,
+    # проверено здесь своим входом.
+    ax_live = {"arrow": "down", "level": "high", "acts": 20, "theme_total": 20,
+               "coverage": 1.0, "down": 20, "up": 0,
+               "text": "Тест по вопросам правового государства: ослабляла"}
+    # Метка вместо слова «ослабляла»: это слово стоит в легенде КАЖДОЙ
+    # страницы, и проверка по нему краснела бы на пояснении значков — то
+    # есть запрещала бы ровно то, что защищает. В этом проекте так
+    # случалось уже пять раз; ищем текст решения, а не слово канона.
+    MARK = "РЕШЕНИЕ-ИЗ-КАРТОЧКИ"
+    ax_live["text"] = MARK
+    fcard_ax = dict(fcard, axis_institutions=ax_live)
+    unres = {"a": {"status": "lineage_unresolved"}, "b": frow["b"]}
+    fp_u = faction_page(fcard_ax, unres, fv)
+    assert MARK not in fp_u, \
+        "страница фракции поставила стрелку строке без установленной связи"
+    assert "мы сюда не дошли" in fp_u, fp_u[:200]
+    mk_m = lambda st: {"lines": [{"anchor_id": 1110, "line": "строка",
+                                  "a": {"status": st}, "b": {"status": "observed"}}]}
+    mu, _, fl_u = rows(mk_m("lineage_unresolved"), {1110: fcard_ax})
+    assert MARK not in mu and fl_u == 0, \
+        "обзор взял текст решения у строки без установленной связи"
+    mo, _, fl_o = rows(mk_m("observed"), {1110: fcard_ax})
+    assert MARK in mo and fl_o == 1, \
+        "обзор потерял решение у строки, где связь установлена"
     assert "<script" not in fp, "§13: скрипт на странице фракции"
     assert 'content="noindex, nofollow"' in fp, "§16: нет noindex на странице фракции"
     assert fp.index("data-frame=short") < fp.index("<h1"), \
@@ -422,6 +457,12 @@ def faction_page(card: dict, row: dict, votes: list) -> str:
     cen = v.get("census") or {}
     cav = v.get("theme_caveat_ru", "")
     ax = card.get("axis_institutions") or {}
+    # §7: строка без установленной связи не получает стрелку НИ ПРИ КАКОМ
+    # решении карточки — там неизвестно, чья это фракция. Валидатор карточек
+    # смотрит на card.status, а здесь источник статуса другой — строка
+    # coverage_matrix, и до 07.10 эта страница запрет не исполняла.
+    if row["a"]["status"] != "observed":
+        ax = {}
     if ax.get("arrow") in ("up", "down", "both"):
         inner1 = (f'<p><b>что мы увидели</b> {esc(ax.get("text"))}</p>'
                   f'<p><b>из чего</b> {esc(ax.get("acts"))} актов из '
