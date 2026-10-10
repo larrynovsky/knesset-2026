@@ -1,0 +1,36 @@
+{
+  "module": "scripts/render_time_page.py",
+  "purpose": "Render calendar fractions of faction/chamber disagreement from one read-only vote snapshot.",
+  "public_surface": {
+    "periods": "(window, months=3|6) -> clipped half-open calendar intervals",
+    "measure": "(data, faction_ids, months, split) -> (intervals, counters); identical vote IDs counted once; conflicting IDs or incomplete named totals fail",
+    "share": "counter -> different/n or None",
+    "breaks": "(half, quarter) -> half-year jumps over BREAK_THRESHOLD with same-boundary quarterly comparison",
+    "validate_page": "HTML -> None or ValueError on forbidden prose, scripts, missing noindex",
+    "label": "interval -> inclusive visible dates",
+    "faction_name": "names, ID -> escaped bilingual HTML",
+    "matrix": "measurement, names -> unsortable matrix without totals",
+    "page": "snapshot, names, split, digest -> (validated HTML, jumps)",
+    "selftest": "synthetic checks and expected-red provocations -> 0",
+    "main": "CLI --selftest or --votes PATH; output OUT defaults to site/time.html"
+  },
+  "depends_on": [
+    {"module": "direction_confidence.faction_position", "legacy": "Existing canonical position computation; no sidecar"},
+    {"module": "build_line_cards._arrow_split", "legacy": "Explicitly required by task; canonical threshold loader has private name"},
+    {"module": "render_overview", "legacy": "Existing CSS, escaping, short frame"},
+    {"module": "check_report_canon", "legacy": "Existing prose extraction, noindex and script checks"},
+    {"module": "yaml.safe_load", "legacy": "PyYAML already installed and used by render_axes"}
+  ],
+  "disposability": {
+    "verdict": "disposable",
+    "date": "2026-10-10",
+    "reason": "Read-only inputs and regenerable HTML; no persistent state or migrations. Can be replaced behind this contract and synthetic oracle.",
+    "removal": "Remove build_site renderer call, time.html output requirement, this script and contract; delete generated time.html.",
+    "oracle": "/opt/homebrew/bin/python3.11 scripts/render_time_page.py --selftest",
+    "tool_limit": "project_context capabilities and disposability both fail: No module named project_context. This is a manual verdict, not a passed project gate."
+  },
+  "ponytail": {
+    "step1": "Explicit user request; needed temporal view is absent in existing renderers.",
+    "step4": "Reuse canonical faction_position, _arrow_split, CSS/frame, existing YAML dependency; no new dependencies."
+  }
+}
