@@ -157,7 +157,10 @@ def other_themes() -> str:
             f'вычеркнуть пришлось бы весь бюллетень целиком.</p>'
             f'<ul class=dim>{li}</ul>'
             f'<p><a href="axes.html">Что мы меряем и почему именно это</a> — '
-            f'там про каждую тему отдельно.</p>')
+            f'там про каждую тему отдельно. '
+            f'<a href="time.html">Как менялась доля расхождений с залом</a> — '
+            f'по полугодиям, без объяснений. '
+            f'<a href="method.html">Как мы считаем</a>.</p>')
 
 
 def grounds_block() -> str:
@@ -497,7 +500,7 @@ def selftest() -> int:
     with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
         site = Path(tmp)
         (site / "index.html").write_text(doc, encoding="utf-8")
-        for name in ("f-1.html", "f-2.html", "f-3.html", "axes.html", "grounds.html"):
+        for name in ("f-1.html", "f-2.html", "f-3.html", "axes.html", "grounds.html", "time.html", "method.html"):
             (site / name).write_text(state, encoding="utf-8")
         n = check_index_links(site)
         (site / "index.html").write_text(doc + '<a href="missing.html">нет</a>', encoding="utf-8")

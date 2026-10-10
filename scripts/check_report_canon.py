@@ -343,7 +343,6 @@ def check_outputs(site, mock):
     if not expected:
         raise ValueError("ОТКАЗ §14: макет пуст — сверять состав не с чем")
     singles = {n for n in expected if not any(n.startswith(k) for k in KINDS)}
-    singles.add("time.html")  # Страница времени заказана отдельно от макета (§24).
     missing = sorted(singles - actual)
     for pref, label in KINDS.items():
         if any(n.startswith(pref) for n in expected) \
@@ -353,7 +352,7 @@ def check_outputs(site, mock):
         raise ValueError("ОТКАЗ §14: страницы принятого макета отсутствуют "
                          "в сборке: " + ", ".join(missing))
     # Дополнительные страницы фракций разрешены: набор зависит от данных.
-    unexpected = {name for name in actual - expected - {"time.html"}
+    unexpected = {name for name in actual - expected
                   if not any(name.startswith(k) for k in KINDS)}
     if unexpected:
         raise ValueError("ОТКАЗ §14: посторонние HTML в сборке: "
