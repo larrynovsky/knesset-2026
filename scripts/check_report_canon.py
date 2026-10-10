@@ -389,6 +389,14 @@ def build_site(root, destination):
               "sys.exit(m.main())")
     subprocess.run([sys.executable, "-c", method, str(destination)],
                    cwd=root / "scripts", check=True)
+    # Основания — страница принятой формы с 2026-10-10 (design/mockup_v5/
+    # grounds.html). Без пометок владельца рендер отказывает, и сборки нет:
+    # сайт без оснований не публикуется, а не публикуется с пустой страницей.
+    grounds = ("import sys; import render_grounds as g; "
+               "from pathlib import Path; g.OUT=Path(sys.argv[1])/'grounds.html'; "
+               "sys.exit(g.main())")
+    subprocess.run([sys.executable, "-c", grounds, str(destination)],
+                   cwd=root / "scripts", check=True)
     cards = ("import sys; import render_card_page as c; "
              "from pathlib import Path; c.OUT_DIR=Path(sys.argv[1]); "
              "sys.exit(c.main())")

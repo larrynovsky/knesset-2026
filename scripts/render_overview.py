@@ -160,6 +160,24 @@ def other_themes() -> str:
             f'там про каждую тему отдельно.</p>')
 
 
+def grounds_block() -> str:
+    """Ссылка на основания — только если пометки владельца существуют.
+    Без них блок не рисуется: обзор не обещает того, чего нет."""
+    marks = sorted((ROOT / "criteria").glob("owner_marks_*.yaml"))
+    if not marks:
+        return ""
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from render_grounds import read_marks
+    m = read_marks(marks[-1])
+    n_bad = sum(1 for v in m.values() if v["mark"] == "недопустимо")
+    return (f'<h2 id="grounds">Основания</h2>'
+            f'<p>Автор прочитал {len(m)} актов, не видя, кто как голосовал, '
+            f'и пометил {n_bad} как недопустимые. '
+            f'<a href="grounds.html">Кто за эти акты голосовал — по актам и '
+            f'по строкам бюллетеня</a>. Документ не говорит «вычеркнуть»; '
+            f'он показывает, кто проголосовал за то, что прочитано и помечено.</p>')
+
+
 def build(m: dict, cards: dict | None = None) -> tuple[str, int, int]:
     body, total, filled = rows(m, cards)
     miss = total - filled
@@ -177,6 +195,7 @@ def build(m: dict, cards: dict | None = None) -> tuple[str, int, int]:
 <p>Мы смотрим на поступки, а не на заявления. Слова перед выборами стоят ноль;
 голос в Кнессете записан поимённо и никуда не денется.</p>
 {FRAME}
+{grounds_block()}
 <h2>Сначала о том, чего мы не знаем</h2>
 <p>Клеток в таблице ниже — <b class=big>{total}</b>. Заполнены {filled};
 в остальных {miss} мы либо не дошли, либо смотрели и вернулись пустыми.</p>
@@ -478,7 +497,7 @@ def selftest() -> int:
     with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
         site = Path(tmp)
         (site / "index.html").write_text(doc, encoding="utf-8")
-        for name in ("f-1.html", "f-2.html", "f-3.html", "axes.html"):
+        for name in ("f-1.html", "f-2.html", "f-3.html", "axes.html", "grounds.html"):
             (site / name).write_text(state, encoding="utf-8")
         n = check_index_links(site)
         (site / "index.html").write_text(doc + '<a href="missing.html">нет</a>', encoding="utf-8")
