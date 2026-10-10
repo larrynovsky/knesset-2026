@@ -14,7 +14,7 @@ status: observed
 snapshots:
   agreements_ocr: 2026-07-30
   raw_budget: 2026-07-31T11:17:28
-  budget_changes: 2026-07-31T11:17:28
+  budget_changes: 2026-07-30T20:59:44
 
 holdout_checked:
   period: null

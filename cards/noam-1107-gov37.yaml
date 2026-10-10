@@ -15,7 +15,7 @@ status: observed
 snapshots:
   agreements_ocr: 2026-07-30
   raw_budget: 2026-07-31T11:17:28
-  budget_changes: 2026-07-31T11:17:28
+  budget_changes: 2026-07-30T20:59:44
 
 holdout_checked:
   period: null
@@ -90,7 +90,7 @@ commitments:
       outcome: found
       note: строка найдена; расхождение — в сумме, не в номенклатуре
     confidence: medium
-    confidence_reason: именная строка, но слой переносов не выгружен и пересмотр 2024 года выше базы
+    confidence_reason: именная строка, но переносы к строкам адресно не привязаны и пересмотр 2024 года выше базы
     what_would_falsify: >-
       решение правительства об Управлении с бюджетом, проведённым через
       другую статью (например, резерв канцелярии) — тогда именная строка
@@ -186,7 +186,7 @@ commitments:
       outcome: found
       note: обязательство дублирует noam-p2-78 с другими числами
     confidence: medium
-    confidence_reason: именная строка; слой переносов не выгружен
+    confidence_reason: именная строка; переносы к строкам адресно не привязаны
     what_would_falsify: >-
       то же, что для noam-p2-78
 

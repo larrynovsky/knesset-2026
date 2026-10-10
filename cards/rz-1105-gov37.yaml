@@ -14,7 +14,7 @@ status: observed
 snapshots:
   agreements_ocr: 2026-07-30
   raw_budget: 2026-07-31T11:17:28
-  budget_changes: 2026-07-31T11:17:28
+  budget_changes: 2026-07-30T20:59:44
 
 holdout_checked:
   period: null
@@ -213,7 +213,7 @@ commitments:
       outcome: found
       note: три строки с именем ХАТАЛ найдены; другого носителя нет
     confidence: medium
-    confidence_reason: носитель именной; слой переносов не выгружен, и он здесь решает
+    confidence_reason: носитель именной; переносы к строкам адресно не привязаны, и он здесь решает
     what_would_falsify: >-
       переносы в 0004521315 за 2023–2025 с источником — покажут, откуда
       244 млн 2025 года
