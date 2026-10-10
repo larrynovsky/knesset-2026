@@ -464,7 +464,11 @@ def selftest() -> int:
     import tempfile
     from validate_cards import REF_NUM
     bc = copy.deepcopy(load_cards("party_period")[1095])
-    assert len(bc) == 1 and len(bc[0]["commitments"]) == 4
+    # Число разборов — из самой карточки (coverage), не константа: 10.10 их
+    # стало 21, и зашитая «4» уронила бы проверку на правильном входе.
+    n_c = bc[0]["coverage"]["commitments_analysed"]
+    assert len(bc) == 1 and len(bc[0]["commitments"]) == n_c, \
+        (len(bc[0]["commitments"]), n_c)
     idx = {(code, int(year)): {"net_allocated": 123000, "net_executed": 456000}
            for c in bc[0]["commitments"]
            for code, year, _ in REF_NUM.findall(c["conclusion"])}
