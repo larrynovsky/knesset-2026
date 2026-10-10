@@ -257,6 +257,11 @@ def selftest() -> int:
         {"anchor_id": 3, "line": "без связи",
          "a": {"status": "lineage_unresolved"}, "b": {"status": "source_missing"}}],
         "source": {"votes_at": "2026-07-31"}}
+    # ── ЧИСЛИТЕЛЬНОЕ СОГЛАСУЕТСЯ С ЧИСЛОМ ────────────────────────────────
+    # «2 обязательств» и «остальные не разобраны» при полном разборе — язык
+    # сборщика, а не документа; страница Оцма (2 из 2) показала оба 10.10.
+    assert [ru_plural(n, "о", "а", "в") for n in (1, 2, 5, 11, 13, 21, 22)] == \
+        ["о", "а", "в", "в", "в", "о", "а"], "склонение «обязательство» сломано"
     doc, total, filled = build(m)
     assert total == 6, f"клеток {total}, а строк три по две колонки"
     assert filled == 0, "без решения в карточке клетка не имеет права заполниться"
@@ -568,6 +573,16 @@ def votes_for(fid: int) -> list:
     return out
 
 
+def ru_plural(n: int, one: str, few: str, many: str) -> str:
+    """1 обязательство, 2–4 обязательства, 5+ обязательств (и 11–14 — many)."""
+    n = abs(int(n))
+    if n % 10 == 1 and n % 100 != 11:
+        return one
+    if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14:
+        return few
+    return many
+
+
 def budget_block(cards: list, idx: dict, titles: list) -> str:
     """§11: проверка и подстановка читают один индекс; старый CLI не вызывается."""
     out = []
@@ -575,10 +590,12 @@ def budget_block(cards: list, idx: dict, titles: list) -> str:
         if card.get("data_fingerprint") != fingerprint(card, idx, titles):
             raise Refuse(f"§11: data_fingerprint не совпал: {card['period_id']}")
         cov = card.get("coverage") or {}
+        n, total = len(card.get("commitments") or []), cov.get("commitments_total")
+        tail = "весь список разобран" if n == total else "остальные не разобраны"
         out.append(f'<section data-budget="{esc(card["period_id"])}">'
                    f'<p>Период: {esc(card["period_id"])}. Разобрано '
-                   f'{len(card.get("commitments") or [])} обязательств из '
-                   f'{esc(cov.get("commitments_total"))}; остальные не разобраны.</p>')
+                   f'{n} {ru_plural(n, "обязательство", "обязательства", "обязательств")} из '
+                   f'{esc(total)}; {tail}.</p>')
         out.append('<p>Снимки источников: ' + esc(
             "; ".join(f"{k} — {v}" for k, v in sorted(card["snapshots"].items()))) + '</p>')
         for c in card.get("commitments") or []:
