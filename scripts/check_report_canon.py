@@ -382,6 +382,13 @@ def build_site(root, destination):
             "sys.exit(a.main())")
     subprocess.run([sys.executable, "-c", axes, str(destination)],
                    cwd=root / "scripts", check=True)
+    # Методология — из объявлений и того же кода, что делал замеры;
+    # руками собранная устарела бы тихо (см. render_method).
+    method = ("import sys; import render_method as m; "
+              "from pathlib import Path; m.OUT=Path(sys.argv[1])/'method.html'; "
+              "sys.exit(m.main())")
+    subprocess.run([sys.executable, "-c", method, str(destination)],
+                   cwd=root / "scripts", check=True)
     cards = ("import sys; import render_card_page as c; "
              "from pathlib import Path; c.OUT_DIR=Path(sys.argv[1]); "
              "sys.exit(c.main())")
