@@ -135,14 +135,22 @@ def per_line(marked: list, tables: dict, fids: list, ru: dict, names: dict) -> s
             last = tables[b][-1]
             g = last["groups"]
             t = names.get(str(b), {}).get("ru", str(b))
+            # Позиция на предыдущих стадиях: демарш на третьем чтении (64 в
+            # зале) не должен стирать «против» на втором двумя неделями раньше.
+            earlier = [v for v in tables[b][:-1]
+                       if f in v["groups"]["for"] or f in v["groups"]["against"]]
+            prev = ""
+            if earlier:
+                kinds = {"за" if f in v["groups"]["for"] else "против" for v in earlier}
+                prev = f"; на предыдущих стадиях — {'/'.join(sorted(kinds))}"
             if f in g["for"]:
-                za.append(t)
+                za.append(t + (prev if "против" in prev else ""))
             elif f in g["against"]:
                 pr.append(t)
             elif f in g["split"]:
                 pr.append(t + " (раскол)")
             else:
-                no.append(f"{t} (в зале {last['named']})")
+                no.append(f"{t} (в зале {last['named']}{prev})")
         li = lambda xs: "".join(f"<li>{E(x)}</li>" for x in xs) or "<li class=dim>—</li>"
         out.append(f"""<section class=line><h3><a href="f-{E(f)}.html">{E(ru.get(f, f))}</a></h3>
 <dl><dt>за акт на последней стадии</dt><dd><ul>{li(za)}</ul></dd>
