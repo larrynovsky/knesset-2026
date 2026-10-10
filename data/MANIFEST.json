@@ -12750,5 +12750,208 @@
     "pages": 1,
     "at": "2026-10-07T13:19:25",
     "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 39607": {
+    "expected": 18,
+    "got": 18,
+    "pages": 1,
+    "at": "2026-07-31T20:34:36",
+    "host": "Studio.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 43034": {
+    "expected": 9,
+    "got": 9,
+    "pages": 1,
+    "at": "2026-07-31T20:37:18",
+    "host": "Studio.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 44879": {
+    "expected": 97,
+    "got": 97,
+    "pages": 1,
+    "at": "2026-07-31T20:42:55",
+    "host": "Studio.local"
+  },
+  "KNS_PlenumVote|VoteDateTime ge 2022-11-15T00:00:00Z and VoteDateTime lt 2026-07-18T00:00:00Z and ForOptionDesc eq 'לקבל את ההסתייגות'": {
+    "expected": 3071,
+    "got": 3071,
+    "pages": 31,
+    "at": "2026-07-31T22:15:55",
+    "host": "Studio.local"
+  },
+  "KNS_PlenumVote|VoteDateTime ge 2022-11-15T00:00:00Z and VoteDateTime lt 2026-07-18T00:00:00Z and ForOptionDesc eq 'לקבל בקריאה שנייה'": {
+    "expected": 1208,
+    "got": 1208,
+    "pages": 13,
+    "at": "2026-07-31T22:16:05",
+    "host": "Studio.local"
+  },
+  "KNS_DocumentBill|BillID eq 2207472": {
+    "expected": 43,
+    "got": 43,
+    "pages": 1,
+    "at": "2026-07-31T22:16:51",
+    "host": "Studio.local"
+  },
+  "KNS_DocumentBill|BillID eq 2201200": {
+    "expected": 36,
+    "got": 36,
+    "pages": 1,
+    "at": "2026-07-31T22:16:52",
+    "host": "Studio.local"
+  },
+  "KNS_DocumentBill|BillID eq 2201202": {
+    "expected": 7,
+    "got": 7,
+    "pages": 1,
+    "at": "2026-07-31T22:16:53",
+    "host": "Studio.local"
+  },
+  "KNS_DocumentBill|BillID eq 2189724": {
+    "expected": 7,
+    "got": 7,
+    "pages": 1,
+    "at": "2026-07-31T22:16:54",
+    "host": "Studio.local"
+  },
+  "KNS_DocumentBill|BillID eq 2198191": {
+    "expected": 27,
+    "got": 27,
+    "pages": 1,
+    "at": "2026-07-31T22:16:55",
+    "host": "Studio.local"
+  },
+  "KNS_DocumentBill|BillID eq 1042100": {
+    "expected": 133,
+    "got": 133,
+    "pages": 2,
+    "at": "2026-07-31T22:17:26",
+    "host": "Studio.local"
+  },
+  "KNS_DocumentBill|BillID eq 2198130": {
+    "expected": 14,
+    "got": 14,
+    "pages": 1,
+    "at": "2026-07-31T22:17:53",
+    "host": "Studio.local"
+  },
+  "KNS_PlmSessionItem|ItemTypeID eq 2": {
+    "expected": 107589,
+    "got": 107589,
+    "pages": 1076,
+    "at": "2026-07-31T23:26:21",
+    "host": "Studio.local"
+  },
+  "KNS_Query|KnessetNum eq 25": {
+    "expected": 1580,
+    "got": 1580,
+    "pages": 16,
+    "at": "2026-08-01T14:55:32",
+    "host": "Studio.local"
+  },
+  "KNS_PersonToPosition|KnessetNum eq 25 and PositionID eq 54": {
+    "expected": 191,
+    "got": 191,
+    "pages": 2,
+    "at": "2026-08-01T14:55:33",
+    "host": "Studio.local"
+  },
+  "KNS_PersonToPosition|PositionID eq 43 and KnessetNum eq 25": {
+    "expected": 128,
+    "got": 128,
+    "pages": 2,
+    "at": "2026-08-01T15:37:23",
+    "host": "Studio.local"
+  },
+  "KNS_Position|": {
+    "expected": 29,
+    "got": 29,
+    "pages": 1,
+    "at": "2026-08-01T15:37:51",
+    "host": "Studio.local"
+  },
+  "KNS_PersonToPosition|PositionID eq 39 and KnessetNum eq 25": {
+    "expected": 91,
+    "got": 91,
+    "pages": 1,
+    "at": "2026-08-01T15:38:19",
+    "host": "Studio.local"
+  },
+  "KNS_PersonToPosition|PositionID eq 57 and KnessetNum eq 25": {
+    "expected": 21,
+    "got": 21,
+    "pages": 1,
+    "at": "2026-08-01T15:38:20",
+    "host": "Studio.local"
+  },
+  "KNS_PersonToPosition|PositionID eq 40 and KnessetNum eq 25": {
+    "expected": 14,
+    "got": 14,
+    "pages": 1,
+    "at": "2026-08-01T15:38:21",
+    "host": "Studio.local"
+  },
+  "KNS_PersonToPosition|PositionID eq 59 and KnessetNum eq 25": {
+    "expected": 2,
+    "got": 2,
+    "pages": 1,
+    "at": "2026-08-01T15:38:21",
+    "host": "Studio.local"
+  },
+  "KNS_PersonToPosition|PositionID eq 285079 and KnessetNum eq 25": {
+    "expected": 0,
+    "got": 0,
+    "pages": 1,
+    "at": "2026-08-01T15:38:22",
+    "host": "Studio.local"
+  },
+  "KNS_PersonToPosition|PositionID eq 45 and KnessetNum eq 25": {
+    "expected": 2,
+    "got": 2,
+    "pages": 1,
+    "at": "2026-08-01T15:38:23",
+    "host": "Studio.local"
+  },
+  "KNS_PersonToPosition|PositionID eq 31 and KnessetNum eq 25": {
+    "expected": 1,
+    "got": 1,
+    "pages": 1,
+    "at": "2026-08-01T15:38:24",
+    "host": "Studio.local"
+  },
+  "KNS_PersonToPosition|PositionID eq 50 and KnessetNum eq 25": {
+    "expected": 2,
+    "got": 2,
+    "pages": 1,
+    "at": "2026-08-01T15:38:24",
+    "host": "Studio.local"
+  },
+  "KNS_PersonToPosition|PositionID eq 65 and KnessetNum eq 25": {
+    "expected": 0,
+    "got": 0,
+    "pages": 1,
+    "at": "2026-08-01T15:38:25",
+    "host": "Studio.local"
+  },
+  "KNS_PersonToPosition|PositionID eq 51 and KnessetNum eq 25": {
+    "expected": 0,
+    "got": 0,
+    "pages": 1,
+    "at": "2026-08-01T15:38:26",
+    "host": "Studio.local"
+  },
+  "KNS_PersonToPosition|PositionID eq 73 and KnessetNum eq 25": {
+    "expected": 0,
+    "got": 0,
+    "pages": 1,
+    "at": "2026-08-01T15:38:27",
+    "host": "Studio.local"
+  },
+  "KNS_PersonToPosition|PositionID eq 54 and KnessetNum eq 25": {
+    "expected": 191,
+    "got": 191,
+    "pages": 2,
+    "at": "2026-08-01T15:39:20",
+    "host": "Studio.local"
   }
 }
