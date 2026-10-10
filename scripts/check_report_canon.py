@@ -388,6 +388,11 @@ def build_site(root, destination):
     subprocess.run([sys.executable, "-c", cards, str(destination)],
                    cwd=root / "scripts", check=True)
     (destination / "robots.txt").write_text("User-agent: *\nAllow: /\n", encoding="utf-8")
+    from render_overview import check_index_links, Refuse
+    try:
+        check_index_links(destination)
+    except Refuse as exc:
+        raise ValueError(str(exc)) from exc
     check_outputs(destination, root / "design/mockup_v5")
     src = {p.relative_to(destination).as_posix(): p.read_text(encoding="utf-8")
            for p in destination.rglob("*.html")}
@@ -410,12 +415,14 @@ def reproduce(root):
         snapshot = pathlib.Path(tmp) / "snapshot"
         # Только входы текущего render_overview; копия не является согласованным
         # срезом источников (§11) или архивом прежней публикации.
-        for name in ("scripts", "cards", "design/mockup_v5", "docs/reference"):
+        for name in ("scripts", "cards", "criteria", "design/mockup_v5", "docs/reference"):
             shutil.copytree(root / name, snapshot / name,
                             ignore=shutil.ignore_patterns("__pycache__"))
         (snapshot / "data").mkdir()
-        for name in ("coverage_matrix.json", "votes_25.json"):
+        for name in ("coverage_matrix.json", "votes_25.json", "budget_takanot.json"):
             shutil.copyfile(root / "data" / name, snapshot / "data" / name)
+        for path in (root / "data").glob("commitment_map_*.json"):
+            shutil.copyfile(path, snapshot / "data" / path.name)
         first, second = pathlib.Path(tmp) / "first", pathlib.Path(tmp) / "second"
         build_site(snapshot, first)
         build_site(snapshot, second)
@@ -465,10 +472,10 @@ def selftest_reproduce():
         # Интеграция того же пути сборки: управляемый renderer выдаёт макет.
         # Это контроль обёртки, не доказательство работы реального renderer.
         fixture = root / "fixture"
-        for name in ("scripts", "cards", "docs/reference", "data"):
+        for name in ("scripts", "cards", "criteria", "docs/reference", "data"):
             (fixture / name).mkdir(parents=True)
         shutil.copytree(ROOT / "design/mockup_v5", fixture / "design/mockup_v5")
-        for name in ("coverage_matrix.json", "votes_25.json"):
+        for name in ("coverage_matrix.json", "votes_25.json", "budget_takanot.json"):
             (fixture / "data" / name).write_text("{}")
         renderer = fixture / "scripts/render_overview.py"
         renderer.write_text(

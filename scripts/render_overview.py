@@ -18,6 +18,11 @@
 from __future__ import annotations
 import json, re, sys
 from pathlib import Path
+from html.parser import HTMLParser
+from urllib.parse import unquote, urlsplit
+
+from build_report import esc, fingerprint, render_commitment, money, Refuse
+from validate_cards import budget_index
 
 ROOT = Path(__file__).resolve().parent.parent
 MOCK = ROOT / "design" / "mockup_v5" / "index.html"
@@ -37,11 +42,6 @@ def css_from_mockup() -> str:
     if not m:
         raise SystemExit("ОТКАЗ: в макете не найден <style> — форма не читается")
     return m.group(1)
-
-
-def esc(s) -> str:
-    import html
-    return html.escape("" if s is None else str(s))
 
 
 def cell(kind: str, label: str) -> str:
@@ -437,6 +437,58 @@ def selftest() -> int:
     # одинаково, отличить их по выводу нельзя — только подлогом.
     assert jargon(fp.replace("<h1", "<p>Так решил валидатор.</p><h1", 1)) \
         is not None, "страж внутреннего языка мёртв: подложенный «валидатор» не найден"
+    # Доставка существующей карточки: пропуск загрузчиком тоже ломает тест.
+    import copy
+    import tempfile
+    from validate_cards import REF_NUM
+    bc = copy.deepcopy(load_cards("party_period")[1095])
+    assert len(bc) == 1 and len(bc[0]["commitments"]) == 4
+    idx = {(code, int(year)): {"net_allocated": 123000, "net_executed": 456000}
+           for c in bc[0]["commitments"]
+           for code, year, _ in REF_NUM.findall(c["conclusion"])}
+    bc[0]["data_fingerprint"] = fingerprint(bc[0], idx, [])
+    block = budget_block(bc, idx, [])
+    shas = faction_page(fcard, frow, fv, block)
+    check_budget_page(shas, bc, idx, [])
+    assert "123 000 ₪" in shas and "{0022010213" not in shas
+    assert jargon(shas) is None, jargon(shas)
+
+    def rejects(label, action):
+        try:
+            action()
+        except Refuse as exc:
+            print(f"КРАСНЫЙ (пойман), {label}: {exc}")
+        else:
+            raise AssertionError(f"мёртвый оракул: {label}")
+
+    rejects("бюджетный блок удалён", lambda: check_budget_page(
+        shas.replace(block, ""), bc, idx, []))
+    print("ЗЕЛЁНЫЙ: четыре бюджетных разбора доставлены на страницу")
+    changed = copy.deepcopy(idx)
+    next(iter(changed.values()))["net_allocated"] += 1
+    rejects("подмена числа", lambda: budget_block(bc, changed, []))
+    bidi = copy.deepcopy(bc)
+    bidi[0]["commitments"][0]["quote_he"] += "\u202e"
+    rejects("Bidi в цитате", lambda: budget_block(bidi, idx, []))
+    state = state_page(dict(anchor_id=1097, line="הציונות הדתית",
+                            a={"status": "lineage_unresolved", "note": "нет связи"}))
+    assert "Наследование запрещено" in state and "Это не значит" in state
+    assert "Религиозный сионизм" in state and "הציונות הדתית" in state
+    assert "c-1097-inst" not in state and jargon(state) is None
+    with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
+        site = Path(tmp)
+        (site / "index.html").write_text(doc, encoding="utf-8")
+        for name in ("f-1.html", "f-2.html", "f-3.html", "axes.html"):
+            (site / name).write_text(state, encoding="utf-8")
+        n = check_index_links(site)
+        (site / "index.html").write_text(doc + '<a href="missing.html">нет</a>', encoding="utf-8")
+        rejects("несуществующий href", lambda: check_index_links(site))
+        (site / "index.html").write_text(doc, encoding="utf-8")
+        assert check_index_links(site) == n
+        print(f"ЗЕЛЁНЫЙ: все {n} href разрешаются внутри site/")
+    if OUT.exists():
+        print(f"ЗЕЛЁНЫЙ: site/index.html, {check_index_links(OUT.parent)} href")
+
     sys.path.insert(0, str(ROOT / "scripts"))
     from classify_direction import n_asserts
     print(f"самопроверка render_overview: {n_asserts(selftest)} утверждений "
@@ -444,14 +496,18 @@ def selftest() -> int:
     return 0
 
 
-def load_cards() -> dict:
+def load_cards(unit="faction_knesset") -> dict:
     sys.path.insert(0, str(ROOT / "scripts"))
     from validate_cards import load_yaml_ish
     out = {}
     for f in sorted((ROOT / "cards").glob("*.yaml")):
         c = load_yaml_ish(f)
-        if c.get("unit") == "faction_knesset":
-            out[int(c["faction_id"])] = c
+        if (c.get("unit") or "party_period") == unit:
+            if unit == "party_period":
+                fid = int(c["period_id"].split("-", 1)[0])
+                out.setdefault(fid, []).append(c)
+            else:
+                out[int(c["faction_id"])] = c
     return out
 
 
@@ -486,13 +542,105 @@ def votes_for(fid: int) -> list:
     return out
 
 
+def budget_block(cards: list, idx: dict, titles: list) -> str:
+    """§11: проверка и подстановка читают один индекс; старый CLI не вызывается."""
+    out = []
+    for card in cards:
+        if card.get("data_fingerprint") != fingerprint(card, idx, titles):
+            raise Refuse(f"§11: data_fingerprint не совпал: {card['period_id']}")
+        cov = card.get("coverage") or {}
+        out.append(f'<section data-budget="{esc(card["period_id"])}">'
+                   f'<p>Период: {esc(card["period_id"])}. Разобрано '
+                   f'{len(card.get("commitments") or [])} обязательств из '
+                   f'{esc(cov.get("commitments_total"))}; остальные не разобраны.</p>')
+        out.append('<p>Снимки источников: ' + esc(
+            "; ".join(f"{k} — {v}" for k, v in sorted(card["snapshots"].items()))) + '</p>')
+        for c in card.get("commitments") or []:
+            out.append(f'<article id="{esc(c["id"])}"><p>Сумма в соглашении: '
+                       f'{money(c["amount_ils"])}</p>'
+                       + render_commitment(c, idx, titles, []) + '</article>')
+        out.append('<p>Журнал исправлений:</p><ul>' + ''.join(
+            f'<li>{esc(r["date"])} · версия {esc(r["version"])}: '
+            f'{esc(r["what"])} — {esc(r["why"])}</li>'
+            for r in card.get("revisions") or []) + '</ul></section>')
+    return "".join(out)
+
+
+def check_budget_page(page: str, cards: list, idx: dict, titles: list) -> None:
+    """Отсутствие любого готового разбора — отказ, даже если остальная страница цела."""
+    for card in cards:
+        for date in card["snapshots"].values():
+            if esc(date) not in page:
+                raise Refuse("дата снимка бюджетного разбора потеряна")
+        for c in card.get("commitments") or []:
+            if money(c["amount_ils"]) not in page:
+                raise Refuse(f"сумма обязательства {c['id']} потеряна")
+            if render_commitment(c, idx, titles, []) not in page:
+                raise Refuse(f"бюджетный разбор {c['id']} потерян на странице")
+
+
+class IndexLinks(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.hrefs = []
+
+    def handle_starttag(self, tag, attrs):
+        self.hrefs.extend(v for k, v in attrs if k == "href" and v is not None)
+
+
+def check_index_links(site: Path) -> int:
+    """Каждый href ведёт в существующий файл внутри site, включая ссылки-якоря."""
+    parser = IndexLinks()
+    parser.feed((site / "index.html").read_text(encoding="utf-8"))
+    if not parser.hrefs:
+        raise Refuse("index.html не содержит ссылок — выборка пуста")
+    for href in parser.hrefs:
+        url = urlsplit(href)
+        target = (site / (unquote(url.path) or "index.html")).resolve()
+        if (url.scheme or url.netloc or not target.is_relative_to(site.resolve())
+                or not target.is_file()):
+            raise Refuse(f"href не разрешается в файл внутри site/: {href}")
+    return len(parser.hrefs)
+
+
+def state_page(row: dict) -> str:
+    """§7: отсутствие связи — отдельная страница, без наследования карточек."""
+    names = json.loads((ROOT / "criteria/wikidata_crosscheck.json").read_text(encoding="utf-8"))
+    ru = next((n["mine"] for group in ("agree", "differ", "missing")
+               for n in names[group] if n["he"] == row["line"]), None)
+    if not ru:
+        raise Refuse(f"§12: нет перевода названия строки {row['anchor_id']}")
+    return f'''<!doctype html><html lang=ru><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex, nofollow"><title>Связь не установлена</title>
+<style>{css_from_mockup()}</style></head><body>
+<nav class=crumbs><a href="index.html">Все фракции</a></nav>{SHORT_FRAME}
+<h1>Строка {esc(row["anchor_id"])}: {esc(ru)} <span lang=he dir=rtl><bdi>{esc(row["line"])}</bdi></span></h1>
+<p class=lead>Связь строки бюллетеня с фракцией не установлена.</p>
+<p>Причина: {esc(row["a"].get("note"))}.</p>
+<p>Преемственность остаётся неразрешённой. Наследование запрещено:
+этой строке нельзя приписывать голосования, бюджетные выводы или поступки
+людей других фракций.</p>
+<p>Это не значит, что партия не голосовала, не была в правительстве или
+что к ней нет вопросов. Это также не обвинение: мы не установили связь,
+необходимую для таких выводов.</p></body></html>'''
+
+
 def main() -> int:
     if "--selftest" in sys.argv:
         return selftest()
     if not MATRIX.exists():
         print(f"нет {MATRIX} — сначала scripts/coverage_matrix.py"); return 2
     m = json.loads(MATRIX.read_text(encoding="utf-8"))
+    # Обновляем подписи из решений, не записывая производный снимок в data/.
+    from coverage_matrix import channel_b, commitment_maps
+    maps = commitment_maps()
+    for row in m["lines"]:
+        if row["anchor_id"] in maps:
+            row["b"]["status"], row["b"]["note"] = channel_b(row["anchor_id"], set(), maps)
     cards = load_cards()
+    budgets = load_cards("party_period")
+    idx, titles = budget_index() if budgets else ({}, [])
     doc, total, filled = build(m, cards)
     bad = jargon(doc)
     if bad:
@@ -503,9 +651,15 @@ def main() -> int:
     pages = 0
     for r in m["lines"]:
         c = cards.get(r["anchor_id"])
-        if not c:
-            continue
-        page = faction_page(c, r, votes_for(r["anchor_id"]))
+        if r["a"]["status"] == "lineage_unresolved":
+            page = state_page(r)
+        elif not c:
+            raise Refuse(f"нет карточки наблюдаемой строки {r['anchor_id']}")
+        else:
+            bc = budgets.get(r["anchor_id"], [])
+            budget = budget_block(bc, idx, titles) if bc else ""
+            page = faction_page(c, r, votes_for(r["anchor_id"]), budget)
+            check_budget_page(page, bc, idx, titles)
         bad = jargon(page)
         if bad:
             print(f"ОТКАЗ: внутренний язык на f-{r['anchor_id']}.html: {bad}")
@@ -542,7 +696,7 @@ def det(summary: str, cert: str, inner: str, open_: bool = False) -> str:
             f'<div class=inner>{inner}</div></details>')
 
 
-def faction_page(card: dict, row: dict, votes: list) -> str:
+def faction_page(card: dict, row: dict, votes: list, budget: str = "") -> str:
     """Страница фракции. Клетка оси — details, как в макете; счёт
     голосований уходит ВНУТРЬ раскрытия, а не вываливается на страницу."""
     ru, he = card.get("party_ru"), card.get("party_he")
@@ -598,13 +752,15 @@ def faction_page(card: dict, row: dict, votes: list) -> str:
                f'голосований вообще считается</a> — разбор по правилам '
                f'отсева.</p>')
     cells = [det(head1, cert1, inner1, True)]
-    if row["b"]["status"] == "not_exposed":
+    if budget:
+        s2, c2 = "Деньги — разбор обязательств", row["b"]["note"]
+    elif row["b"]["status"] == "not_exposed":
         s2, c2 = ('Деньги — <b class=tx-none>искали, не нашли</b>',
                   "не экспонирована: канал покрывает только подписавших соглашение")
     else:
         s2, c2 = ('Деньги — <b class=tx-miss>мы сюда не дошли</b>',
                   "сопоставление обязательств не построено")
-    cells.append(det(s2, c2, f'<p>{esc(row["b"]["note"])}</p>'))
+    cells.append(det(s2, c2, budget or f'<p>{esc(row["b"]["note"])}</p>'))
     body = [f'<p class=lead>{esc(card.get("conclusion"))}</p>']
     for r in card.get("readings") or []:
         body.append(f'<p><b>{esc(READ_RU.get(r.get("type"), ""))}.</b> '
