@@ -194,8 +194,37 @@ def budget_index() -> tuple[dict, list[str]]:
 
 
 # --------------------------------------------------------------- 14 проверок
+def quote_in_ocr(quote: str, lines: list[str], line: int, pad: int = 2) -> bool:
+    """quote_he обязана быть подстрокой OCR в окне line±pad после схлопывания
+    пробелов. Буквы, кавычки, цифры не исправляются: исправленный OCR —
+    реконструкция, не цитата. Ревью 10.10: валидатор принимал выдуманную
+    цитату — восемь из двадцати двух цитат РС/ЯТ были «подправлены»."""
+    q = " ".join((quote or "").split())
+    lo, hi = max(0, int(line) - 1 - pad), int(line) + pad
+    window = " ".join(" ".join(l.split()) for l in lines[lo:hi])
+    return bool(q) and q in window
+
+
+def ocr_by_period() -> dict:
+    """period_id → список файлов OCR (как списки строк), по разделу agreements
+    criteria/budget_mapping.yaml. Без pyyaml (на Studio его нет): пары
+    `- file:` / `period_id:` читаются регулярным выражением."""
+    out: dict = {}
+    rule = ROOT / "criteria" / "budget_mapping.yaml"
+    if not rule.exists():
+        return out
+    text = rule.read_text(encoding="utf-8")
+    for m in re.finditer(r"^  - file: (\S+)\n(?:    (?!period_id:).*\n)*?    period_id: (\S+)",
+                         text, re.M):
+        f = ROOT / "data" / "agreements_ocr" / m.group(1)
+        if f.exists():
+            # у одного периода может быть несколько файлов (ЯТ + приложение)
+            out.setdefault(m.group(2), []).append(f.read_text(encoding="utf-8").split("\n"))
+    return out
+
+
 def check_card(card: dict, name: str, periods: set[str], idx: dict,
-               titles: list[str]) -> None:
+               titles: list[str], ocr: dict | None = None) -> None:
     def bad(rule: str, msg: str) -> None:
         fail(f"{name}: {rule} — {msg}")
 
@@ -390,6 +419,12 @@ def check_card(card: dict, name: str, periods: set[str], idx: dict,
             fail(f"{p}: §12 — quote_he пуст")
         if not (c.get("quote_ru") or "").strip():
             fail(f"{p}: §12 — quote_ru пуст")
+        # §12 — цитата дословна: OCR в окне line±2, без исправления букв
+        files = (ocr or {}).get(card.get("period_id"))
+        if files and c.get("line") and not any(
+                quote_in_ocr(c.get("quote_he"), lines, c["line"]) for lines in files):
+            fail(f"{p}: §12 — quote_he не найдена дословно в OCR в строках "
+                 f"{c['line']}±2; исправленный OCR — реконструкция, не цитата")
 
         # гранулярность из закрытого списка (criteria/budget_mapping.yaml)
         g = c.get("granularity")
@@ -565,6 +600,24 @@ def selftest() -> int:
         return len(problems)
 
     assert run(lambda c: None) == 0, f"чистая карточка не должна падать: {problems}"
+
+    # §12 — дословность цитаты: окно OCR line±2, пробелы схлопнуты, буквы — нет
+    ocr = {"1095-gov37": [["", "א", "ב. טקסט   ארוך", "ג", "ד", "ה", "ו", "ז", "ח"]]}
+    def run_ocr(mut) -> int:
+        problems.clear()
+        import copy
+        c = copy.deepcopy(base)
+        c["commitments"][0].update(quote_he="טקסט ארוך", line=3)
+        mut(c)
+        check_card(c, "t", P, idx, titles, ocr)
+        return len(problems)
+    assert run_ocr(lambda c: None) == 0, f"дословная цитата со схлопнутыми пробелами отвергнута: {problems}"
+    assert run_ocr(lambda c: c["commitments"][0].update(quote_he="טקסט ארוך מזויף")) == 1, \
+        "вымышленная добавка к цитате прошла"
+    assert run_ocr(lambda c: c["commitments"][0].update(quote_he='ב. טקסט "ארוך')) == 1, \
+        "исправленная кавычка OCR прошла как цитата"
+    assert run_ocr(lambda c: c["commitments"][0].update(line=8)) == 1, \
+        "цитата вне окна ±2 прошла"
 
     # Карточка канала А: единица — фракция × Кнессет, периода нет по
     # устройству предмета. Сначала убеждаемся, что ЧИСТАЯ такая карточка
@@ -782,6 +835,10 @@ def main() -> int:
         print("карточек нет — проверять нечего, но проверка НЕ отключена (§20)")
         return 0
     periods, (idx, titles) = known_periods(), budget_index()
+    ocr = ocr_by_period()
+    if not ocr:
+        print("ВНИМАНИЕ: нет data/agreements_ocr — дословность цитат "
+              "не проверяется, это дыра, а не «всё хорошо»", file=sys.stderr)
     if not idx:
         print("ВНИМАНИЕ: нет data/budget_takanot.json — ссылки на числа "
               "не проверяются, это дыра, а не «всё хорошо»", file=sys.stderr)
@@ -791,7 +848,7 @@ def main() -> int:
         except Exception as exc:  # noqa: BLE001
             fail(f"{f.name}: не разобрался — {exc}")
             continue
-        check_card(card, f.name, periods, idx, titles)
+        check_card(card, f.name, periods, idx, titles, ocr)
 
     if problems:
         print(f"НАРУШЕНИЯ КОНТРАКТА КАРТОЧКИ ({len(problems)}):", file=sys.stderr)
