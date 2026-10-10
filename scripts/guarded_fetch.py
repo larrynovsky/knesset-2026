@@ -66,6 +66,17 @@ def _get(url: str, timeout: int = 60, attempts: int = 4) -> dict:
         try:
             req = urllib.request.Request(url, headers=UA)
             with urllib.request.urlopen(req, timeout=timeout, context=CTX) as r:
+                # 2026-10-10: Studio получил 303 → maintenance-page-geo, и
+                # HTML уехал в json.loads. JSONDecodeError в post-receive
+                # читался как «состав каденций неполон» — отказ источника
+                # превращался в утверждение о данных (§7: source_missing ≠
+                # observed). Повтор здесь бессмыслен: гео-заглушка не
+                # пройдёт через 2**k секунд, поэтому отказ немедленный.
+                ct = r.headers.get_content_type()
+                if ct != "application/json":
+                    raise ShortRead(
+                        f"сервер отдал {ct!r} вместо JSON; конечный адрес "
+                        f"{r.geturl()[:120]} — это отказ источника, не данные")
                 return json.loads(r.read())
         except urllib.error.HTTPError as e:
             if e.code < 500:
@@ -214,11 +225,19 @@ def sync_manifest() -> tuple[int, int]:
     except Exception:  # noqa: BLE001
         snap = {}
     before = len(snap)
+    # Слияние по времени записи, а не по алфавиту имён буферов. 2026-10-10:
+    # `snap.update()` в порядке glob отдавал победу Studio.local.json
+    # (S > M), и запись 31.07 (4515) затирала свежую с MacBook (4518);
+    # `--sync` печатал «стало 1822», а unsynced() продолжал краснеть на том
+    # же ключе — flush, который не flush. Побеждает новейшее `at`.
     for f in sorted((_ROOT / "data" / "manifest").glob("*.json")):
         try:
-            snap.update(json.loads(f.read_text()))
+            buf = json.loads(f.read_text())
         except Exception as exc:  # noqa: BLE001
             raise ShortRead(f"буфер {f.name} не читается: {exc}") from exc
+        for k, v in buf.items():
+            if k not in snap or str(v.get("at", "")) >= str(snap[k].get("at", "")):
+                snap[k] = v
     MANIFEST.write_text(json.dumps(snap, ensure_ascii=False, indent=2))
     return before, len(snap)
 
@@ -252,6 +271,12 @@ def unsynced() -> list[str]:
             # Настоящий сигнал — ключ, которого git никогда не видел, или
             # изменившиеся цифры. Повторная выгрузка с тем же результатом
             # новым доказательством не является.
+            # Исключение одно: снимок уже держит БОЛЕЕ ПОЗДНЮЮ выгрузку того
+            # же ключа с другой машины. Старый буфер тогда не «потерян», а
+            # превзойдён — иначе после слияния по `at` вторая машина вечно
+            # краснела бы на своей же устаревшей записи.
+            if s is not None and str(s.get("at", "")) > str(v.get("at", "")):
+                continue
             if s is None or (s.get("expected"), s.get("got")) != (
                     v.get("expected"), v.get("got")):
                 out.append(k)
@@ -495,8 +520,21 @@ if __name__ == "__main__":
     (_ROOT / "data" / "manifest" / "host.json").write_text(json.dumps(
         {"X|": {"expected": 2, "got": 2, "pages": 1, "at": "T2", "host": "h"}}))
     assert unsynced() == ["X|"], "изменившиеся цифры не пойманы"
+    # Две машины, один ключ: файл, ПОЗДНИЙ по алфавиту, держит СТАРУЮ запись.
+    # Воспроизводит 2026-10-10: Studio.local.json (31.07, 4515) затирал
+    # MacBook-…json (10.10, 4518). Побеждать обязано новейшее `at`, и старый
+    # буфер после этого не должен читаться как потеря.
+    (_ROOT / "data" / "manifest" / "a-new.json").write_text(json.dumps(
+        {"Y|": {"expected": 4518, "got": 4518, "pages": 46, "at": "2026-10-10T12:46:43", "host": "a"}}))
+    (_ROOT / "data" / "manifest" / "z-old.json").write_text(json.dumps(
+        {"Y|": {"expected": 4515, "got": 4515, "pages": 46, "at": "2026-07-31T14:27:32", "host": "z"}}))
+    sync_manifest()
+    _snap = json.loads(MANIFEST.read_text())
+    assert _snap["Y|"]["got"] == 4518, \
+        f"слияние по алфавиту: старая запись затёрла новую ({_snap['Y|']['got']})"
+    assert "Y|" not in unsynced(), "превзойдённый старый буфер читается как потеря"
     _ROOT, MANIFEST = _real_root, _real_manifest
-    print("  OK: потеря обнаружена, flush её закрыл")
+    print("  OK: потеря обнаружена, flush её закрыл, новейшая запись побеждает")
 
     # ---- повтор на обрыве: обязан пережить обрыв и НЕ прятать 4xx --------
     print("повтор на обрыве сети: обрыв переживается, 404 — нет...")
@@ -504,7 +542,17 @@ if __name__ == "__main__":
     _calls = {"n": 0}
 
     class _Fake:
-        def __init__(self, payload): self._p = payload
+        def __init__(self, payload, ct="application/json",
+                     url="https://example.invalid/x"):
+            self._p, self._ct, self._u = payload, ct, url
+
+        class _H:
+            def __init__(self, ct): self._ct = ct
+            def get_content_type(self): return self._ct
+
+        @property
+        def headers(self): return self._H(self._ct)
+        def geturl(self): return self._u
         def read(self): return json.dumps(self._p).encode()
         def __enter__(self): return self
         def __exit__(self, *a): return False
@@ -547,7 +595,27 @@ if __name__ == "__main__":
         except urllib.error.HTTPError:
             assert _calls["n"] == 1, \
                 "404 повторялся — повтор маскирует неверный запрос"
-        print("  OK: обрыв пережит, лимит соблюдён, 404 не повторяется")
+
+        # Гео-заглушка: 303 → HTML с кодом 200. Это должен быть отказ с
+        # адресом, а не JSONDecodeError, который читатель примет за дефект
+        # данных. Провокация воспроизводит Studio 2026-10-10 дословно.
+        def _geo(req, **kw):
+            _calls["n"] += 1
+            return _Fake(None, ct="text/html",
+                         url="https://www.knesset.gov.il/maintenance-page-geo")
+
+        _calls["n"] = 0
+        urllib.request.urlopen = _geo
+        try:
+            _get("https://example.invalid/x")
+            print("  ПРОВАЛ: HTML-заглушка принята за JSON")
+            raise SystemExit(1)
+        except ShortRead as e:
+            assert "maintenance-page-geo" in str(e), \
+                "отказ не называет конечный адрес"
+            assert _calls["n"] == 1, "гео-заглушка повторялась"
+        print("  OK: обрыв пережит, лимит соблюдён, 404 не повторяется, "
+              "HTML вместо JSON — отказ с адресом")
     finally:
         urllib.request.urlopen = _real_open
 

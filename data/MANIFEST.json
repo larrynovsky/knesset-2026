@@ -3,8 +3,8 @@
     "expected": 545,
     "got": 545,
     "pages": 6,
-    "at": "2026-07-31T14:26:31",
-    "host": "Studio.local"
+    "at": "2026-10-10T12:45:46",
+    "host": "MacBook-Pro-14-Alexander.local"
   },
   "KNS_PersonToPosition|PositionID eq 43": {
     "expected": 2981,
@@ -13,11 +13,11 @@
     "at": "2026-07-28T12:28:03"
   },
   "KNS_PersonToPosition|PositionID eq 54": {
-    "expected": 4515,
-    "got": 4515,
+    "expected": 4518,
+    "got": 4518,
     "pages": 46,
-    "at": "2026-07-31T14:27:32",
-    "host": "Studio.local"
+    "at": "2026-10-10T12:46:43",
+    "host": "MacBook-Pro-14-Alexander.local"
   },
   "KNS_Bill|KnessetNum eq 25": {
     "expected": 7491,
