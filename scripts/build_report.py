@@ -286,6 +286,7 @@ def render_commitment(c: dict, idx, titles, nulls) -> str:
     p = [f"<h3>{esc(c.get('quote_ru'))}</h3>"]
     p.append(f'<div class=q><div class=he lang=he dir=rtl>'
              f'<bdi>{esc(c.get("quote_he"))}</bdi></div>'
+             f'<div class=he lang=he dir=rtl><bdi>{esc(c.get("heading_he"))}</bdi></div>'
              f'<div class=meta>{esc(c.get("heading_ru"))} · '
              f'страница {esc(c.get("page"))}, строка {esc(c.get("line"))}</div></div>')
     p.append(f"<p>{substitute(c.get('conclusion') or '', idx, titles, nulls)}</p>")

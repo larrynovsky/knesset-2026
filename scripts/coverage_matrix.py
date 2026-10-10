@@ -93,7 +93,10 @@ def channel_b(anchor_id: int, gov: set, maps: dict) -> tuple:
     """Деньги. Канал покрывает только подписавших соглашение — это его предел,
     а не наша недоработка, и потому not_exposed, а не source_missing."""
     if anchor_id in maps:
-        return OBSERVED, f"{maps[anchor_id]} обязательств сопоставлено"
+        n = maps[anchor_id]
+        return OBSERVED, (f"Кандидатов: {n['candidates']}; из них признано "
+                          f"обязательствами: {n['commitments']}; из этих обязательств "
+                          f"ожидают решения о сопоставлении: {n['unresolved']}")
     if anchor_id not in gov:
         return NOT_EXPOSED, ("ноль периодов в правительстве: соглашения нет "
                              "по устройству канала, а не по нашей вине")
@@ -174,7 +177,29 @@ def selftest() -> int:
         {"bill_id": 11, "by_faction": {"1|А": {}, "3|В": {}}},
         {"bill_id": 11, "by_faction": {"9|Чужая": {}}}]}
     periods = {"periods": [{"faction_id": 1}, {"faction_id": 2}]}
-    m = build(lin, votes, periods, {1: 21})
+    items = ([{"category": "commitment", "granularity": None,
+               "rejection_reason": None}] * 19
+             + [{"category": "commitment", "granularity": "exact_takana"},
+                {"category": "commitment", "rejection_reason": "no_term_match"}]
+             + [{"category": "continuation", "rejection_reason": "not_budgetary"}] * 14
+             + [{"category": "unit_rate", "rejection_reason": "not_budgetary"}] * 4
+             + [{"category": "status_quo", "rejection_reason": "not_budgetary"}] * 3)
+    counts = commitment_counts(items)
+    assert counts == {"candidates": 42, "commitments": 21, "unresolved": 19}
+    m = build(lin, votes, periods, {1: counts})
+    expected = ("Кандидатов: 42; из них признано обязательствами: 21; "
+                "из этих обязательств ожидают решения о сопоставлении: 19")
+    old = f"{len(items)} обязательств сопоставлено"
+    def check_caption(caption):
+        assert caption == expected, f"неверная подпись: {caption}"
+    try:
+        check_caption(old)
+    except AssertionError as exc:
+        print(f"КРАСНЫЙ (пойман): {exc}")
+    else:
+        raise AssertionError("оракул пропустил старую формулу")
+    check_caption(m["lines"][0]["b"]["note"])
+    print(f"ЗЕЛЁНЫЙ: {expected}")
 
     # ГЛАВНЫЙ ОРАКУЛ: строка без данных обязана ОСТАТЬСЯ в таблице со
     # статусом. Исчезновение строки — тот самый способ, которым отчёт о
@@ -216,8 +241,16 @@ def selftest() -> int:
     return 0
 
 
+def commitment_counts(items: list) -> dict:
+    """Кандидат ≠ обязательство ≠ принятое сопоставление; отказ не решение."""
+    commitments = [i for i in items if i.get("category") == "commitment"]
+    return {"candidates": len(items), "commitments": len(commitments),
+            "unresolved": sum(not i.get("granularity") and
+                              not i.get("rejection_reason") for i in commitments)}
+
+
 def commitment_maps() -> dict:
-    """faction_id -> число сопоставленных обязательств. Ключ берётся из
+    """faction_id -> раздельные счётчики кандидатов, обязательств и ожиданий. Ключ берётся из
     period_id карточки-источника («1095-gov37»), а не из имени файла."""
     out = {}
     for p in sorted((ROOT / "data").glob("commitment_map_*.json")):
@@ -225,7 +258,10 @@ def commitment_maps() -> dict:
         pid = str(d.get("period_id") or "")
         head = pid.split("-", 1)[0]
         if head.isdigit():
-            out[int(head)] = len(d.get("items") or [])
+            counts = out.setdefault(int(head), dict.fromkeys(
+                ("candidates", "commitments", "unresolved"), 0))
+            for key, value in commitment_counts(d.get("items") or []).items():
+                counts[key] += value
     return out
 
 
