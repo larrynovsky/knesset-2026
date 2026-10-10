@@ -343,6 +343,7 @@ def check_outputs(site, mock):
     if not expected:
         raise ValueError("ОТКАЗ §14: макет пуст — сверять состав не с чем")
     singles = {n for n in expected if not any(n.startswith(k) for k in KINDS)}
+    singles.add("time.html")  # Страница времени заказана отдельно от макета (§24).
     missing = sorted(singles - actual)
     for pref, label in KINDS.items():
         if any(n.startswith(pref) for n in expected) \
@@ -352,7 +353,7 @@ def check_outputs(site, mock):
         raise ValueError("ОТКАЗ §14: страницы принятого макета отсутствуют "
                          "в сборке: " + ", ".join(missing))
     # Дополнительные страницы фракций разрешены: набор зависит от данных.
-    unexpected = {name for name in actual - expected
+    unexpected = {name for name in actual - expected - {"time.html"}
                   if not any(name.startswith(k) for k in KINDS)}
     if unexpected:
         raise ValueError("ОТКАЗ §14: посторонние HTML в сборке: "
@@ -401,6 +402,11 @@ def build_site(root, destination):
              "from pathlib import Path; c.OUT_DIR=Path(sys.argv[1]); "
              "sys.exit(c.main())")
     subprocess.run([sys.executable, "-c", cards, str(destination)],
+                   cwd=root / "scripts", check=True)
+    time_page = ("import sys; import render_time_page as t; "
+                 "from pathlib import Path; t.OUT=Path(sys.argv[1])/'time.html'; "
+                 "sys.argv=sys.argv[:1]; sys.exit(t.main())")
+    subprocess.run([sys.executable, "-c", time_page, str(destination)],
                    cwd=root / "scripts", check=True)
     (destination / "robots.txt").write_text("User-agent: *\nAllow: /\n", encoding="utf-8")
     from render_overview import check_index_links, Refuse
@@ -451,7 +457,7 @@ def selftest_reproduce():
         root = pathlib.Path(tmp)
         mock, site = root / "mock", root / "site"
         mock.mkdir(); site.mkdir()
-        for name in ("index.html", "f-example.html"):
+        for name in ("index.html", "f-example.html", "time.html"):
             (mock / name).write_text("example")
             (site / name).write_text("example")
         (site / "robots.txt").write_text("User-agent: *\nAllow: /\n")
@@ -459,6 +465,15 @@ def selftest_reproduce():
         other = root / "other"
         shutil.copytree(site, other)
         compare_builds(site, other)
+        (site / "time.html").unlink()
+        try:
+            check_outputs(site, mock)
+        except ValueError as e:
+            assert "time.html" in str(e)
+            print(f"КРАСНЫЙ (страница времени потеряна): {e}")
+        else:
+            raise AssertionError("пропущена потеря time.html")
+        (site / "time.html").write_text("example")
         # Каждый подлог меняет настоящий файл и вызывает рабочий оракул.
         for label, path, content, oracle in (
             ("добавленная страница макета", mock / "new.html", "new",
@@ -492,6 +507,15 @@ def selftest_reproduce():
         shutil.copytree(ROOT / "design/mockup_v5", fixture / "design/mockup_v5")
         for name in ("coverage_matrix.json", "votes_25.json", "budget_takanot.json"):
             (fixture / "data" / name).write_text("{}")
+        # Общий build_site вызывает все генераторы; здесь проверяется обёртка.
+        for module in ("render_axes", "render_card_page"):
+            (fixture / f"scripts/{module}.py").write_text("def main(): return 0\n")
+        (fixture / "scripts/render_time_page.py").write_text(
+            "from pathlib import Path\nimport shutil\n"
+            "def main():\n"
+            "    shutil.copyfile(Path(__file__).resolve().parents[1]/"
+            "'design/mockup_v5/f-generic.html', OUT)\n"
+            "    return 0\n")
         renderer = fixture / "scripts/render_overview.py"
         renderer.write_text(
             "from pathlib import Path\nimport shutil\n"
