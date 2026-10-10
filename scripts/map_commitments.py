@@ -20,12 +20,14 @@
      владельцу, а не самостоятельное дорешивание.
 
 Запуск (данные лежат на Studio, §19):
-    ssh larry@studio 'cd ~/knesset && python3 -u scripts/map_commitments.py'
+    ssh larry@studio 'cd ~/knesset && python3 -u scripts/map_commitments.py --agreement CA37-Shas.txt'
 Самопроверка (без сети и без данных):
     python3 scripts/map_commitments.py --selftest
 """
 from __future__ import annotations
 
+import argparse
+import datetime as dt
 import hashlib
 import json
 import re
@@ -34,13 +36,14 @@ import sys
 import time
 from pathlib import Path
 
+from validate_cards import load_yaml_ish
+
 ROOT = Path(__file__).resolve().parent.parent
 RULE = ROOT / "criteria" / "budget_mapping.yaml"
 RULE_REL = "criteria/budget_mapping.yaml"
-AGREEMENT = ROOT / "data" / "agreements_ocr" / "CA37-Shas.txt"
 TAKANOT = ROOT / "data" / "budget_takanot.json"
 CHANGES = ROOT / "data" / "budget_changes.json"
-OUT = ROOT / "data" / "commitment_map_shas.json"
+PERIODS = ROOT / "criteria" / "periods.yaml"
 
 # Служебные слова иврита и единицы измерения. Это МЕХАНИКА поиска, не норма:
 # правило требует, чтобы термины приходили из цитаты, и этот список только
@@ -116,6 +119,93 @@ def rule_str(text: str, key: str) -> str:
     if not m:
         sys.exit(f"ОТКАЗ: в {RULE_REL} нет строкового ключа `{key}` (§20)")
     return m.group(1)
+
+
+def slug(agreement: dict) -> str:
+    return Path(agreement["file"]).stem.removeprefix("CA37-").lower()
+
+
+def validate_agreement(a: dict) -> None:
+    required = ("file", "period_id", "faction_id", "party_he", "budget_years",
+                "candidate_lines_expected")
+    if not isinstance(a, dict) or any(k not in a for k in required):
+        raise SystemExit(f"ОТКАЗ: agreements требует поля {', '.join(required)} (§23)")
+    if not isinstance(a["file"], str) or not re.fullmatch(r"CA37-[A-Za-z0-9-]+\.txt", a["file"]):
+        raise SystemExit("ОТКАЗ: file должен быть именем CA37-<slug>.txt")
+    if not isinstance(a["party_he"], str) or not a["party_he"].strip():
+        raise SystemExit("ОТКАЗ: party_he пуст")
+    expected = a["candidate_lines_expected"]
+    if type(expected) is not int or expected < 0:
+        raise SystemExit("§23 ОТКАЗ: candidate_lines_expected должен быть целым >= 0")
+    periods = load_yaml_ish(PERIODS)["periods"]
+    period = next((p for p in periods if p["id"] == a["period_id"]), None)
+    if period is None:
+        raise SystemExit(f"§1 ОТКАЗ: period_id {a['period_id']} отсутствует в criteria/periods.yaml")
+    if a["faction_id"] != period["faction_id"]:
+        raise SystemExit("§1 ОТКАЗ: faction_id не соответствует периоду")
+    start = dt.date.fromisoformat(period["start"]).year
+    finish = dt.date.fromisoformat(period["finish"]).year if period["finish"] else dt.date.today().year
+    years = a["budget_years"]
+    if (not isinstance(years, list) or not years or
+            any(type(y) is not int or not start <= y <= finish for y in years) or
+            len(set(years)) != len(years)):
+        raise SystemExit(f"§11 ОТКАЗ: budget_years {years} вне периода {start}–{finish} или повторены")
+
+
+def agreement_entries(text: str) -> list[dict]:
+    # Общие поля правила содержат YAML вне подмножества карточного парсера.
+    # Повторно используем его только для структурированного списка agreements.
+    block = re.search(r"^agreements:[^\n]*\n(?:(?:[ \t]+[^\n]*|#[^\n]*|)\n?)*", text, re.M)
+    if not block:
+        raise SystemExit("§3 ОТКАЗ: в правиле нет списка agreements; требуется criteria-revision")
+    entries = load_yaml_ish(RULE, text=block.group())["agreements"]
+    if not isinstance(entries, list) or not entries:
+        raise SystemExit("ОТКАЗ: agreements должен быть непустым списком")
+    for a in entries:
+        validate_agreement(a)
+    if len({slug(a) for a in entries}) != len(entries):
+        raise SystemExit("ОТКАЗ: повтор имени выхода в agreements")
+    return entries
+
+
+def cli_args():
+    parser = argparse.ArgumentParser(description=__doc__)
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--agreement", help="имя файла из agreements в правиле")
+    group.add_argument("--all", action="store_true", help="все объявленные соглашения")
+    parser.add_argument("--selftest", action="store_true")
+    parser.add_argument("--data-dir", type=Path, default=ROOT / "data")
+    parser.add_argument("--output-dir", type=Path)
+    args = parser.parse_args()
+    if not (args.selftest or args.agreement or args.all):
+        parser.error("укажите --agreement FILE или --all")
+    return args
+
+
+def select_agreements(text: str, args) -> list[dict]:
+    entries = agreement_entries(text)
+    selected = [a for a in entries if args.all or a["file"] == args.agreement]
+    if not selected:
+        raise SystemExit(f"§3 ОТКАЗ: {args.agreement} не объявлено в agreements")
+    return selected
+
+
+def require_quotes(items: list[dict]) -> None:
+    for item in items:
+        if not isinstance(item.get("quote_he"), str) or not item["quote_he"].strip():
+            raise SystemExit(f"§12 ОТКАЗ: quote_he отсутствует, строка {item.get('line')}")
+
+
+def validate_mapping(d: dict, a: dict, sha: str) -> None:
+    validate_agreement(a)
+    require_quotes(d["items"])
+    if d["period_id"] != a["period_id"] or d["years"] != a["budget_years"] or d["party"] != a["party_he"]:
+        raise SystemExit("ОТКАЗ: период, годы или партия карты расходятся с agreements")
+    if d["rule_sha256"] != sha:
+        raise SystemExit("§3 ОТКАЗ: rule_sha256 карты расходится с текущим правилом")
+    actual, expected = len(d["items"]), a["candidate_lines_expected"]
+    if actual != expected or d["counts"]["candidates"] != actual:
+        raise SystemExit(f"§23 ОТКАЗ: кандидатов {actual}, правило объявляет {expected}, counts={d['counts']['candidates']}")
 
 
 # ------------------------------------------------------------- извлечение
@@ -226,11 +316,12 @@ def amount_of(quote: str) -> float | None:
 TITLE_FIELDS = ("title", "title_level8", "title_level6", "title_level4")
 
 
-def doc_freq(rows: list[dict], term: str, _cache: dict = {}) -> int:  # noqa: B006
-    """В скольких названиях статей встречается термин. Считается один раз."""
-    if term not in _cache:
-        _cache[term] = sum(1 for r in rows if term in (r["title"] or ""))
-    return _cache[term]
+def doc_freq(rows: list[dict], term: str, _cache: dict | None = None) -> int:
+    """Кеш принадлежит одному сопоставлению, а не всем соглашениям процесса."""
+    cache = {} if _cache is None else _cache
+    if term not in cache:
+        cache[term] = sum(1 for r in rows if term in (r["title"] or ""))
+    return cache[term]
 
 
 def search(rows: list[dict], terms: list[str], years: list[int],
@@ -373,26 +464,155 @@ def selftest() -> int:
     assert "מלש" in ds and "הבאים" in ds and "באים" in ds, ds
     assert "מלש" not in terms_of('שיפוץ - 30 מלש"ח', ds)
     assert "כנסת" in terms_of('שיפוץ בתי כנסת - 30 מלש"ח', ds)
-    print("самопроверка map_commitments пройдена: 26 утверждений")
+    # Подложенные входы. Реальные соглашения кроме ШАС
+    # здесь не читаются: §3. Мутанты обязаны отказать тем же путём, что CLI.
+    from copy import deepcopy
+    from tempfile import TemporaryDirectory
+    from unittest.mock import patch
+    import io
+    import contextlib
+    import render_mapping_review as review
+    import probe_placebo as placebo
+
+    declared = """agreements:
+  - file: CA37-Shas.txt
+    period_id: 1095-gov37
+    faction_id: 1095
+    party_he: ש"ס
+    budget_years: [2023, 2024, 2025]
+    candidate_lines_expected: 42
+  - file: CA37-Fixture.txt
+    period_id: 1105-gov37
+    faction_id: 1105
+    party_he: בדיקה
+    budget_years: [2024]
+    candidate_lines_expected: 1
+"""
+    rule = RULE.read_text(encoding="utf-8")
+    # Не подменяем будущий production-список: тестовый блок разбирается отдельно.
+    shas, other = agreement_entries(declared + "source:\n  table: raw_budget\n")
+    assert slug(shas) == "shas" and slug(other) == "fixture"
+    budget = {"fetched_at": "fixture", "table": "raw_budget", "rows": [
+        {"code": "0012345601", "year": 2024, "title": "קהילות", "net_allocated": 11,
+         "net_revised": 12, "net_executed": 9},
+        {"code": "0098765401", "year": 2024, "title": "זר", "net_allocated": 1,
+         "net_revised": 2, "net_executed": 0}]}
+    lines = ['יוקצו 15 מיליון לקהילות']
+    good = build_map(rule, "fixture-sha", other, lines, budget, [])
+    validate_mapping(good, other, "fixture-sha")
+    assert good["years"] == [2024] and good["period_id"] == "1105-gov37"
+    assert set(good["items"][0]["candidates"][0]["years"]) == {"2024"}
+    print("GREEN: второе соглашение — собственные период, годы, выход fixture")
+
+    def refuses(name, operation, *messages):
+        try:
+            operation()
+        except SystemExit as exc:
+            message = str(exc)
+            assert all(m in message for m in messages), message
+            print(f"RED: {name}: {message}")
+        else:
+            raise AssertionError(f"мутант выжил: {name}")
+
+    refuses("нет quote_he", lambda: require_quotes([{"category": "commitment"}]), "quote_he")
+    with patch.dict(globals(), candidates=lambda *_: [{"line": 1}]):
+        refuses("нет quote_he при извлечении", lambda: build_map(
+            rule, "fixture-sha", other, lines, budget, []), "quote_he")
+    for name, change, message in [
+        ("чужой период", {"period_id": "missing-gov37"}, "criteria/periods.yaml"),
+        ("год до периода", {"budget_years": [2021]}, "budget_years"),
+        ("расхождение числа", {"candidate_lines_expected": 2}, "кандидатов 1, правило объявляет 2"),
+    ]:
+        bad = dict(other, **change)
+        refuses(name, lambda: build_map(rule, "fixture-sha", bad, lines, budget, []), message)
+    refuses("нет ожидания в agreements", lambda: agreement_entries(
+        declared.replace("    candidate_lines_expected: 1\n", "")), "candidate_lines_expected")
+    refuses("нет agreements", lambda: agreement_entries("extraction:\n  candidate_lines_expected: 42\n"), "agreements")
+    refuses("повтор соглашения", lambda: agreement_entries(declared + declared.split("agreements:\n")[1]), "повтор")
+    broken = deepcopy(good)
+    del broken["items"][0]["quote_he"]
+    refuses("рендер без оригинала", lambda: review.render(broken), "quote_he")
+    refuses("карта другого правила", lambda: validate_mapping(good, other, "wrong-sha"), "rule_sha256")
+    good["items"][0]["quote_ru"] = "Перевод <проверка>"
+    page = review.render(good)
+    assert '<td>2024</td><td>11</td><td>12</td><td>9</td>' in page
+    assert "2023" not in page and "2025" not in page
+    assert review.esc(lines[0]) in page and "Перевод &lt;проверка&gt;" in page
+    assert page.index(review.esc(lines[0])) < page.index("Перевод &lt;проверка&gt;")
+    assert 'בדיקה' in page and 'ШАС' not in page
+    assert "15 000 000 ₪" in page
+    print("GREEN: HTML — иврит, перевод, сумма, кандидат и только объявленный год")
+    with TemporaryDirectory() as tmp:
+        log = io.StringIO()
+        with contextlib.redirect_stdout(log):
+            assert placebo.probe(other, good, budget["rows"], Path(tmp)) == 0
+        assert "настоящая 00123456" in log.getvalue()
+        assert "ветка 00987654" in log.getvalue()
+        print("GREEN: плацебо использует найденную ветку 00123456 и контроль 00987654")
+        refuses("плацебо без контроля", lambda: placebo.probe(
+            other, good, budget["rows"][:1], Path(tmp)), "контрольных веток")
+        leaky = deepcopy(budget["rows"])
+        leaky[1]["title"] = "קהילות"
+        with contextlib.redirect_stdout(io.StringIO()):
+            assert placebo.probe(other, good, leaky, Path(tmp)) == 1
+        print("RED: плацебо, совпадения на чужой ветке — exit 1")
+    assert doc_freq([{"title": "קהילות"}], "קהילות") == 1
+    assert doc_freq([{"title": "זר"}], "קהילות") == 0
+    print("GREEN: кеш частот не протекает между бюджетами")
+
+    # Тот же CLI --all пишет разные карты и страницы.
+    with TemporaryDirectory() as tmp:
+        data = Path(tmp)
+        (data / "agreements_ocr").mkdir()
+        (data / "agreements_ocr" / shas["file"]).write_text("\n".join(lines * 42), encoding="utf-8")
+        (data / "agreements_ocr" / other["file"]).write_text("\n".join(lines), encoding="utf-8")
+        (data / TAKANOT.name).write_text(json.dumps(dict(budget, rows=[])), encoding="utf-8")
+        (data / CHANGES.name).write_text('{"rows": []}', encoding="utf-8")
+        args = argparse.Namespace(selftest=False, all=True, agreement=None, data_dir=data, output_dir=data)
+        fixture_rule = declared + "\n" + rule
+        fixture_sha = hashlib.sha256(fixture_rule.encode()).hexdigest()
+        with patch.dict(globals(), cli_args=lambda: args,
+                        rule_text_and_sha=lambda: (fixture_rule, fixture_sha)):
+            with contextlib.redirect_stdout(io.StringIO()):
+                assert main() == 0
+        for entry in (shas, other):
+            d = json.loads((data / f"commitment_map_{slug(entry)}.json").read_text())
+            validate_mapping(d, entry, fixture_sha)
+        with patch.object(review.mc, "cli_args", return_value=args), \
+                patch.object(review.mc, "rule_text_and_sha", return_value=(fixture_rule, fixture_sha)):
+            with contextlib.redirect_stdout(io.StringIO()):
+                assert review.main() == 0
+        assert (data / "mapping_review_shas.html").exists()
+        assert (data / "mapping_review_fixture.html").exists()
+        print("GREEN: CLI --all — два JSON и две HTML-страницы, разные имена и метаданные")
+
+    # Настоящий OCR ШАС при наличии; без данных проверяем объявленные 42
+    # на подложенном тексте. Полная регрессия прежнего JSON — отдельный прогон.
+    source = ROOT / "data" / "agreements_ocr" / shas["file"]
+    shas_lines = source.read_text(encoding="utf-8").splitlines() if source.exists() else lines * 42
+    with contextlib.redirect_stdout(io.StringIO()):
+        shas_map = build_map(rule, "fixture-sha", shas, shas_lines,
+                             {"fetched_at": "fixture", "table": "raw_budget", "rows": []}, [])
+    assert len(shas_map["items"]) == 42
+    print(f"GREEN: ШАС 42; OCR {'настоящий' if source.exists() else 'подложенный'}, бюджет подложенный")
+    print("самопроверка канала Б пройдена: базовые проверки, мутанты, два соглашения")
     return 0
 
 
-def main() -> int:
-    if "--selftest" in sys.argv:
-        return selftest()
-
-    text, sha = rule_text_and_sha()
+def build_map(text: str, sha: str, agreement: dict, lines: list[str],
+              budget: dict, changes: list[dict]) -> dict:
+    """Сопоставление на явных входах; запись остаётся только в CLI."""
+    validate_agreement(agreement)
     units = rule_list(text, "money_units") + rule_list(text, "damaged_units")
-    expected = rule_int(text, "candidate_lines_expected")
+    expected = agreement["candidate_lines_expected"]
     max_shown = rule_int(text, "max_candidates_shown")
     max_manual = rule_int(text, "max_manual_decisions")
     rare_max = rule_int(text, "rare_term_max_articles")
     code_pat = rule_str(text, "pattern")
-    years = [2023, 2024, 2025]
+    years = agreement["budget_years"]
     # Стоп-слова, выведенные из объявленного в правиле, а не подобранные.
     dstop = _derived_stop(units, HEADING_MARK)
 
-    lines = AGREEMENT.read_text(encoding="utf-8").splitlines()
     cands = candidates(lines, units)
     if len(cands) != expected:
         sys.exit(f"§23 ОТКАЗ: кандидатов {len(cands)}, правило объявляет {expected}. "
@@ -400,8 +620,6 @@ def main() -> int:
                  "а не подкрутить список единиц.")
     print(f"кандидатов: {len(cands)} (совпало с объявленным)")
 
-    budget = json.loads(TAKANOT.read_text(encoding="utf-8"))
-    changes = json.loads(CHANGES.read_text(encoding="utf-8"))["rows"]
     rows = budget["rows"]
     rows10 = [r for r in rows if len(r["code"]) == 10]
     by_cy = {(r["code"], r["year"]): r for r in rows}
@@ -409,7 +627,9 @@ def main() -> int:
           f"переносов: {len(changes)}")
 
     items, manual = [], 0
+    df_cache = {}
     for c in cands:
+        require_quotes([c])
         cat, rule_fired = classify(c["quote_he"])
         item = {
             **c,
@@ -450,7 +670,7 @@ def main() -> int:
                 if t not in terms:
                     terms.append(t)
         item["terms"] = terms
-        dfs = {t: doc_freq(rows10, t) for t in terms}
+        dfs = {t: doc_freq(rows10, t, df_cache) for t in terms}
         item["term_df"] = dfs
         found = search(rows10, terms, years, dfs)
         item["matches_before_narrowing"] = len(found)
@@ -475,26 +695,44 @@ def main() -> int:
         if it["rejection_reason"]:
             by_rej[it["rejection_reason"]] = by_rej.get(it["rejection_reason"], 0) + 1
 
-    OUT.write_text(json.dumps({
+    result = {
         "built_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-        "party": 'ש"ס', "period_id": "1095-gov37", "years": years,
+        "party": agreement["party_he"], "period_id": agreement["period_id"], "years": years,
         "rule": RULE_REL, "rule_sha256": sha,
         "budget_snapshot": budget["fetched_at"],
         "source_table": budget["table"],
         "counts": {"candidates": len(cands), "by_category": by_cat,
                    "by_rejection": by_rej, "manual_decisions": manual},
         "items": items,
-    }, ensure_ascii=False, indent=1), encoding="utf-8")
+    }
 
     print("по категориям: " + ", ".join(f"{k}={v}" for k, v in sorted(by_cat.items())))
     print("отказы: " + (", ".join(f"{k}={v}" for k, v in sorted(by_rej.items())) or "нет"))
     print(f"ручных решений: {manual} (порог {max_manual})")
-    print(f"-> {OUT.name}")
     if manual > max_manual:
         print(f"\nСТОП: ручных решений {manual} > объявленного порога {max_manual}. "
               "Правило требует спросить владельца, а не дорешивать самому.",
               file=sys.stderr)
-        return 1
+        raise SystemExit(1)
+    return result
+
+
+def main() -> int:
+    args = cli_args()
+    if args.selftest:
+        return selftest()
+    text, sha = rule_text_and_sha()
+    selected = select_agreements(text, args)
+    budget = json.loads((args.data_dir / TAKANOT.name).read_text(encoding="utf-8"))
+    changes = json.loads((args.data_dir / CHANGES.name).read_text(encoding="utf-8"))["rows"]
+    for agreement in selected:
+        lines = (args.data_dir / "agreements_ocr" / agreement["file"]).read_text(
+            encoding="utf-8").splitlines()
+        result = build_map(text, sha, agreement, lines, budget, changes)
+        out = (args.output_dir or args.data_dir) / f"commitment_map_{slug(agreement)}.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(result, ensure_ascii=False, indent=1), encoding="utf-8")
+        print(f"-> {out}")
     return 0
 
 

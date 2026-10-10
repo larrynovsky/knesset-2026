@@ -15,7 +15,7 @@
 Одноразовость: `disposable`. Когда появится build_report.py, страница умирает
 вместе с этапом. Оракул у неё один и он живой — владелец на Ф5.
 
-    python3 scripts/render_mapping_review.py
+    python3 scripts/render_mapping_review.py --agreement CA37-Shas.txt
     -> report/mapping_review_shas.html
 """
 from __future__ import annotations
@@ -25,9 +25,10 @@ import json
 import sys
 from pathlib import Path
 
+import map_commitments as mc
+from validate_cards import load_yaml_ish
+
 ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / "data" / "commitment_map_shas.json"
-OUT = ROOT / "report" / "mapping_review_shas.html"
 
 CAT_RU = {
     "commitment": "обязательство",
@@ -55,16 +56,17 @@ def esc(s) -> str:
     return html.escape(str(s if s is not None else ""))
 
 
-def year_cells(years: dict, transfers: list) -> str:
+def year_cells(years: dict, transfers: list, period_years: list[int]) -> str:
     tr_by_year: dict[str, float] = {}
     for t in transfers:
         y = str(t["year"])
         tr_by_year[y] = tr_by_year.get(y, 0.0) + (t.get("net_expense_diff") or 0.0)
     out = []
-    for y in ("2023", "2024", "2025"):
+    for year in period_years:
+        y = str(year)
         d = years.get(y)
         if d is None:
-            out.append(f"<tr><td>{y}</td><td colspan=4 class=none>строки нет</td></tr>")
+            out.append(f"<tr><td>{y}</td><td colspan=5 class=none>строки нет</td></tr>")
             continue
         base = "в базе" if not d.get("non_repeating") else "разовая"
         out.append(
@@ -78,9 +80,11 @@ def year_cells(years: dict, transfers: list) -> str:
 
 
 def render(d: dict) -> str:
+    mc.require_quotes(d["items"])
     c = d["counts"]
     parts = [f"""<!doctype html><html lang=ru><meta charset=utf-8>
-<title>Сопоставление обязательств ШАС с бюджетом — обзор</title>
+<meta name="robots" content="noindex, nofollow">
+<title>Сопоставление обязательств {esc(d["party"])} с бюджетом — обзор</title>
 <style>
  body{{font:15px/1.55 -apple-system,Segoe UI,Roboto,sans-serif;max-width:1100px;
       margin:2rem auto;padding:0 1rem;color:#1a1a1a}}
@@ -102,7 +106,7 @@ def render(d: dict) -> str:
        border-radius:4px;font-size:.86rem;margin-top:.5rem}}
  code{{background:#f1f1f1;padding:0 .25rem;border-radius:3px}}
 </style>
-<h1>Сопоставление обязательств ШАС с бюджетными строками</h1>
+<h1>Сопоставление обязательств {esc(d["party"])} с бюджетными строками</h1>
 <div class=meta>
 Период <code>{esc(d['period_id'])}</code>, годы {', '.join(str(y) for y in d['years'])}.
 Правило <code>{esc(d['rule'])}</code>, sha256 <code>{esc(d['rule_sha256'][:16])}…</code>.
@@ -123,12 +127,19 @@ def render(d: dict) -> str:
         parts.append(f'<div><span class=tag>стр. ⟦{it["page"]}⟧</span>'
                      f'<span class=tag>строка {it["line"]}</span>'
                      f'<span class=tag>{esc(CAT_RU.get(it["category"]))}</span>')
-        if it["amount_ils"]:
+        if it["amount_ils"] is not None:
             parts.append(f'<span class=tag>{money(it["amount_ils"])} ₪</span>')
         if it["in_budget_base"] == "required_in_base":
             parts.append('<span class=tag>соглашение требует «в базе бюджета»</span>')
         parts.append('</div>')
         parts.append(f'<div class=he>{esc(it["quote_he"])}</div>')
+
+        if it.get("quote_ru"):
+            parts.append(f'<div class=ru>{esc(it["quote_ru"])}</div>')
+        if it.get("heading"):
+            parts.append(f'<div class=he>{esc(it["heading"]["quote_he"])}</div>')
+            if it["heading"].get("quote_ru"):
+                parts.append(f'<div class=ru>{esc(it["heading"]["quote_ru"])}</div>')
 
         if it.get("explicit_code"):
             parts.append('<div class=ask>В тексте соглашения назван код статьи '
@@ -149,8 +160,9 @@ def render(d: dict) -> str:
 
         for cand in it["candidates"]:
             parts.append('<div class=cand>')
-            title = cand.get("title") or (cand["years"].get("2023") or {}).get("title") \
-                or (cand["years"].get("2024") or {}).get("title") or ""
+            title = cand.get("title") or next(
+                ((cand["years"].get(str(y)) or {}).get("title")
+                 for y in d["years"] if (cand["years"].get(str(y)) or {}).get("title")), "")
             parts.append(f'<div><code>{esc(cand["code"])}</code> '
                          f'<span class=dim>совпало терминов: '
                          f'{len(cand["matched"])}</span></div>')
@@ -158,7 +170,7 @@ def render(d: dict) -> str:
             parts.append('<table><tr><th>год</th><th>утверждено</th>'
                          '<th>пересмотрено</th><th>исполнено</th>'
                          '<th>переносы</th><th></th></tr>'
-                         + year_cells(cand["years"], cand["transfers"]) + '</table>')
+                         + year_cells(cand["years"], cand["transfers"], d["years"]) + '</table>')
             n = len(cand["transfers"])
             if n:
                 parts.append(f'<div class=dim>переносов в эту ветку: {n}. '
@@ -191,13 +203,29 @@ def render(d: dict) -> str:
 
 
 def main() -> int:
-    if not SRC.exists():
-        sys.exit(f"ОТКАЗ: нет {SRC.name} — сначала scripts/map_commitments.py")
-    d = json.loads(SRC.read_text(encoding="utf-8"))
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(render(d), encoding="utf-8")
-    n = d["counts"]["manual_decisions"]
-    print(f"-> {OUT.relative_to(ROOT)} · решений к принятию: {n}")
+    args = mc.cli_args()
+    if args.selftest:
+        return mc.selftest()
+    text, sha = mc.rule_text_and_sha()
+    for a in mc.select_agreements(text, args):
+        src = args.data_dir / f"commitment_map_{mc.slug(a)}.json"
+        d = json.loads(src.read_text(encoding="utf-8"))
+        mc.validate_mapping(d, a, sha)
+        # Перевод берём лишь при совпадении периода, строки И оригинала.
+        card_path = ROOT / "cards" / f"{mc.slug(a)}-{a['period_id']}.yaml"
+        if card_path.exists():
+            card = load_yaml_ish(card_path)
+            if card["period_id"] != a["period_id"]:
+                raise SystemExit("ОТКАЗ: период карточки расходится с соглашением")
+            translations = {(c["line"], c["quote_he"]): c for c in card["commitments"]}
+            for item in d["items"]:
+                c = translations.get((item["line"], item["quote_he"]), {})
+                if c.get("quote_ru"):
+                    item["quote_ru"] = c["quote_ru"]
+        out = (args.output_dir or ROOT / "report") / f"mapping_review_{mc.slug(a)}.html"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(render(d), encoding="utf-8")
+        print(f"-> {out} · решений к принятию: {d['counts']['manual_decisions']}")
     return 0
 
 

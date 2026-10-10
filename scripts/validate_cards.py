@@ -67,7 +67,7 @@ def fail(msg: str) -> None:
 
 
 # ----------------------------------------------------------- мини-разборщики
-def load_yaml_ish(path: Path) -> dict:
+def load_yaml_ish(path: Path, *, text: str | None = None) -> dict:
     """Разбор подмножества YAML без внешних зависимостей (на Studio нет pyyaml).
 
     Поддерживает то, что реально нужно карточке: вложенные словари по отступам,
@@ -168,7 +168,7 @@ def load_yaml_ish(path: Path) -> dict:
         return s.strip("'\"")
 
     raw = []
-    for ln in path.read_text(encoding="utf-8").splitlines():
+    for ln in (path.read_text(encoding="utf-8") if text is None else text).splitlines():
         if not ln.strip() or ln.lstrip().startswith("#"):
             continue
         raw.append((len(ln) - len(ln.lstrip()), ln.strip()))
