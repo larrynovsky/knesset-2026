@@ -85,7 +85,10 @@ OUTCOME_RU = {
 CHAN_RU = {"allocated": "база", "revised": "после пересмотра",
            "executed": "исполнено", "transfers": "переносы"}
 GRAN_RU = {
-    "exact_takana": "код статьи назван в самом обязательстве",
+    # Прежняя метка «код статьи назван в самом обязательстве» утверждала то,
+    # чего exact_takana не означает (criteria: совпадение с одной 10-значной
+    # строкой); верна была 1 записи из 7 (ревью 18.10, R6-F07).
+    "exact_takana": "сопоставлено с одной бюджетной статьёй",
     "subset_of_line": "часть строки бюджета",
     "spread_over_lines": "размазано по нескольким строкам",
     "not_found": "в бюджете на публикуемой глубине не найдено",
@@ -135,6 +138,17 @@ def cells(card: dict, idx: dict, titles: list[str]) -> list[tuple[str, object]]:
     out: list[tuple[str, object]] = []
     for c in card.get("commitments") or []:
         concl = c.get("conclusion") or ""
+        # Ссылки на числа живут и вне conclusion: прочтения, область поиска,
+        # note, опровержение рендерятся с подстановкой (ревью 18.10, R6-F08),
+        # значит и их ячейки — часть прочитанного карточкой (§11).
+        cs = c.get("counter_search") or {}
+        extra = " ".join([*(r.get("text") or "" for r in c.get("readings") or []),
+                          *(as_text(w) for w in cs.get("searched_where") or []),
+                          cs.get("note") or "", c.get("what_would_falsify") or "",
+                          c.get("confidence_reason") or ""])
+        for code, year, chan in vc.REF_NUM.findall(extra):
+            out.append((f"num|{code}|{year}|{chan}", cell_value(code, int(year),
+                                                                chan, idx)))
         for code, year, chan in vc.REF_NUM.findall(concl):
             out.append((f"num|{code}|{year}|{chan}", cell_value(code, int(year),
                                                                 chan, idx)))
@@ -296,20 +310,21 @@ def render_commitment(c: dict, idx, titles, nulls) -> str:
              f'{esc(c.get("plan_year"))}</p>')
     for r in c.get("readings") or []:
         p.append(f'<p class=r><b>{esc(READING_RU.get(r.get("type")))} '
-                 f'прочтение.</b> {esc(r.get("text"))}</p>')
+                 f'прочтение.</b> '
+                 f'{substitute(r.get("text") or "", idx, titles, nulls)}</p>')
     cs = c.get("counter_search") or {}
-    where = "".join(f"<li>{esc(as_text(w))}</li>"
+    where = "".join(f"<li>{substitute(as_text(w), idx, titles, nulls)}</li>"
                     for w in cs.get("searched_where") or [])
     p.append(f'<p class=r><b>Поиск опровержения.</b> '
              f'{esc(OUTCOME_RU.get(cs.get("outcome"), cs.get("outcome")))}.</p>'
              f'<ul class=meta>{where}</ul>')
     if cs.get("note"):
-        p.append(f'<p class=meta>{esc(cs["note"])}</p>')
+        p.append(f'<p class=meta>{substitute(cs["note"], idx, titles, nulls)}</p>')
     p.append(f'<p class=r><b>Уверенность:</b> '
              f'{esc(CONF_RU.get(c.get("confidence")))} — '
-             f'{esc(c.get("confidence_reason"))}</p>')
+             f'{substitute(c.get("confidence_reason") or "", idx, titles, nulls)}</p>')
     p.append(f'<p class=r><b>Чем это опровергается.</b> '
-             f'{esc(c.get("what_would_falsify"))}</p>')
+             f'{substitute(c.get("what_would_falsify") or "", idx, titles, nulls)}</p>')
     return "\n".join(p)
 
 
@@ -582,6 +597,27 @@ def selftest() -> int:
         fails.append("область поиска отрендерена как python-repr, "
                      "а не как текст")
 
+    # 6c: ссылки {код:год:поле} в прочтениях и в области поиска подставляются,
+    # а не уходят читателю сырым текстом (ревью 18.10, R6-F08); метка
+    # exact_takana не утверждает, что код назван в соглашении (R6-F07)
+    c6c = card()
+    c6c["commitments"][0]["readings"][1]["text"] = "b {0022010213:2023:executed}"
+    c6c["commitments"][0]["counter_search"]["searched_where"] = [
+        "строка {0022010213:2023:allocated}"]
+    c6c["commitments"][0]["counter_search"]["note"] = "n {0022010213:2023:allocated}"
+    c6c["commitments"][0]["what_would_falsify"] = "w {0022010213:2023:executed}"
+    h6c = build([("t", c6c)], idx, titles)
+    assert not re.search(r"\{\d{10}:\d{4}:", h6c), \
+        "ссылка в прочтении или в области поиска не подставлена"
+    assert "код статьи назван" not in h6c, \
+        "метка exact_takana утверждает, что код назван в соглашении"
+    c6d = card(conclusion="нет {absent:מוסדות דת זמני}")
+    c6d["commitments"][0]["readings"][1]["text"] = "b {0022010213:2023:executed}"
+    idx2 = {k: dict(v) for k, v in idx.items()}
+    idx2[("0022010213", 2023)]["net_executed"] = 501
+    assert fingerprint(c6d, idx, titles) != fingerprint(c6d, idx2, titles), \
+        "§11: отпечаток не краснеет на ячейке, прочитанной в прочтении"
+
     # 7: §13 — сортировать нечем, потому что нечего и незачем
     if "<table" in ok or "<script" in ok:
         fails.append("§13: в документе таблица или скрипт — появилась "
@@ -691,7 +727,7 @@ def selftest() -> int:
     finally:
         globals()["votes_of"] = orig
 
-    print("самопроверка отчёта пройдена: 14 утверждений + 8 на карточку канала А. Напоминание: "
+    print("самопроверка отчёта пройдена: 17 утверждений + 8 на карточку канала А. Напоминание: "
           "проверено, что документ СОБИРАЕТСЯ и не врёт механически; "
           "осмысленность выводов машиной не проверяется (§24)")
     return 0
