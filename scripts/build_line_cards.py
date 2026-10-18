@@ -226,7 +226,7 @@ def _core(text: str) -> str:
     return re.sub(r"^(card_version|data_fingerprint):.*\n", "", text, flags=re.M)
 
 
-def carry_history(body: str, old: str | None, snap: str) -> str:
+def carry_history(body: str, old: str | None, snap: str, name: str = "?") -> str:
     """§15 (R19-F03): перегенерация не стирает версию и журнал.
 
     Содержание не изменилось — файл остаётся байт в байт прежним.
@@ -238,7 +238,7 @@ def carry_history(body: str, old: str | None, snap: str) -> str:
     if not m or "\nrevisions:\n" not in old:
         # R22-F04: без версии или журнала — отказ с адресом, а не тихий
         # возврат неполной карточки и не AttributeError
-        raise SystemExit("ОТКАЗ: у существующей карточки нет card_version или "
+        raise SystemExit(f"ОТКАЗ: у cards/{name} нет card_version или "
                          "revisions — перегенерация не знает, какую версию продолжать")
     if _core(body) == _core(old):
         return old
@@ -331,7 +331,7 @@ def emit(directions: Path | None = None) -> int:
             raise SystemExit(f"ОТКАЗ: {fid} разобрана, а проза канала денег — «не построено»")
         p = ROOT / "cards" / name
         out[name] = carry_history(body, p.read_text(encoding="utf-8")
-                                  if p.exists() else None, snap)
+                                  if p.exists() else None, snap, name)
     print(json.dumps({"cards": out, "skipped": skipped}, ensure_ascii=False))
     return 0
 
@@ -379,9 +379,9 @@ def selftest() -> int:
         "журнал правок потерян при перегенерации"
     assert carry_history(r, None, SNAP) == r, "новая карточка изменена"
     try:
-        carry_history(r, r.replace("card_version: 1\n", ""), SNAP)
-    except SystemExit:
-        pass
+        carry_history(r, r.replace("card_version: 1\n", ""), SNAP, "line-x.yaml")
+    except SystemExit as e:
+        assert "cards/line-x.yaml" in str(e), "R24-F01: отказ без адреса карточки"
     else:
         raise AssertionError("R22-F04: карточка без card_version прошла перегенерацию")
     assert "должностей у этой строки пусты" not in b and "портфелей" not in b, \
