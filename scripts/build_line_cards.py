@@ -122,12 +122,15 @@ def card_yaml(fid: int, he: str, cen: dict, in_gov: bool, b_status: str,
                  if zero else
                  "партия правила, сопоставление обязательств не построено")
     else:
-        frame = ("каналы денег и должностей у этой строки пусты по устройству "
-                 "измерения: соглашения она не подписывала, портфелей не "
-                 "держала. Это свойство измерителя, а не партии, и читать "
+        # R23: денег нет по устройству канала, должностей — из-за нашей
+        # невыгрузки; одной причиной их не называть.
+        frame = ("канал денег у этой строки пуст по устройству измерения: "
+                 "коалиционного соглашения она не подписывала. Это свойство "
+                 "измерителя, а не партии, и читать "
                  "пустоту как «к этой вопросов нет» — ошибка того же рода, "
                  "что читать её как обвинение")
-        bnote = "ноль периодов в правительстве доказан criteria/periods.yaml"
+        bnote = ("в 25-м Кнессете партия в правительство не входила — по "
+                 "списку составов правительства")
     return f"""# Базовая линия. Сгенерирована scripts/build_line_cards.py 13.08.2026.
 # Человеческого разбора конкретных голосований в этой карточке НЕТ.
 # Правки руками ведут к расхождению с генератором — правь генератор.
@@ -231,9 +234,15 @@ def carry_history(body: str, old: str | None, snap: str) -> str:
     новая с причиной: числа пересчитаны по такому-то снимку."""
     if old is None:
         return body
+    m = re.search(r"^card_version: (\d+)$", old, flags=re.M)
+    if not m or "\nrevisions:\n" not in old:
+        # R22-F04: без версии или журнала — отказ с адресом, а не тихий
+        # возврат неполной карточки и не AttributeError
+        raise SystemExit("ОТКАЗ: у существующей карточки нет card_version или "
+                         "revisions — перегенерация не знает, какую версию продолжать")
     if _core(body) == _core(old):
         return old
-    v = int(re.search(r"^card_version: (\d+)$", old, flags=re.M).group(1)) + 1
+    v = int(m.group(1)) + 1
     hist = old.split("\nrevisions:\n", 1)[1].rstrip("\n")
     head = re.sub(r"^card_version: \d+$", f"card_version: {v}",
                   body.split("\nrevisions:\n", 1)[0], count=1, flags=re.M)
@@ -369,6 +378,14 @@ def selftest() -> int:
         "  - version: 3\n" in r3 and SNAP in r3.split("  - version: 3", 1)[1], \
         "журнал правок потерян при перегенерации"
     assert carry_history(r, None, SNAP) == r, "новая карточка изменена"
+    try:
+        carry_history(r, r.replace("card_version: 1\n", ""), SNAP)
+    except SystemExit:
+        pass
+    else:
+        raise AssertionError("R22-F04: карточка без card_version прошла перегенерацию")
+    assert "должностей у этой строки пусты" not in b and "портфелей" not in b, \
+        "R23: пустота денег и должностей снова названа одной причиной"
     z = card_yaml(1, "פ", cen, True, "", SNAP, zero=True)
     assert "денежных обещаний не найдено" in z and "не построено" not in z, \
         "R19-F01: пустая карта извлечения названа «не построено»"

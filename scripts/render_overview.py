@@ -104,7 +104,8 @@ def rows(m: dict, cards: dict | None = None,
         a, b = r["a"]["status"], r["b"]["status"]
         who = (f'<td class=who><a href="f-{r["anchor_id"]}.html">{esc(r["line"][:44])}</a>')
         if b == "not_exposed":
-            who += ('<span class=norec>ни разу не была в правительстве</span>')
+            # R23: горизонт назван — справочник составов охватывает 25-й Кнессет
+            who += ('<span class=norec>в 25-м Кнессете в правительстве не была</span>')
         who += "</td>"
         # Колонка «суд, парламент, свободы»: направление берётся из РЕШЕНИЯ
         # карточки, а не считается здесь — генератор ничего не выводит сам.
@@ -223,12 +224,15 @@ def build(m: dict, cards: dict | None = None,
 {FRAME}
 {grounds_block()}
 <h2>Сначала о том, чего мы не знаем</h2>
-<p>Клеток в таблице ниже — <b class=big>{total}</b>. Заполнены {filled};
-в {rev} разбор есть, но вывода нет; в остальных {miss} мы либо не дошли,
-либо смотрели и вернулись пустыми.</p>
+<p>Клеток в таблице ниже — <b class=big>{total}</b>. С итоговым выводом — {filled};
+в {rev} разбор есть, но вывода нет; в остальных {miss} нужный разбор не
+проведён или искомого не нашли — что именно, сказано в подписи клетки.</p>
 <p>Это разные вещи, и подписаны они по-разному.
-<b class=tx-miss>«Не дошли»</b> значит, что мы туда не смотрели вовсе.
-<b class=tx-none>«Искали, не нашли»</b> — что смотрели и вернулись пустыми.
+<b class=tx-miss>«Не дошли»</b> значит, что нужный разбор ещё не проведён;
+причина — в подписи клетки.
+<b class=tx-none>«Искали, не нашли»</b> — что не найдено то, что названо в
+подписи (например, соглашение или денежные обещания в нём), а не «нарушений
+не нашли».
 <b class=tx-rev>«Разобрано — без вывода»</b> — что обещания из коалиционного
 соглашения сверены с бюджетом по одному, и каждая запись лежит на странице
 фракции; сводного вывода о фракции мы из них не делаем.
@@ -354,7 +358,7 @@ def selftest() -> int:
     assert 'content="noindex, nofollow"' in doc, "§16: нет noindex"
     assert doc.index("data-frame=full") < doc.index("<table"), \
         "§17: рамка обязана стоять раньше первой таблицы"
-    assert "ни разу не была в правительстве" in doc, \
+    assert "в 25-м Кнессете в правительстве не была" in doc, \
         "§7: неправившая строка обязана нести пометку, иначе её пустота " \
         "неотличима от нашей недоработки"
     assert doc.count("tx-miss") >= 2 and doc.count("tx-none") >= 2, \
@@ -479,10 +483,13 @@ def selftest() -> int:
         raise AssertionError("обзор «искали» и страница «не дошли» прошли вместе")
     # R19-F02 (M06): проводка обзора — разобранная строка без клетки
     # «разобрано» и неразобранная с ней отвергаются.
-    check_overview_money(mr, {1110})
-    for bad_doc, bad_set in ((mo, {1110}), (mr, set())):
+    check_overview_money(mr, {1110}, {1110})
+    # R22-F02 (W04b): строка без денежной клетки и чужая клетка отвергаются
+    no_eq = re.sub(r"<td class=c-eq[^>]*>.*?</td>", "", mo, flags=re.S)
+    for bad_doc, bad_set, lines in ((mo, {1110}, {1110}), (mr, set(), {1110}),
+                                    (no_eq, set(), {1110}), (mo, set(), {1110, 1111})):
         try:
-            check_overview_money(bad_doc, bad_set)
+            check_overview_money(bad_doc, bad_set, lines)
         except Refuse:
             pass
         else:
@@ -667,6 +674,11 @@ def selftest() -> int:
         shas + "<p>ожидают решения о сопоставлении: 24</p>", bc, idx, []))
     rejects("клетка «разобрано» снята", lambda: check_budget_page(
         shas.replace("разобрано — без вывода", "разбор обязательств"), bc, idx, []))
+    # R22-F02 (W03): та же строка заголовка вне <summary> не считается
+    rejects("заголовок вынесен из summary абзацем", lambda: check_budget_page(
+        shas.replace("<summary>Деньги — <b class=tx-rev>разобрано — без вывода</b>",
+                     "<p>Деньги — <b class=tx-rev>разобрано — без вывода</b></p>"
+                     "<summary>Деньги — <b class=tx-none>искали, не нашли</b>"), bc, idx, []))
     rejects("заголовок клетки подменён, фраза осталась абзацем", lambda: check_budget_page(
         shas.replace("Деньги — <b class=tx-rev>разобрано — без вывода</b>",
                      "Деньги — <b class=tx-none>искали, не нашли</b>")
@@ -856,33 +868,71 @@ def budget_block(cards: list, idx: dict, titles: list) -> str:
     return "".join(out)
 
 
-def check_overview_money(doc: str, reviewed: set) -> None:
-    """R19-F02: клетка «деньги» каждой строки обзора согласована с наличием
-    разбора — проверяется готовый HTML, а не аргумент вызова."""
-    seen = set()
-    for tr in re.findall(r"<tr>(.*?)</tr>", doc, flags=re.S):
-        fid = re.search(r'href="f-(\d+)\.html"', tr)
-        eq = re.search(r"<td class=c-eq[^>]*>(.*?)</td>", tr, flags=re.S)
-        if not (fid and eq):
-            continue
-        fid = int(fid.group(1))
-        seen.add(fid)
-        if (fid in reviewed) != ("разобрано — без вывода" in eq.group(1)):
+def reviewed_from_files() -> set:
+    """Фракции с непустой карточкой разбора — по файлам *-gov37.yaml, мимо
+    load_cards (независимый путь для сверки, R22-F01)."""
+    from validate_cards import load_yaml_ish
+    out = set()
+    for p in (ROOT / "cards").glob("*-gov37.yaml"):
+        c = load_yaml_ish(p)
+        if c.get("commitments"):
+            out.add(int(str(c["period_id"]).split("-")[0]))
+    return out
+
+
+def _money_td(doc: str, fid: int) -> str:
+    """Ровно одна строка обзора этой фракции и ровно одна её клетка «деньги»
+    (R22-F02, W04b: регулярка через </tr> брала клетку соседней строки)."""
+    trs = [tr for tr in re.findall(r"<tr>(.*?)</tr>", doc, flags=re.S)
+           if f'href="f-{fid}.html"' in tr]
+    if len(trs) != 1:
+        raise Refuse(f"строк обзора у {fid}: {len(trs)}, а не одна")
+    eq = re.findall(r"<td class=c-eq[^>]*>(.*?)</td>", trs[0], flags=re.S)
+    if len(eq) != 1:
+        raise Refuse(f"клеток «деньги» в строке {fid}: {len(eq)}, а не одна")
+    return eq[0]
+
+
+def _cell_word(html: str, where: str) -> str:
+    words = [w for _, w, _ in CELL.values() if f"{w}<span class=lb>" in html
+             or f">{w}</b>" in html]
+    if len(words) != 1:
+        raise Refuse(f"{where}: значений клетки {words}, а не одно")
+    return words[0]
+
+
+def _money_summaries(page: str) -> list:
+    """Заголовки денежной клетки — только внутри <summary> (R22-F02, W03)."""
+    return [x for x in re.findall(r"<summary>(.*?)</summary>", page, flags=re.S)
+            if x.lstrip().startswith("Деньги — ")]
+
+
+def check_overview_money(doc: str, reviewed: set, lines: set | None = None) -> None:
+    """R19-F02/R22-F02: у каждой строки бюллетеня ровно одна клетка «деньги»,
+    и «разобрано — без вывода» стоит ровно у разобранных."""
+    lines = set(lines) if lines is not None else set(reviewed)
+    if not reviewed <= lines:
+        raise Refuse(f"разобранные вне строк бюллетеня: {sorted(reviewed - lines)}")
+    for fid in lines:
+        if (fid in reviewed) != (_cell_word(_money_td(doc, fid), f"обзор {fid}")
+                                 == "разобрано — без вывода"):
             raise Refuse(f"клетка «деньги» строки {fid} не согласована с разбором")
-    if not reviewed <= seen:
-        raise Refuse(f"разобранные строки без клетки в обзоре: {sorted(reviewed - seen)}")
 
 
-def check_money_same(doc: str, page: str, fid: int) -> None:
-    """R19-F01: на вопрос «вы смотрели?» обзор и страница фракции отвечают
-    одним значением клетки «деньги»."""
-    row = re.search(rf'href="f-{fid}\.html".*?<td class=c-eq[^>]*>(.*?)</td>', doc, flags=re.S)
-    head = re.search(r"Деньги — <b class=[\w-]+>(.*?)</b>", page)
-    words = [w for _, w, _ in CELL.values()]
-    a = next((w for w in words if row and f"{w}<span class=lb>" in row.group(1)), None)
-    if not (a and head and head.group(1) == a):
-        raise Refuse(f"f-{fid}: клетка «деньги» в обзоре ({a}) и на странице "
-                     f"({head.group(1) if head else None}) расходятся")
+def check_money_same(doc: str, page: str, fid: int, unresolved: bool = False) -> None:
+    """R19-F01: обзор и страница фракции отвечают одним значением. Строка
+    без установленной связи (1097) денежной клетки на странице не имеет, а в
+    обзоре — «мы сюда не дошли» (R22: проверяется, а не пропускается)."""
+    a = _cell_word(_money_td(doc, fid), f"обзор {fid}")
+    heads = _money_summaries(page)
+    if unresolved:
+        if heads or a != "мы сюда не дошли":
+            raise Refuse(f"f-{fid}: строка без связи получила денежный вывод")
+        return
+    if len(heads) != 1:
+        raise Refuse(f"f-{fid}: денежных заголовков {len(heads)}, а не один")
+    if _cell_word(heads[0], f"f-{fid}") != a:
+        raise Refuse(f"f-{fid}: клетка «деньги» в обзоре ({a}) и на странице расходятся")
 
 
 def check_budget_page(page: str, cards: list, idx: dict, titles: list) -> None:
@@ -894,7 +944,7 @@ def check_budget_page(page: str, cards: list, idx: dict, titles: list) -> None:
             if stale in page:
                 raise Refuse(f"страница с разбором обязательств говорит «{stale}»")
         # именно в заголовке денежной клетки (R19-F02, M11), не где угодно
-        if "Деньги — <b class=tx-rev>разобрано — без вывода</b>" not in page:
+        if [_cell_word(h, "страница") for h in _money_summaries(page)] != ["разобрано — без вывода"]:
             raise Refuse("у разобранной партии нет клетки «разобрано — без вывода»")
     for card in cards:
         for date in card["snapshots"].values():
@@ -978,8 +1028,13 @@ def main() -> int:
     budgets = load_cards("party_period")
     idx, titles = budget_index() if budgets else ({}, [])
     reviewed = {k for k, v in budgets.items() if v}
+    # R22-F01 (W01): набор разборов сверяется с файлами карточек независимым
+    # путём — пропущенная загрузка иначе согласованно опустошает все стражи.
+    if reviewed != reviewed_from_files():
+        raise Refuse(f"разборы загружены не все: {sorted(reviewed)} против "
+                     f"{sorted(reviewed_from_files())} по файлам")
     doc, total, filled = build(m, cards, reviewed)
-    check_overview_money(doc, reviewed)
+    check_overview_money(doc, reviewed, {r["anchor_id"] for r in m["lines"]})
     bad = jargon(doc)
     if bad:
         print(f"ОТКАЗ: внутренний язык в обзоре: {bad}")
@@ -991,6 +1046,7 @@ def main() -> int:
         c = cards.get(r["anchor_id"])
         if r["a"]["status"] == "lineage_unresolved":
             page = state_page(r)
+            check_money_same(doc, page, r["anchor_id"], unresolved=True)
         elif not c:
             raise Refuse(f"нет карточки наблюдаемой строки {r['anchor_id']}")
         else:
@@ -1006,7 +1062,7 @@ def main() -> int:
         (OUT.parent / f"f-{r['anchor_id']}.html").write_text(page, encoding="utf-8")
         pages += 1
     print(f"обзор + {pages} страниц фракций -> {OUT.parent}")
-    rev = doc.count("tx-rev")
+    rev = doc.count('tx-rev">')   # клетки, не легенда (R22-F05)
     print(f"ЗАМЕР: клеток {total}, заполнено {filled}, разобрано без вывода {rev}, "
           f"пусто {total - filled - rev}")
     return 0
@@ -1111,6 +1167,9 @@ def faction_page(card: dict, row: dict, votes: list, budget: str = "") -> str:
         s2, c2 = ('Деньги — <b class=tx-none>искали, не нашли</b>',
                   "коалиционного соглашения у этой фракции нет: она его не "
                   "подписывала, и сверять денежные обещания с бюджетом не с чем")
+        budget = ('<p>В 25-м Кнессете фракция в правительство не входила и '
+                  'коалиционного соглашения не подписывала. Это не результат '
+                  'проверки, не выявившей проблем, и не обвинение.</p>')
     else:
         s2, c2 = ('Деньги — <b class=tx-miss>мы сюда не дошли</b>',
                   "сопоставление обязательств не построено")

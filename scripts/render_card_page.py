@@ -259,7 +259,13 @@ def main() -> int:
     table, names, cards = sign_table(), names_ref(), load_cards()
     OUT_DIR.mkdir(exist_ok=True)
     n = 0
+    from build_report import fingerprint, Refuse
     for fid, card in sorted(cards.items()):
+        # R22-F03: перегенерированная карточка без нового отпечатка не
+        # публикуется («Отпечаток данных: .» проходил сборку)
+        if card.get("data_fingerprint") != fingerprint(card, {}, []):
+            raise Refuse(f"§11: у карточки {fid} нет верного data_fingerprint — "
+                         f"сначала scripts/build_report.py --stamp")
         b = classify(rows, fid, table, rule)
         if not sum(x["votes"] for x in b.values()):
             continue
