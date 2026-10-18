@@ -94,7 +94,30 @@ def party(src): return {n: v for n, v in src.items() if n not in DOCS_FREE}
 CHECKS = []
 
 def edit(src, fname, old, new, n=1):
+    # Отсутствующий якорь — громкий отказ с адресом (R20-F01), а не тихое
+    # «ничего не изменил» без объяснения, где искали.
+    if old not in src[fname]:
+        raise LookupError(f"{fname}: якорь {old[:50]!r} не найден")
     d = dict(src); d[fname] = d[fname].replace(old, new, n); return d
+
+# Первая клетка обзора, какая есть: живой сайт без стрелок и принятый макет
+# со стрелками испытываются одним и тем же воздействием (R20-F01).
+CELL_RX = re.compile(r'(<span class="v[^"]*">)((?:<span class=a>[^<]*</span>&#8201;)?)([^<]+)')
+
+def cell_edit(src, mk):
+    s = src["index.html"]
+    m = CELL_RX.search(s)
+    if not m:
+        raise LookupError("index.html: ни одной клетки со значением")
+    d = dict(src)
+    d["index.html"] = s[:m.start()] + m.group(1) + mk(m.group(3)) + s[m.end():]
+    return d
+
+def party_page(src):
+    for n in sorted(party(src)):
+        if n.startswith("f-") and "<h1>" in src[n]:
+            return n
+    raise LookupError("нет страницы партии с <h1>")
 
 def anyfile(src): return sorted(src)[0]
 
@@ -161,9 +184,9 @@ def c_frame(src):
     return len(src), bad, f"{len(src)}/{len(src)}, позиция верна"
 
 @check("значение клетки из закрытого списка, стрелка ↔ значение",
-       [("значение вне списка", lambda s: edit(s, "index.html", "&#8201;ослабляла", "&#8201;скорее ослабляла")),
-        ("стрелка не та", lambda s: edit(s, "index.html", "<span class=a>↓</span>&#8201;ослабляла", "<span class=a>↑</span>&#8201;ослабляла")),
-        ("неканоническая формулировка", lambda s: edit(s, "index.html", "&#8201;и туда и обратно", "&#8201;в обе стороны"))])
+       [("значение вне списка", lambda s: cell_edit(s, lambda w: "скорее ослабляла")),
+        ("стрелка не та", lambda s: cell_edit(s, lambda w: "<span class=a>↑</span>&#8201;ослабляла")),
+        ("неканоническая формулировка", lambda s: cell_edit(s, lambda w: "в обе стороны"))])
 def c_closed(src):
     # Считаем клетки, ДАВШИЕ значение. Пустой разбор объектом не является:
     # иначе счётчик прикрывает вакуумность вместо того, чтобы её выдавать.
@@ -175,14 +198,14 @@ def c_closed(src):
     return len(cells), sorted(set(bad))[:4], f"{len(cells)} клеток со значением"
 
 @check("ни одной цифры в клетке обзора",
-       [("число в клетке", lambda s: edit(s, "index.html", "&#8201;ослабляла", "&#8201;ослабляла 7 из 10"))])
+       [("число в клетке", lambda s: cell_edit(s, lambda w: w + " 7 из 10"))])
 def c_digits(src):
     tds = re.findall(r"<td class=c-(?:inst|eq)[^>]*>(.*?)</td>", src["index.html"], flags=re.S)
     bad = [t[:30] for t in tds if re.search(r"\d", _h.unescape(re.sub(r"<[^>]+>", "", t)))]
     return len(tds), bad[:3], f"{len(tds)} клеток"
 
 @check("лексика страниц партий",
-       [("слово «валидатор» в прозе", lambda s: edit(s, "f-likud.html", "<h1>", "<p>Так решил валидатор.</p><h1>"))])
+       [("слово «валидатор» в прозе", lambda s: edit(s, party_page(s), "<h1>", "<p>Так решил валидатор.</p><h1>"))])
 def c_lex(src):
     pp, bad = party(src), []
     for n, s in pp.items():
