@@ -17,7 +17,8 @@
       | python3 scripts/build_line_cards.py --apply
 """
 from __future__ import annotations
-import json, sys, collections
+import json, re, sys, collections
+from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -89,7 +90,8 @@ axis_institutions:
 
 
 def card_yaml(fid: int, he: str, cen: dict, in_gov: bool, b_status: str,
-              snap: str, ax: dict | None = None, reviewed: bool = False) -> str:
+              snap: str, ax: dict | None = None, reviewed: bool = False,
+              zero: bool = False) -> str:
     ru = RU.get(fid, he)
     miss = cen["acts_without_participation"]
     share = miss / cen["acts_in_theme_total"]
@@ -113,6 +115,11 @@ def card_yaml(fid: int, he: str, cen: dict, in_gov: bool, b_status: str,
         bnote = ("партия правила; обязательства соглашения сверены с бюджетом "
                  "по одному, сводного вывода нет — записи ниже на этой странице"
                  if reviewed else
+                 # R19-F01: пустая карта извлечения — смотрели и вернулись
+                 # пустыми, а не «не дошли»
+                 "партия правила; в коалиционном соглашении денежных обещаний "
+                 "не найдено, сверять с бюджетом нечего"
+                 if zero else
                  "партия правила, сопоставление обязательств не построено")
     else:
         frame = ("каналы денег и должностей у этой строки пусты по устройству "
@@ -210,6 +217,32 @@ revisions:
 """
 
 
+def _core(text: str) -> str:
+    """Содержание карточки без версии, отпечатка и журнала."""
+    text = text.split("\nrevisions:\n", 1)[0]
+    return re.sub(r"^(card_version|data_fingerprint):.*\n", "", text, flags=re.M)
+
+
+def carry_history(body: str, old: str | None, snap: str) -> str:
+    """§15 (R19-F03): перегенерация не стирает версию и журнал.
+
+    Содержание не изменилось — файл остаётся байт в байт прежним.
+    Изменилось — следующая версия, прежние записи журнала целиком и одна
+    новая с причиной: числа пересчитаны по такому-то снимку."""
+    if old is None:
+        return body
+    if _core(body) == _core(old):
+        return old
+    v = int(re.search(r"^card_version: (\d+)$", old, flags=re.M).group(1)) + 1
+    hist = old.split("\nrevisions:\n", 1)[1].rstrip("\n")
+    head = re.sub(r"^card_version: \d+$", f"card_version: {v}",
+                  body.split("\nrevisions:\n", 1)[0], count=1, flags=re.M)
+    return (f"{head}\nrevisions:\n{hist}\n  - version: {v}\n"
+            f"    date: {date.today().isoformat()}\n    what: >-\n"
+            f"      перегенерация базовой линии по снимку голосований {snap}; "
+            f"содержание изменилось, прежние записи журнала сохранены\n")
+
+
 def arrows(votes: dict, directions_path: Path | None) -> dict:
     """Решения по оси для всех фракций, или пусто, если прогона нет.
 
@@ -267,6 +300,8 @@ def emit(directions: Path | None = None) -> int:
     ax_all = arrows(votes, directions)
     from render_overview import load_cards
     reviewed = {k for k, v in load_cards("party_period").items() if v}
+    from coverage_matrix import commitment_maps
+    zero = {k for k, v in commitment_maps().items() if not v["commitments"]}
     out, skipped = {}, []
     for ch in lin["chains"]:
         fid, he = ch["anchor_id"], ch["anchor"]
@@ -279,8 +314,15 @@ def emit(directions: Path | None = None) -> int:
             skipped.append((fid, he, "карточка написана руками — не трогаем"))
             continue
         name = slug(RU.get(fid, "line"), fid) + ".yaml"
-        out[name] = card_yaml(fid, he, cen, fid in gov, "", snap,
-                              ax_all.get(fid), fid in reviewed)
+        body = card_yaml(fid, he, cen, fid in gov, "", snap,
+                         ax_all.get(fid), fid in reviewed, fid in zero)
+        # Проводка (R19-F02, M09): разобранная правившая партия обязана
+        # получить прозу о сверке — иначе отказ здесь, а не на сайте.
+        if fid in gov and fid in reviewed and "сверены с бюджетом" not in body:
+            raise SystemExit(f"ОТКАЗ: {fid} разобрана, а проза канала денег — «не построено»")
+        p = ROOT / "cards" / name
+        out[name] = carry_history(body, p.read_text(encoding="utf-8")
+                                  if p.exists() else None, snap)
     print(json.dumps({"cards": out, "skipped": skipped}, ensure_ascii=False))
     return 0
 
@@ -315,6 +357,21 @@ def selftest() -> int:
     r = card_yaml(1, "פ", cen, True, "", SNAP, reviewed=True)
     assert "не построено" in a and "не построено" not in r and "сверены с бюджетом" in r, \
         "R8-F04: разобранная партия получила прозу «не построено»"
+    # R19-F03: v2 с двумя записями журнала переживает перегенерацию
+    v2 = (r.replace("card_version: 1\n", "card_version: 2\n")
+          + "  - version: 2\n    date: 2026-10-18\n    what: >-\n      ручная правка\n")
+    v2 = v2.replace("card_version: 2\n", "card_version: 2\ndata_fingerprint: sha256:ab\n", 1)
+    assert carry_history(r, v2, SNAP) == v2, "неизменная перегенерация тронула файл"
+    cen3 = dict(cen, votes=11)
+    r3 = carry_history(card_yaml(1, "פ", cen3, True, "", SNAP, reviewed=True), v2, SNAP)
+    assert "card_version: 3\n" in r3 and "card_version: 1\n" not in r3, "версия вернулась назад"
+    assert "      ручная правка\n" in r3 and "  - version: 1\n" in r3 and \
+        "  - version: 3\n" in r3 and SNAP in r3.split("  - version: 3", 1)[1], \
+        "журнал правок потерян при перегенерации"
+    assert carry_history(r, None, SNAP) == r, "новая карточка изменена"
+    z = card_yaml(1, "פ", cen, True, "", SNAP, zero=True)
+    assert "денежных обещаний не найдено" in z and "не построено" not in z, \
+        "R19-F01: пустая карта извлечения названа «не построено»"
     assert "60%" in a, "доля пропуска не выведена из чисел этой строки"
     assert CAV in a and a.count(CAV) >= 2, "оговорка о теме не при утверждении"
     cen2 = dict(cen, acts_without_participation=1, votes=99)

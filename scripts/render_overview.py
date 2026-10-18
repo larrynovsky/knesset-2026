@@ -134,10 +134,17 @@ def rows(m: dict, cards: dict | None = None,
               "source_missing": "miss", "lineage_unresolved": "miss"}[b]
         if b == "observed" and r["anchor_id"] in budgets:
             k2 = "reviewed"
+        elif b == "observed":
+            # R19-F01: карта извлечения есть, разбора нет. Пустая — смотрели и
+            # вернулись пустыми; непустая без разбора — не дошли.
+            k2 = "none" if r["b"].get("commitments") == 0 else "miss"
         lab = ("коалиционного соглашения не подписывала"
                if b == "not_exposed" else
                "обязательства против бюджета — по записям на странице фракции"
-               if k2 == "reviewed" else "обязательства против бюджета")
+               if k2 == "reviewed" else
+               "денежных обещаний в соглашении не найдено"
+               if b == "observed" and k2 == "none" else
+               "обязательства против бюджета")
         c2 = cell(k2, lab)
         total += 1
         if k2 not in ("miss", "none", "reviewed"):
@@ -451,8 +458,35 @@ def selftest() -> int:
     assert "разобрано — без вывода" in mr and "искали, не нашли" not in mr, \
         "разобранная партия показана как «искали, не нашли»"
     assert fl_r == fl_o, "«разобрано — без вывода» посчитано как заполненная клетка"
-    assert "искали, не нашли" in mo and "разобрано" not in mo, \
-        "партия без карточки разбора получила «разобрано»"
+    assert "разобрано" not in mo, "партия без карточки разбора получила «разобрано»"
+    mz_m = mk_m("observed")
+    mz_m["lines"][0]["b"]["commitments"] = 0
+    mz, _, _ = rows(mz_m, {1110: fcard_ax})
+    assert "искали, не нашли" in mz and "денежных обещаний в соглашении не найдено" in mz, \
+        "R19-F01: пустая карта извлечения показана не как «искали, не нашли»"
+    mz_m["lines"][0]["b"]["commitments"] = 3
+    mn, _, _ = rows(mz_m, {1110: fcard_ax})
+    assert "мы сюда не дошли" in mn and "искали" not in mn, \
+        "извлечённые, но не разобранные обещания показаны как «искали, не нашли»"
+    # R19-F01: обзор и страница отвечают одним значением
+    _pg = lambda w: f"<summary>Деньги — <b class=tx-none>{w}</b></summary>"
+    check_money_same(mz, _pg("искали, не нашли"), 1110)
+    try:
+        check_money_same(mz, _pg("мы сюда не дошли"), 1110)
+    except Refuse:
+        pass
+    else:
+        raise AssertionError("обзор «искали» и страница «не дошли» прошли вместе")
+    # R19-F02 (M06): проводка обзора — разобранная строка без клетки
+    # «разобрано» и неразобранная с ней отвергаются.
+    check_overview_money(mr, {1110})
+    for bad_doc, bad_set in ((mo, {1110}), (mr, set())):
+        try:
+            check_overview_money(bad_doc, bad_set)
+        except Refuse:
+            pass
+        else:
+            raise AssertionError("обзор с потерянной проводкой разборов прошёл")
     dr, tr, fr = build(mk_m("observed"), {1110: fcard_ax}, {1110})
     assert f"в 1 разбор есть, но вывода нет; в остальных {tr - fr - 1}" in dr, \
         "счёт пустых клеток включил разобранную"
@@ -632,6 +666,10 @@ def selftest() -> int:
         shas + "<p>ожидают решения о сопоставлении: 24</p>", bc, idx, []))
     rejects("клетка «разобрано» снята", lambda: check_budget_page(
         shas.replace("разобрано — без вывода", "разбор обязательств"), bc, idx, []))
+    rejects("заголовок клетки подменён, фраза осталась абзацем", lambda: check_budget_page(
+        shas.replace("Деньги — <b class=tx-rev>разобрано — без вывода</b>",
+                     "Деньги — <b class=tx-none>искали, не нашли</b>")
+        + "<p>разобрано — без вывода</p>", bc, idx, []))
     print("ЗЕЛЁНЫЙ: четыре бюджетных разбора доставлены на страницу")
     changed = copy.deepcopy(idx)
     next(iter(changed.values()))["net_allocated"] += 1
@@ -817,6 +855,35 @@ def budget_block(cards: list, idx: dict, titles: list) -> str:
     return "".join(out)
 
 
+def check_overview_money(doc: str, reviewed: set) -> None:
+    """R19-F02: клетка «деньги» каждой строки обзора согласована с наличием
+    разбора — проверяется готовый HTML, а не аргумент вызова."""
+    seen = set()
+    for tr in re.findall(r"<tr>(.*?)</tr>", doc, flags=re.S):
+        fid = re.search(r'href="f-(\d+)\.html"', tr)
+        eq = re.search(r"<td class=c-eq[^>]*>(.*?)</td>", tr, flags=re.S)
+        if not (fid and eq):
+            continue
+        fid = int(fid.group(1))
+        seen.add(fid)
+        if (fid in reviewed) != ("разобрано — без вывода" in eq.group(1)):
+            raise Refuse(f"клетка «деньги» строки {fid} не согласована с разбором")
+    if not reviewed <= seen:
+        raise Refuse(f"разобранные строки без клетки в обзоре: {sorted(reviewed - seen)}")
+
+
+def check_money_same(doc: str, page: str, fid: int) -> None:
+    """R19-F01: на вопрос «вы смотрели?» обзор и страница фракции отвечают
+    одним значением клетки «деньги»."""
+    row = re.search(rf'href="f-{fid}\.html".*?<td class=c-eq[^>]*>(.*?)</td>', doc, flags=re.S)
+    head = re.search(r"Деньги — <b class=[\w-]+>(.*?)</b>", page)
+    words = [w for _, w, _ in CELL.values()]
+    a = next((w for w in words if row and f"{w}<span class=lb>" in row.group(1)), None)
+    if not (a and head and head.group(1) == a):
+        raise Refuse(f"f-{fid}: клетка «деньги» в обзоре ({a}) и на странице "
+                     f"({head.group(1) if head else None}) расходятся")
+
+
 def check_budget_page(page: str, cards: list, idx: dict, titles: list) -> None:
     """Отсутствие любого готового разбора — отказ, даже если остальная страница цела."""
     # Разбор есть — проза «не построено» / сырой счёт ожиданий карты
@@ -825,7 +892,8 @@ def check_budget_page(page: str, cards: list, idx: dict, titles: list) -> None:
         for stale in ("не построено", "ожидают решения о сопоставлении"):
             if stale in page:
                 raise Refuse(f"страница с разбором обязательств говорит «{stale}»")
-        if "разобрано — без вывода" not in page:
+        # именно в заголовке денежной клетки (R19-F02, M11), не где угодно
+        if "Деньги — <b class=tx-rev>разобрано — без вывода</b>" not in page:
             raise Refuse("у разобранной партии нет клетки «разобрано — без вывода»")
     for card in cards:
         for date in card["snapshots"].values():
@@ -904,10 +972,13 @@ def main() -> int:
     for row in m["lines"]:
         if row["anchor_id"] in maps:
             row["b"]["status"], row["b"]["note"] = channel_b(row["anchor_id"], set(), maps)
+            row["b"]["commitments"] = maps[row["anchor_id"]]["commitments"]
     cards = load_cards()
     budgets = load_cards("party_period")
     idx, titles = budget_index() if budgets else ({}, [])
-    doc, total, filled = build(m, cards, {k for k, v in budgets.items() if v})
+    reviewed = {k for k, v in budgets.items() if v}
+    doc, total, filled = build(m, cards, reviewed)
+    check_overview_money(doc, reviewed)
     bad = jargon(doc)
     if bad:
         print(f"ОТКАЗ: внутренний язык в обзоре: {bad}")
@@ -926,6 +997,7 @@ def main() -> int:
             budget = budget_block(bc, idx, titles) if bc else ""
             page = faction_page(c, r, votes_for(r["anchor_id"]), budget)
             check_budget_page(page, bc, idx, titles)
+            check_money_same(doc, page, r["anchor_id"])
         bad = jargon(page)
         if bad:
             print(f"ОТКАЗ: внутренний язык на f-{r['anchor_id']}.html: {bad}")
@@ -933,7 +1005,9 @@ def main() -> int:
         (OUT.parent / f"f-{r['anchor_id']}.html").write_text(page, encoding="utf-8")
         pages += 1
     print(f"обзор + {pages} страниц фракций -> {OUT.parent}")
-    print(f"ЗАМЕР: клеток {total}, заполнено {filled}, пусто {total - filled}")
+    rev = doc.count("tx-rev")
+    print(f"ЗАМЕР: клеток {total}, заполнено {filled}, разобрано без вывода {rev}, "
+          f"пусто {total - filled - rev}")
     return 0
 
 
@@ -1022,6 +1096,15 @@ def faction_page(card: dict, row: dict, votes: list, budget: str = "") -> str:
         s2, c2 = ('Деньги — <b class=tx-rev>разобрано — без вывода</b>',
                   "каждая запись соглашения сверена с бюджетом отдельно; "
                   "сводного вывода о фракции нет")
+    elif row["b"]["status"] == "observed" and row["b"].get("commitments") == 0:
+        # R19-F01: та же клетка, что в обзоре; сырой нулевой счёт карты не
+        # печатается — он ничего не говорит читателю.
+        s2, c2 = ('Деньги — <b class=tx-none>искали, не нашли</b>',
+                  "в коалиционном соглашении денежных обещаний не найдено")
+        budget = ('<p>В тексте коалиционного соглашения фракции не найдено ни '
+                  'одного денежного обещания, поэтому сверять с бюджетом нечего. '
+                  'Полнота распознавания текста соглашения отдельно не '
+                  'перепроверялась.</p>')
     elif row["b"]["status"] == "not_exposed":
         s2, c2 = ('Деньги — <b class=tx-none>искали, не нашли</b>',
                   "не экспонирована: канал покрывает только подписавших соглашение")

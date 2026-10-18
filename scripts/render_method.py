@@ -208,6 +208,18 @@ def selftest() -> int:
         "разбиение канала денег не сходится"
     from coverage_matrix import commitment_maps as _cm
     assert f["b_obs"] == len(_cm()), "счёт денег взят не из живых карт извлечения"
+    # R19-F02 (M07): разобранные — независимым путём, по файлам карточек
+    # разбора и числу их записей, а не через load_cards.
+    from validate_cards import load_yaml_ish as _ly
+    _rev = set()
+    for _p in (ROOT / "cards").glob("*-gov37.yaml"):
+        _c = _ly(_p)
+        if _c.get("commitments"):
+            _rev.add(int(str(_c["period_id"]).split("-")[0]))
+    _money = _cm()
+    assert f["b_rev"] == len(_rev & set(_money)), (f["b_rev"], sorted(_rev))
+    assert f["b_zero"] == sum(1 for k, v in _money.items()
+                              if k not in _rev and not v["commitments"]), f["b_zero"]
     # R8-F12: число моделей не зашито словом «Две» при другом составе
     import copy as _copy
     g3 = _copy.deepcopy(f)
