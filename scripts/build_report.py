@@ -223,7 +223,10 @@ def substitute(text: str, idx: dict, titles: list[str], nulls: list[str]) -> str
                 f'<span class=src>[{code} · {year} · {CHAN_RU[chan]}]</span>')
 
     def absent(m: re.Match) -> str:
-        term = m.group(1)
+        # Текст уже экранирован: «"» стало «&quot;». Искать надо исходный
+        # термин, иначе термин с кавычкой «не находится» никогда, и пометка
+        # «отсутствие проверено» лжёт (ревью 18.10, R8-F02).
+        term = html.unescape(m.group(1))
         hits = [t for t in titles if term in t]
         if hits:
             raise Refuse(f"заявлено отсутствие {term!r}, но оно есть в "
@@ -533,7 +536,7 @@ def selftest() -> int:
     вызывалась бы на той машине, где стоит pre-commit."""
     idx = {("0022010213", 2023): {"net_allocated": 1000, "net_executed": 500},
            ("0022010212", 2023): {"net_allocated": None}}
-    titles = ["הקמת מוסדות דת שוטף", "פיתוח בתי עלמין"]
+    titles = ["הקמת מוסדות דת שוטף", "פיתוח בתי עלמין", 'תמיכה בבתי חב"ד']
 
     def card(**kw) -> dict:
         c = {"card_version": 1, "period_id": "1095-gov37", "card_type": "party",
@@ -574,6 +577,7 @@ def selftest() -> int:
             ("битая ссылка", {"conclusion": "нет {9999999999:2023:allocated}"}),
             ("канал transfers", {"conclusion": "нет {0022010213:2023:transfers}"}),
             ("ложное отсутствие", {"conclusion": "нет {absent:מוסדות דת}"}),
+            ("ложное отсутствие с кавычкой", {"conclusion": 'нет {absent:בתי חב"ד}'}),
             ("ложное отсутствие кода", {"conclusion": "нет {nocode:0022010213}"}),
             ("BiDi в цитате", {"quote_he": "טקסט‮הפוך"})):
         if not refuses(name, **kw):
