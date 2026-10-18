@@ -307,10 +307,12 @@ def render_commitment(c: dict, idx, titles, nulls) -> str:
              f'<div class=meta>{esc(c.get("heading_ru"))} · '
              f'страница {esc(c.get("page"))}, строка {esc(c.get("line"))}</div></div>')
     p.append(f"<p>{substitute(c.get('conclusion') or '', idx, titles, nulls)}</p>")
+    # «Год плана и факта» снят: один plan_year не описывает пары лет, которые
+    # сравнивает вывод (Ноам 78 — 2023/2024, РС 477 — 2025, Оцма 422 — вне
+    # снимка); годы стоят при каждом числе (ревью 18.10, R8-F06).
     p.append(f'<p class=meta>Сопоставление: '
              f'{esc(GRAN_RU.get(c.get("granularity"), c.get("granularity")))} · '
-             f'ветка {esc(c.get("branch"))} · год плана и факта '
-             f'{esc(c.get("plan_year"))}</p>')
+             f'ветка {esc(c.get("branch"))}</p>')
     for r in c.get("readings") or []:
         p.append(f'<p class=r><b>{esc(READING_RU.get(r.get("type")))} '
                  f'прочтение.</b> '

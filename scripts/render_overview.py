@@ -21,7 +21,7 @@ from pathlib import Path
 from html.parser import HTMLParser
 from urllib.parse import unquote, urlsplit
 
-from build_report import esc, fingerprint, render_commitment, money, Refuse
+from build_report import esc, fingerprint, render_commitment, money, Refuse, OUTCOME_RU
 from validate_cards import budget_index
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -502,7 +502,9 @@ def selftest() -> int:
         (len(bc[0]["commitments"]), n_c)
     idx = {(code, int(year)): {"net_allocated": 123000, "net_executed": 456000}
            for c in bc[0]["commitments"]
-           for code, year, _ in REF_NUM.findall(c["conclusion"])}
+           # все поля, не только conclusion: ссылки в прочтениях и в области
+           # поиска тоже подставляются (b1ca545, R6-F08)
+           for code, year, _ in REF_NUM.findall(repr(c))}
     bc[0]["data_fingerprint"] = fingerprint(bc[0], idx, [])
     block = budget_block(bc, idx, [])
     shas = faction_page(fcard, frow, fv, block)
@@ -856,7 +858,7 @@ def faction_page(card: dict, row: dict, votes: list, budget: str = "") -> str:
     where = "".join(f"<li>{esc(w.get('источник') if isinstance(w, dict) else w)}</li>"
                     for w in cs.get("searched_where") or [])
     body.append(f'<div class=note><p><b>Искали, чем это опровергнуть:</b> '
-                f'{esc(cs.get("outcome"))}</p><ul class=dim>{where}</ul>'
+                f'{esc(OUTCOME_RU.get(cs.get("outcome"), cs.get("outcome")))}</p><ul class=dim>{where}</ul>'
                 f'<p class=dim>{esc(cs.get("note", ""))}</p>'
                 f'<p><b>Уверенность:</b> {esc(CERT.get(card.get("confidence")))} — '
                 f'{esc(card.get("confidence_reason"))}</p>'
@@ -888,7 +890,7 @@ def faction_page(card: dict, row: dict, votes: list, budget: str = "") -> str:
 {''.join(cells)}
 {''.join(body)}
 <div class=foot><p>Первый выпуск на живых данных, 13.08.2026. Форма принята
-01.08.2026. Снимок голосований: 2026-07-31.</p></div>
+01.08.2026. Снимок голосований: {esc(str((card.get("snapshots") or {}).get("votes_25", "не указан"))[:10])}.</p></div>
 </body></html>"""
 
 
