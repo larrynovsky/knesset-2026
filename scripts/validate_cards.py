@@ -473,6 +473,17 @@ def check_card(card: dict, name: str, periods: set[str], idx: dict,
             fail(f"{p}: нет what_would_falsify. Утверждение, которое нечем "
                  "опровергнуть, читатель проверить не может")
 
+        # §13 — и прочтения тоже: ревью 10.10 нашло вердикты («выполнено
+        # наполовину», «перевыполнено», «не сбылось») в readings, где
+        # прежний сторож не смотрел. Слова те же, плюс формы «сбыл».
+        for r in readings:
+            low_r = (r.get("text") or "").lower()
+            hit = next((w for w in VERDICT_WORDS + ("сбыл", "перевыполн") if w in low_r), None)
+            if hit:
+                fail(f"{p}: §13 — оценочный ярлык {hit!r} в прочтении ({r.get('type')}). "
+                     "Прочтение предлагает чтение данных, не вердикт об обещании")
+                break
+
         # §13 — вывод описательный, а не оценочный
         concl = c.get("conclusion") or ""
         if not concl.strip():
@@ -731,6 +742,9 @@ def selftest() -> int:
         ("§5 мало", lambda c: c["commitments"][0].update(readings=[{"type": "weakening"}])),
         ("§5 все ослабляющие", lambda c: c["commitments"][0].update(
             readings=[{"type": "weakening"}, {"type": "weakening"}])),
+        ("§13 вердикт в прочтении", lambda c: c["commitments"][0].update(
+            readings=[{"type": "weakening", "text": "обещание не выполнено"},
+                      {"type": "strengthening", "text": "строка есть"}])),
         ("§6 шкала", lambda c: c["commitments"][0].update(confidence="уверен")),
         ("§6 причина", lambda c: c["commitments"][0].update(confidence_reason="")),
         ("§8 high", lambda c: (c.update(holdout_checked={}),
