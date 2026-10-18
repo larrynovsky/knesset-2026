@@ -389,9 +389,11 @@ def selftest() -> int:
     assert "Снимок голосований: 2099-01-02" in fp, "дата снимка в подвале не из карточки"
     assert "честный поиск ничего не дал" in fp and ">nothing<" not in fp \
         and "опровергнуть:</b> nothing" not in fp, "исход поиска выведен служебным ключом"
-    for oc in ("found", "contradictory"):
+    # ожидание записано буквально, не берётся из того же словаря (R15-F03)
+    for oc, ru in (("found", "контрсвидетельство найдено и включено"),
+                   ("contradictory", "свидетельства противоречивы, доминирующего вывода нет")):
         fc = dict(fcard, counter_search=dict(fcard["counter_search"], outcome=oc))
-        assert f"опровергнуть:</b> {OUTCOME_RU[oc]}" in faction_page(fc, frow, fv), \
+        assert f"опровергнуть:</b> {ru}" in faction_page(fc, frow, fv), \
             f"исход {oc} не переведён"
     # ── §7: СТРОКА БЕЗ СВЯЗИ НЕ ПОЛУЧАЕТ СТРЕЛКУ НИ ОТ КАКОЙ КАРТОЧКИ ────
     # not_transferred.связь запрещает заполнять клетку у lineage_unresolved:
@@ -524,8 +526,16 @@ def selftest() -> int:
     assert reader_terms("Исправлено поле coverage.why.") == \
         "Исправлено поле пояснение к охвату.", reader_terms("Исправлено поле coverage.why.")
     for keep in ("файл conclusion.py", "ключ readings_extra", "not_found_count=2",
-                 "код `coverage.why`", "буквально «human_undecided»"):
+                 "код `coverage.why`", "буквально «human_undecided»",
+                 "xconclusion", "`conclusion + 1`", "`x = coverage.why + 1`",
+                 "«conclusion изменено»", "«поле coverage.why изменено»",
+                 '"coverage.why"', "conclusion.PY"):
         assert reader_terms(keep) == keep, (keep, reader_terms(keep))
+    assert reader_terms("дубль noam-p2-79") == "дубль запись строки 79"
+    # R13-F02/R15-F04: поле выгрузки не выдаётся за порядковую глубину
+    assert reader_terms("в title_level6") == "в название родительского узла", \
+        reader_terms("в title_level6")
+    assert "уровень" not in reader_terms("title_level6 и title_level4")
     # Ключи схемы не доходят до читателя ни в выводах, ни в журнале правок
     # (R10-F07): журнал ШАС содержит «coverage.why» — без перевода краснеет.
     import html as _html
@@ -661,11 +671,26 @@ READER_TERMS = {
 
 
 def reader_terms(text: str) -> str:
-    """Перевод ключа — только как отдельного слова прозы: не внутри имени
-    файла или составного идентификатора, не в `коде` и не в «цитате»
-    (R13-F03: прежний str.replace портил «conclusion.py» и «not_found_count»)."""
+    """Перевод ключа — только в прозе. Буквальные сегменты целиком не
+    трогаются: `код`, «цитата», "цитата", имена файлов (R13-F03, R15-F02).
+    Внутренние ID записей (shas-p32-1653) показываются как «запись строки N»
+    (R15-F01): читателю они ничего не говорят."""
+    lit = re.compile(r"`[^`]*`|«[^»]*»|\"[^\"]*\"|"
+                     r"\S+\.(?:py|md|ya?ml|json|txt|html?|log|csv|sh)\b", re.I)
+    out, pos = [], 0
+    for m in lit.finditer(text):
+        out.append(_terms_prose(text[pos:m.start()]))
+        out.append(m.group(0))
+        pos = m.end()
+    out.append(_terms_prose(text[pos:]))
+    return "".join(out)
+
+
+def _terms_prose(text: str) -> str:
+    text = re.sub(r"\b(?:shas|rz|yt|otzma|noam|uright)-p\d+-(\d+)\b",
+                  r"запись строки \1", text)
     for k in sorted(READER_TERMS, key=len, reverse=True):
-        text = re.sub(r"(?<![\w./`«-])" + re.escape(k) + r"(?![\w`»-]|\.[a-z])",
+        text = re.sub(r"(?<![\w./`«-])" + re.escape(k) + r"(?![\w`»-])",
                       READER_TERMS[k], text)
     return text
 

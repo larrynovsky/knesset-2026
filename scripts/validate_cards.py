@@ -854,9 +854,11 @@ def selftest() -> int:
     # CLI: путь в аргументах раньше молча игнорировался (ecce333, R11-F02)
     import subprocess
     existing = next(iter(sorted(CARDS.glob("*.yaml"))), Path("cards/x.yaml"))
-    for argv in (["cards/x.yaml"], [str(existing)], ["--selftest", str(existing)]):
+    rel = str(existing.relative_to(ROOT)) if existing.is_absolute() else str(existing)
+    for argv in (["cards/x.yaml"], [str(existing)], [rel], ["--selftest", rel],
+                 [rel, "--selftest"]):
         rc = subprocess.run([sys.executable, __file__, *argv],
-                            capture_output=True).returncode
+                            capture_output=True, cwd=ROOT).returncode
         if rc != 2:
             print(f"САМОПРОВЕРКА ПРОВАЛЕНА: позиционный аргумент {argv} принят "
                   f"(rc={rc})", file=sys.stderr)
