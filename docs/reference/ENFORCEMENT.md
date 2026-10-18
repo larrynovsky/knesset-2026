@@ -12,7 +12,7 @@ MANUAL с упоминаниями допустим; оснований повы
 
 | § | правило | заявлено | файлы с упоминанием |
 |---|---|---|---|
-| §1 | Единица наблюдения — партия в период участия в правительстве. | PARTIAL | build_periods.py, check_artifacts.py, probe_shas_periods.py, slice_party_theme.py, validate_cards.py |
+| §1 | Единица наблюдения — партия в период участия в правительстве. | PARTIAL | build_periods.py, check_artifacts.py, map_commitments.py, probe_shas_periods.py, slice_party_theme.py, validate_cards.py |
 | §2 | Партия и её фигуры считаются раздельно. | PARTIAL | validate_cards.py |
 | §3 | Критерии отбора фиксируются ДО первого взгляда на результаты. | LIVE | build_blind_reading.py, build_lineage_candidates.py, build_periods.py, build_report.py, check_artifacts.py, check_criteria_order.py, commit-msg, direction_confidence.py, fetch_votes.py, map_commitments.py, post-receive.template, pre-commit, scan_bills.py, select_pilot.py, select_structdiff_pilot.py |
 | §4 | Карточка обязана нести отчёт о поиске опровержения. | PARTIAL | check_artifacts.py, classify_direction.py, post-receive.template, pre-commit, validate_cards.py |

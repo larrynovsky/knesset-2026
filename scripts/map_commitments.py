@@ -688,9 +688,20 @@ def selftest() -> int:
     assert split["items"][0]["category_rule"] == "глагол пункта: יעמוד על (стр. 1)", split["items"][0]
     print("GREEN: v1.4 — границы пунктов, маркеры страниц, оба направления, формы и приоритеты")
 
+    # Контрольная выборка v1.3 зашита: живые карты пересобраны под v1.4 и
+    # прежней выборкой служить не могут (ревью Кодекса 18.10).
     baseline_counts = {"shas": (42, 21), "rz": (27, 13), "otzma": (10, 2),
                        "noam": (5, 3), "yt": (25, 9), "app-ay": (0, 0),
                        "unity": (0, 0), "u-right": (1, 0)}
+    baseline_v13 = {
+        "shas": {551, 553, 555, 557, 559, 561, 563, 573, 717, 824, 892, 912,
+                 1518, 1644, 1645, 1646, 1653, 1660, 1682, 1696, 1699},
+        "rz": {532, 535, 576, 603, 608, 650, 676, 737, 741, 742, 745, 799, 837},
+        "otzma": {415, 420}, "noam": {78, 83, 486},
+        "yt": {408, 731, 945, 949, 995, 1512, 1516, 1527, 1547},
+        "app-ay": set(), "unity": set(), "u-right": set(),
+    }
+    assert all(len(baseline_v13[k]) == v[1] for k, v in baseline_counts.items())
     entries = agreement_entries(rule)
     assert {slug(a) for a in entries} == set(baseline_counts)
     for entry in entries:
@@ -706,14 +717,16 @@ def selftest() -> int:
         new_items = {i["line"]: i for i in result["items"]}
         assert len(old_items) == len(new_items) == expected
         assert old_items.keys() == new_items.keys(), key
-        preserved = [i for i in old["items"] if i["category"] == "commitment"]
-        assert len(preserved) == previous, key
+        preserved = baseline_v13[key]
+        assert preserved <= new_items.keys(), (key, preserved - new_items.keys())
         for line, item in old_items.items():
             assert item["quote_he"] == new_items[line]["quote_he"], (key, line)
             assert item.get("heading") == new_items[line].get("heading"), (key, line)
-        assert all(new_items[i["line"]]["category"] == "commitment" for i in preserved), key
+            assert item["category"] == new_items[line]["category"], (key, line)
+        lost = [l for l in preserved if new_items[l]["category"] != "commitment"]
+        assert not lost, (key, lost)
         added = [i for i in result["items"] if i["category"] == "commitment"
-                 and old_items[i["line"]]["category"] != "commitment"]
+                 and i["line"] not in preserved]
         print(f"GREEN: {entry['file']}: candidates={expected}; сохранено commitment={previous}; "
               f"новых commitment={len(added)}; строки={[i['line'] for i in added]}")
         for item in added:
