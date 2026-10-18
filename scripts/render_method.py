@@ -82,6 +82,16 @@ def facts() -> dict:
                                           cov["counts"]["c_observed"])
     money = commitment_maps()
     f["money"] = {fid: v for fid, v in money.items()}
+    # R8-F04: счёт «деньги — у N» берётся из тех же живых объектов, что
+    # обзор, а не из снимка coverage_matrix.json (там b_observed=1 с августа).
+    # Не «1 → 7» вслепую: у 1098 карта извлечения есть, обязательств ноль.
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from render_overview import load_cards
+    f["b_obs"] = len(money)
+    rev = {k for k, v in load_cards("party_period").items() if v}
+    f["b_rev"] = len(rev & set(money))
+    f["b_zero"] = sum(1 for k, v in money.items() if k not in rev and not v["commitments"])
+    f["b_open"] = f["b_obs"] - f["b_rev"] - f["b_zero"]
 
     sel = flat(OWNER_DECL, "selection")
     f["owner_size"] = int(sel.get("size", 0) or 0)
@@ -122,7 +132,10 @@ def build(f: dict) -> str:
 
 <h2>Три источника поступков и кого они видят</h2>
 <p>Строк бюллетеня в сборке: {f['lines']}. Голосования наблюдаемы у
-<b>{f['a_obs']}</b>, деньги — у <b>{f['b_obs']}</b>, должности — у
+<b>{f['a_obs']}</b>, деньги — у <b>{f['b_obs']}</b> (обещания соглашения сверены с бюджетом
+по одному у <b>{f['b_rev']}</b>, сводного вывода нет; денежных обещаний в
+соглашении не найдено у <b>{f['b_zero']}</b>; обещания извлечены, но не
+разобраны у <b>{f['b_open']}</b>), должности — у
 <b>{f['c_obs']}</b>. Молчание документа о деньгах или должностях партии —
 свойство измерения, а не партии (§7): его нельзя читать ни как «чистая»,
 ни как обвинение.</p>
@@ -185,9 +198,16 @@ def selftest() -> int:
     # Каждое число словаря обязано быть на странице — страница не вправе
     # выборочно молчать о замере.
     for k in ("alpha", "alpha_threshold", "pairs", "agree", "attempted",
-              "carries", "none", "inverts", "a_obs", "b_obs", "c_obs", "lines"):
+              "carries", "none", "inverts", "a_obs", "b_obs", "b_rev", "b_zero", "b_open", "c_obs", "lines"):
         assert str(f[k]) in page, f"на странице нет {k}={f[k]}"
     assert f["window"][1] in page, "граница среза не напечатана"
+    # R8-F04: однозначные числа найдутся на странице где угодно — ищем фразу.
+    assert (f"деньги — у <b>{f['b_obs']}</b> (обещания соглашения сверены с бюджетом\n"
+            f"по одному у <b>{f['b_rev']}</b>") in page, "счёт канала денег не напечатан"
+    assert f["b_open"] >= 0 and f["b_rev"] + f["b_zero"] + f["b_open"] == f["b_obs"], \
+        "разбиение канала денег не сходится"
+    from coverage_matrix import commitment_maps as _cm
+    assert f["b_obs"] == len(_cm()), "счёт денег взят не из живых карт извлечения"
     # R8-F12: число моделей не зашито словом «Две» при другом составе
     import copy as _copy
     g3 = _copy.deepcopy(f)

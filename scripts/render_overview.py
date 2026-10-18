@@ -29,11 +29,15 @@ MOCK = ROOT / "design" / "mockup_v5" / "index.html"
 MATRIX = ROOT / "data" / "coverage_matrix.json"
 OUT = ROOT / "site" / "index.html"
 
-# Закрытый список пяти значений клетки — канон D2 из приёмки 01.08.
+# Закрытый список значений клетки — канон D2 из приёмки 01.08 и шестое
+# значение по решению владельца 18.10 (R8-F04): «разобрано — без вывода».
+# Разбор по записям есть, сводного вывода о фракции нет. Без него
+# разобранная партия читалась как «искали, не нашли» — то есть пустой.
 CELL = {"up": ("↑", "укрепляла", ""), "down": ("↓", "ослабляла", ""),
         "both": ("↕", "и туда и обратно", ""),
         "none": ("", "искали, не нашли", "tx-none"),
-        "miss": ("", "мы сюда не дошли", "tx-miss")}
+        "miss": ("", "мы сюда не дошли", "tx-miss"),
+        "reviewed": ("", "разобрано — без вывода", "tx-rev")}
 
 
 def css_from_mockup() -> str:
@@ -86,9 +90,15 @@ def alpha_ok(ax: dict) -> bool:
         return False
 
 
-def rows(m: dict, cards: dict | None = None) -> tuple[str, int, int]:
-    """Строки обзора. Возвращает разметку, число клеток и число заполненных."""
+def rows(m: dict, cards: dict | None = None,
+         budgets: set | None = None) -> tuple[str, int, int]:
+    """Строки обзора. Возвращает разметку, число клеток и число заполненных.
+
+    budgets — фракции, у которых есть карточка разбора обязательств против
+    бюджета. Клетка «деньги» у них — «разобрано — без вывода», а не
+    «искали, не нашли»: разбор не пустой, но вывода о фракции он не даёт."""
     cards = cards or {}
+    budgets = budgets or set()
     out, total, filled = [], 0, 0
     for r in m["lines"]:
         a, b = r["a"]["status"], r["b"]["status"]
@@ -122,11 +132,15 @@ def rows(m: dict, cards: dict | None = None) -> tuple[str, int, int]:
         # Колонка «деньги»: здесь состояние ЕСТЬ и оно различено §7.
         k2 = {"observed": "none", "not_exposed": "none",
               "source_missing": "miss", "lineage_unresolved": "miss"}[b]
+        if b == "observed" and r["anchor_id"] in budgets:
+            k2 = "reviewed"
         lab = ("коалиционного соглашения не подписывала"
-               if b == "not_exposed" else "обязательства против бюджета")
+               if b == "not_exposed" else
+               "обязательства против бюджета — по записям на странице фракции"
+               if k2 == "reviewed" else "обязательства против бюджета")
         c2 = cell(k2, lab)
         total += 1
-        if k2 not in ("miss", "none"):
+        if k2 not in ("miss", "none", "reviewed"):
             filled += 1
         out.append(f"<tr>{who}\n<td class=c-inst "
                    f'data-l="суд, парламент, свободы">{c1}</td>\n'
@@ -181,9 +195,11 @@ def grounds_block() -> str:
             f'он показывает, кто проголосовал за то, что прочитано и помечено.</p>')
 
 
-def build(m: dict, cards: dict | None = None) -> tuple[str, int, int]:
-    body, total, filled = rows(m, cards)
-    miss = total - filled
+def build(m: dict, cards: dict | None = None,
+          budgets: set | None = None) -> tuple[str, int, int]:
+    body, total, filled = rows(m, cards, budgets)
+    rev = body.count("tx-rev")
+    miss = total - filled - rev
     doc = f"""<!doctype html>
 <html lang=ru><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -201,10 +217,14 @@ def build(m: dict, cards: dict | None = None) -> tuple[str, int, int]:
 {grounds_block()}
 <h2>Сначала о том, чего мы не знаем</h2>
 <p>Клеток в таблице ниже — <b class=big>{total}</b>. Заполнены {filled};
-в остальных {miss} мы либо не дошли, либо смотрели и вернулись пустыми.</p>
+в {rev} разбор есть, но вывода нет; в остальных {miss} мы либо не дошли,
+либо смотрели и вернулись пустыми.</p>
 <p>Это разные вещи, и подписаны они по-разному.
 <b class=tx-miss>«Не дошли»</b> значит, что мы туда не смотрели вовсе.
 <b class=tx-none>«Искали, не нашли»</b> — что смотрели и вернулись пустыми.
+<b class=tx-rev>«Разобрано — без вывода»</b> — что обещания из коалиционного
+соглашения сверены с бюджетом по одному, и каждая запись лежит на странице
+фракции; сводного вывода о фракции мы из них не делаем.
 И ни то, ни другое не значит «к этой партии вопросов нет». Пустая клетка
 рассказывает про нас, а не про партию.</p>
 <h2>Шестнадцать строк бюллетеня</h2>
@@ -424,6 +444,18 @@ def selftest() -> int:
     mo, _, fl_o = rows(mk_m("observed"), {1110: fcard_ax})
     assert MARK in mo and fl_o == 1, \
         "обзор потерял решение у строки, где связь установлена"
+    # R8-F04, решение владельца 18.10: разобранная партия — не «пустая».
+    # Ожидаемые слова записаны здесь, а не взяты из CELL: мутант словаря
+    # обязан покраснеть.
+    mr, _, fl_r = rows(mk_m("observed"), {1110: fcard_ax}, {1110})
+    assert "разобрано — без вывода" in mr and "искали, не нашли" not in mr, \
+        "разобранная партия показана как «искали, не нашли»"
+    assert fl_r == fl_o, "«разобрано — без вывода» посчитано как заполненная клетка"
+    assert "искали, не нашли" in mo and "разобрано" not in mo, \
+        "партия без карточки разбора получила «разобрано»"
+    dr, tr, fr = build(mk_m("observed"), {1110: fcard_ax}, {1110})
+    assert f"в 1 разбор есть, но вывода нет; в остальных {tr - fr - 1}" in dr, \
+        "счёт пустых клеток включил разобранную"
     # ── ГРАНИЦА ПУБЛИКАЦИИ, А НЕ ТОЛЬКО ВЫЧИСЛЕНИЯ ──────────────────────
     # Правило объявило «при альфе ниже порога стрелка не публикуется
     # вовсе». Отказ стоял в расчёте; готовая карточка проходила мимо, и
@@ -563,6 +595,12 @@ def selftest() -> int:
         cut, bc, idx, []))
     rejects("бюджетный блок удалён", lambda: check_budget_page(
         shas.replace(block, ""), bc, idx, []))
+    rejects("старая проза канала денег", lambda: check_budget_page(
+        shas + "<p>партия правила, сопоставление обязательств не построено</p>", bc, idx, []))
+    rejects("сырой счёт ожиданий", lambda: check_budget_page(
+        shas + "<p>ожидают решения о сопоставлении: 24</p>", bc, idx, []))
+    rejects("клетка «разобрано» снята", lambda: check_budget_page(
+        shas.replace("разобрано — без вывода", "разбор обязательств"), bc, idx, []))
     print("ЗЕЛЁНЫЙ: четыре бюджетных разбора доставлены на страницу")
     changed = copy.deepcopy(idx)
     next(iter(changed.values()))["net_allocated"] += 1
@@ -743,6 +781,14 @@ def budget_block(cards: list, idx: dict, titles: list) -> str:
 
 def check_budget_page(page: str, cards: list, idx: dict, titles: list) -> None:
     """Отсутствие любого готового разбора — отказ, даже если остальная страница цела."""
+    # Разбор есть — проза «не построено» / сырой счёт ожиданий карты
+    # извлечения ему противоречит (R8-F04/F05): отказ, а не две версии.
+    if cards:
+        for stale in ("не построено", "ожидают решения о сопоставлении"):
+            if stale in page:
+                raise Refuse(f"страница с разбором обязательств говорит «{stale}»")
+        if "разобрано — без вывода" not in page:
+            raise Refuse("у разобранной партии нет клетки «разобрано — без вывода»")
     for card in cards:
         for date in card["snapshots"].values():
             if esc(date) not in page:
@@ -823,7 +869,7 @@ def main() -> int:
     cards = load_cards()
     budgets = load_cards("party_period")
     idx, titles = budget_index() if budgets else ({}, [])
-    doc, total, filled = build(m, cards)
+    doc, total, filled = build(m, cards, {k for k, v in budgets.items() if v})
     bad = jargon(doc)
     if bad:
         print(f"ОТКАЗ: внутренний язык в обзоре: {bad}")
@@ -935,7 +981,9 @@ def faction_page(card: dict, row: dict, votes: list, budget: str = "") -> str:
                f'отсева.</p>')
     cells = [det(head1, cert1, inner1, True)]
     if budget:
-        s2, c2 = "Деньги — разбор обязательств", row["b"]["note"]
+        s2, c2 = ('Деньги — <b class=tx-rev>разобрано — без вывода</b>',
+                  "каждая запись соглашения сверена с бюджетом отдельно; "
+                  "сводного вывода о фракции нет")
     elif row["b"]["status"] == "not_exposed":
         s2, c2 = ('Деньги — <b class=tx-none>искали, не нашли</b>',
                   "не экспонирована: канал покрывает только подписавших соглашение")

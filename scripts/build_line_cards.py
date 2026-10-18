@@ -89,7 +89,7 @@ axis_institutions:
 
 
 def card_yaml(fid: int, he: str, cen: dict, in_gov: bool, b_status: str,
-              snap: str, ax: dict | None = None) -> str:
+              snap: str, ax: dict | None = None, reviewed: bool = False) -> str:
     ru = RU.get(fid, he)
     miss = cen["acts_without_participation"]
     share = miss / cen["acts_in_theme_total"]
@@ -108,7 +108,12 @@ def card_yaml(fid: int, he: str, cen: dict, in_gov: bool, b_status: str,
                  "голосование по правительственным законопроектам может "
                  "отражать коалиционную дисциплину, а не предпочтение по "
                  "предмету; голосованиями это не разделяется")
-        bnote = "партия правила, сопоставление обязательств не построено"
+        # R8-F04: у партии с карточкой разбора обязательств прежняя проза
+        # «не построено» противоречила бюджетному блоку той же страницы.
+        bnote = ("партия правила; обязательства соглашения сверены с бюджетом "
+                 "по одному, сводного вывода нет — записи ниже на этой странице"
+                 if reviewed else
+                 "партия правила, сопоставление обязательств не построено")
     else:
         frame = ("каналы денег и должностей у этой строки пусты по устройству "
                  "измерения: соглашения она не подписывала, портфелей не "
@@ -260,6 +265,8 @@ def emit(directions: Path | None = None) -> int:
             hand.add(int(c["faction_id"]))
     snap = votes["at"][:19]   # §11: снимок берётся из данных, не из константы
     ax_all = arrows(votes, directions)
+    from render_overview import load_cards
+    reviewed = {k for k, v in load_cards("party_period").items() if v}
     out, skipped = {}, []
     for ch in lin["chains"]:
         fid, he = ch["anchor_id"], ch["anchor"]
@@ -273,7 +280,7 @@ def emit(directions: Path | None = None) -> int:
             continue
         name = slug(RU.get(fid, "line"), fid) + ".yaml"
         out[name] = card_yaml(fid, he, cen, fid in gov, "", snap,
-                              ax_all.get(fid))
+                              ax_all.get(fid), fid in reviewed)
     print(json.dumps({"cards": out, "skipped": skipped}, ensure_ascii=False))
     return 0
 
@@ -305,6 +312,9 @@ def selftest() -> int:
         "иначе шестнадцать карточек — это одна, размноженная шестнадцать раз"
     assert "по устройству измерения" in b, "пустота не названа свойством измерителя"
     assert "baseline: true" in a, "карточка базовой линии не помечена как базовая"
+    r = card_yaml(1, "פ", cen, True, "", SNAP, reviewed=True)
+    assert "не построено" in a and "не построено" not in r and "сверены с бюджетом" in r, \
+        "R8-F04: разобранная партия получила прозу «не построено»"
     assert "60%" in a, "доля пропуска не выведена из чисел этой строки"
     assert CAV in a and a.count(CAV) >= 2, "оговорка о теме не при утверждении"
     cen2 = dict(cen, acts_without_participation=1, votes=99)
