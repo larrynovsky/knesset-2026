@@ -857,6 +857,14 @@ def selftest() -> int:
 
 
 def main() -> int:
+    extra = [a for a in sys.argv[1:] if a not in ("--selftest", "--emit-schema")]
+    if extra:
+        # Путь в аргументах раньше молча игнорировался: проверялся весь cards/,
+        # и подлог на копии файла давал ложное зелёное (KNS-L005, 18.10).
+        print(f"ОТКАЗ: аргументы не поддерживаются: {extra}. Валидатор всегда "
+              f"проверяет весь {CARDS.relative_to(ROOT)}/; подлог делать на месте.",
+              file=sys.stderr)
+        return 2
     if "--selftest" in sys.argv:
         return selftest()
     if "--emit-schema" in sys.argv:
