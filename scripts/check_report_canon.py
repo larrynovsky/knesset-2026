@@ -263,10 +263,25 @@ def c_sem(src):
     return len(src), bad[:3], ""
 
 @check("фактуры несут состояния пустоты",
-       [("фактуры сняты", lambda s: dict(s, **{"index.html": s["index.html"].replace("tx-none", "x").replace("tx-miss", "x")}))])
+       [("фактуры сняты", lambda s: dict(s, **{"index.html": s["index.html"].replace("tx-none", "x").replace("tx-miss", "x")})),
+        # R20-F03: CSS цел, в разметке фактур нет — прежде давало зелёное
+        ("фактуры сняты только в разметке", lambda s: dict(s, **{"index.html": styles(s["index.html"]) + s["index.html"][len(styles(s["index.html"])):].replace("tx-none", "x").replace("tx-miss", "x")}))])
 def c_texture(src):
-    hits = len(re.findall(r"tx-none|tx-miss", src["index.html"]))
-    return hits, [] if hits else ["в обзоре только слова"], f"{hits} мест"
+    # Считаются ПРИМЕНЕНИЯ в клетках, не объявления в CSS: каждая пустая
+    # клетка обязана нести свою фактуру (R20-F03).
+    s = src["index.html"]
+    body = s[len(styles(s)):]
+    need = {"искали, не нашли": "tx-none", "мы сюда не дошли": "tx-miss"}
+    seen, bad = 0, []
+    for m in CELL_RX.finditer(body):
+        word = m.group(3).strip()
+        if word in need:
+            seen += 1
+            if need[word] not in m.group(1):
+                bad.append(f"«{word}» без {need[word]}")
+    if not seen:
+        bad.append("в обзоре нет ни одной пустой клетки с фактурой")
+    return seen, sorted(set(bad))[:3], f"{seen} пустых клеток"
 
 @check("видимый фокус клавиатуры",
        [("focus-visible убран", lambda s: dict(s, **{k: v.replace(":focus-visible", ":focus-xxxxx") for k, v in s.items()}))])
