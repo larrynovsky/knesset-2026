@@ -265,19 +265,29 @@ def selftest() -> int:
     # ── ДУБЛЬ НЕ СЧИТАЕТСЯ ОБЯЗАТЕЛЬСТВОМ ───────────────────────────────
     # Пометка duplicate_of в записи обязана доехать до счётчика: иначе
     # график 700/800/950 из трёх строк читается как три обещания.
-    _dup_card = {"period_id": "t", "data_fingerprint": None, "coverage": {"commitments_total": 2},
+    # Ложный денежный кандидат (not_budgetary) — тоже не обещание денег (F-06):
+    # основной + дубль + ложный кандидат = 3 записи / 1 денежное обязательство.
+    _dup_card = {"period_id": "t", "data_fingerprint": None, "coverage": {"commitments_total": 3},
                  "snapshots": {"x": "2026"},
                  "commitments": [{"id": "a", "amount_ils": 1, "quote_he": "א", "quote_ru": "а",
                                   "conclusion": "x", "readings": [], "granularity": "exact_takana",
                                   "codes": [], "confidence": "low"},
                                  {"id": "b", "amount_ils": 1, "quote_he": "ב", "quote_ru": "б",
                                   "conclusion": "y", "readings": [], "granularity": "exact_takana",
-                                  "codes": [], "confidence": "low", "duplicate_of": "a"}]}
+                                  "codes": [], "confidence": "low", "duplicate_of": "a"},
+                                 {"id": "c", "amount_ils": None, "quote_he": "ג", "quote_ru": "в",
+                                  "conclusion": "z", "readings": [], "granularity": "not_budgetary",
+                                  "codes": [], "confidence": "low"}]}
     import unittest.mock as _m
     with _m.patch(__name__ + ".fingerprint", lambda *_a: None):
         _html = budget_block([_dup_card], {}, [])
-    assert "Самостоятельных обязательств 1" in _html, "дубль не дошёл до счётчика"
-    assert "Разобрано 2 записи" in _html, _html[:200]
+    assert "Самостоятельных денежных обязательств 1" in _html, "дубль/ложный кандидат не дошли до счётчика"
+    assert "1 запись — продолжение" in _html and "1 запись — без собственной суммы" in _html, _html[:400]
+    assert "Разобрано 3 записи" in _html, _html[:200]
+    _dup_card["commitments"][2]["granularity"] = "exact_takana"
+    with _m.patch(__name__ + ".fingerprint", lambda *_a: None):
+        _html = budget_block([_dup_card], {}, [])
+    assert "Самостоятельных денежных обязательств 2" in _html, "снятие not_budgetary не сдвинуло счётчик"
     doc, total, filled = build(m)
     assert total == 6, f"клеток {total}, а строк три по две колонки"
     assert filled == 0, "без решения в карточке клетка не имеет права заполниться"
@@ -611,12 +621,21 @@ def budget_block(cards: list, idx: dict, titles: list) -> str:
         # Дубли (duplicate_of) — записи, а не самостоятельные обязательства:
         # счётчик обязан это различать, иначе график из трёх строк считается
         # за три обещания (ревью 18.10, F-07).
+        # Ложный денежный кандидат (not_budgetary) — тоже запись, не обещание
+        # денег (ревью 18.10, F-06): знаменатель — денежные обязательства.
         dups = [c for c in card.get("commitments") or [] if c.get("duplicate_of")]
-        uniq = n - len(dups)
-        dup_note = ("" if not dups else
-                    f" Самостоятельных обязательств {uniq}: "
-                    f"{len(dups)} {ru_plural(len(dups), 'запись', 'записи', 'записей')} — "
-                    "продолжение другого пункта (помечено в самой записи).")
+        nonmoney = [c for c in card.get("commitments") or []
+                    if not c.get("duplicate_of") and c.get("granularity") == "not_budgetary"]
+        uniq = n - len(dups) - len(nonmoney)
+        parts = []
+        if dups:
+            parts.append(f"{len(dups)} {ru_plural(len(dups), 'запись', 'записи', 'записей')} — "
+                         "продолжение другого пункта (помечено в самой записи)")
+        if nonmoney:
+            parts.append(f"{len(nonmoney)} {ru_plural(len(nonmoney), 'запись', 'записи', 'записей')} — "
+                         "без собственной суммы (разобрано, но денег не обещает)")
+        dup_note = ("" if not parts else
+                    f" Самостоятельных денежных обязательств {uniq}: " + "; ".join(parts) + ".")
         out.append(f'<section data-budget="{esc(card["period_id"])}">'
                    f'<p>Период: {esc(card["period_id"])}. Разобрано '
                    f'{n} {ru_plural(n, "запись", "записи", "записей")} из '
