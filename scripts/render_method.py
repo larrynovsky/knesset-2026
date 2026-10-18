@@ -192,7 +192,10 @@ def selftest() -> int:
     import copy as _copy
     g3 = _copy.deepcopy(f)
     g3["models"] = {"a": "m1", "b": "m2", "c": "m3"}
-    assert "Две модели" not in build(g3), "«Две модели» при трёх в метаданных"
+    p3 = build(g3)
+    assert "Две модели" not in p3 and "две модели" not in p3, "«две модели» при трёх в метаданных"
+    assert "какие две" in p3 and "m1" in p3 and "m3" in p3, \
+        "оговорка о составе моделей пропала или список моделей не выведен"
     assert f["carries"] + f["none"] + f["inverts"] == f["votes_rows"], \
         "классы «за» не складываются в число записей"
     print(f"  OK: все замеры на странице; α={f['alpha']} при пороге "

@@ -389,6 +389,10 @@ def selftest() -> int:
     assert "Снимок голосований: 2099-01-02" in fp, "дата снимка в подвале не из карточки"
     assert "честный поиск ничего не дал" in fp and ">nothing<" not in fp \
         and "опровергнуть:</b> nothing" not in fp, "исход поиска выведен служебным ключом"
+    for oc in ("found", "contradictory"):
+        fc = dict(fcard, counter_search=dict(fcard["counter_search"], outcome=oc))
+        assert f"опровергнуть:</b> {OUTCOME_RU[oc]}" in faction_page(fc, frow, fv), \
+            f"исход {oc} не переведён"
     # ── §7: СТРОКА БЕЗ СВЯЗИ НЕ ПОЛУЧАЕТ СТРЕЛКУ НИ ОТ КАКОЙ КАРТОЧКИ ────
     # not_transferred.связь запрещает заполнять клетку у lineage_unresolved:
     # там неизвестно, ЧЬЯ это фракция. Валидатор смотрит card.status, а
@@ -516,6 +520,12 @@ def selftest() -> int:
     check_budget_page(shas, bc, idx, [])
     assert "123 000 ₪" in shas and "{0022010213" not in shas
     assert jargon(shas) is None, jargon(shas)
+    # Перевод — только отдельного слова; имена файлов, `код` и «цитата» целы
+    assert reader_terms("Исправлено поле coverage.why.") == \
+        "Исправлено поле пояснение к охвату.", reader_terms("Исправлено поле coverage.why.")
+    for keep in ("файл conclusion.py", "ключ readings_extra", "not_found_count=2",
+                 "код `coverage.why`", "буквально «human_undecided»"):
+        assert reader_terms(keep) == keep, (keep, reader_terms(keep))
     # Ключи схемы не доходят до читателя ни в выводах, ни в журнале правок
     # (R10-F07): журнал ШАС содержит «coverage.why» — без перевода краснеет.
     import html as _html
@@ -532,6 +542,15 @@ def selftest() -> int:
         else:
             raise AssertionError(f"мёртвый оракул: {label}")
 
+    _amts = [c.get("amount_ils") for c in bc[0]["commitments"]]
+    c0 = next(c for c in bc[0]["commitments"]
+              if c.get("amount_ils") and _amts.count(c["amount_ils"]) > 1)
+    t0 = f'<article id="{esc(c0["id"])}">'
+    a0 = shas.find(t0)
+    lab0 = f"Сумма в соглашении: {money(c0['amount_ils'])}"
+    cut = shas[:a0] + shas[a0:].replace(lab0, "Сумма в соглашении: ?", 1)
+    rejects("сумма удалена у своего обязательства", lambda: check_budget_page(
+        cut, bc, idx, []))
     rejects("бюджетный блок удалён", lambda: check_budget_page(
         shas.replace(block, ""), bc, idx, []))
     print("ЗЕЛЁНЫЙ: четыре бюджетных разбора доставлены на страницу")
@@ -633,16 +652,21 @@ READER_TERMS = {
     "spread_over_lines": "«размазано по нескольким строкам»",
     "exact_takana": "«одна бюджетная статья»", "not_found": "«не найдено»",
     "required_in_base": "«требуется в базе»", "human_undecided": "«носитель не выбран»",
-    "title_level6": "шестой уровень бюджетной иерархии",
-    "title_level4": "четвёртый уровень бюджетной иерархии",
+    # title_levelN — поле выгрузки, а не порядковая глубина узла (R13-F02)
+    "title_level6": "название родительского узла",
+    "title_level4": "название узла уровнем выше",
     "granularity": "категория сопоставления", "counter_search": "поиск опровержения",
     "readings": "прочтения", "conclusion": "вывод", "rejection_reason": "причина отказа",
 }
 
 
 def reader_terms(text: str) -> str:
+    """Перевод ключа — только как отдельного слова прозы: не внутри имени
+    файла или составного идентификатора, не в `коде` и не в «цитате»
+    (R13-F03: прежний str.replace портил «conclusion.py» и «not_found_count»)."""
     for k in sorted(READER_TERMS, key=len, reverse=True):
-        text = text.replace(k, READER_TERMS[k])
+        text = re.sub(r"(?<![\w./`«-])" + re.escape(k) + r"(?![\w`»-]|\.[a-z])",
+                      READER_TERMS[k], text)
     return text
 
 
@@ -701,7 +725,12 @@ def check_budget_page(page: str, cards: list, idx: dict, titles: list) -> None:
         for c in card.get("commitments") or []:
             amt = ("не указана" if c.get("amount_ils") is None
                    else money(c["amount_ils"]))
-            if f"Сумма в соглашении: {amt}" not in page:
+            # у СВОЕГО обязательства: равная сумма соседа не маскирует потерю
+            # (R13-F06)
+            tag = f'<article id="{esc(c["id"])}">'
+            seg = page[page.find(tag):page.find("</article>", page.find(tag))] \
+                if tag in page else ""
+            if f"Сумма в соглашении: {amt}" not in seg:
                 raise Refuse(f"сумма обязательства {c['id']} потеряна")
             if render_commitment(c, idx, titles, []) not in page:
                 raise Refuse(f"бюджетный разбор {c['id']} потерян на странице")
