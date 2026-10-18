@@ -410,9 +410,15 @@ def check_card(card: dict, name: str, periods: set[str], idx: dict,
     hold = card.get("holdout_checked") or {}
     holdout_empty = not hold.get("period")
 
+    ids = {c.get("id") for c in card.get("commitments") or []}
     for c in card.get("commitments") or []:
         cid = c.get("id") or "?"
         p = f"{name}[{cid}]"
+
+        # дубль — запись, продолжающая другой пункт; ссылка обязана резолвиться
+        dup = c.get("duplicate_of")
+        if dup is not None and (dup not in ids or dup == cid):
+            fail(f"{p}: duplicate_of {dup!r} не указывает на другую запись этой карточки")
 
         # §12 — оба языка цитаты
         if not (c.get("quote_he") or "").strip():
@@ -742,6 +748,7 @@ def selftest() -> int:
         ("§5 мало", lambda c: c["commitments"][0].update(readings=[{"type": "weakening"}])),
         ("§5 все ослабляющие", lambda c: c["commitments"][0].update(
             readings=[{"type": "weakening"}, {"type": "weakening"}])),
+        ("дубль в никуда", lambda c: c["commitments"][0].update(duplicate_of="нет-такого")),
         ("§13 вердикт в прочтении", lambda c: c["commitments"][0].update(
             readings=[{"type": "weakening", "text": "обещание не выполнено"},
                       {"type": "strengthening", "text": "строка есть"}])),

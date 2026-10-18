@@ -262,6 +262,22 @@ def selftest() -> int:
     # сборщика, а не документа; страница Оцма (2 из 2) показала оба 10.10.
     assert [ru_plural(n, "о", "а", "в") for n in (1, 2, 5, 11, 13, 21, 22)] == \
         ["о", "а", "в", "в", "в", "о", "а"], "склонение «обязательство» сломано"
+    # ── ДУБЛЬ НЕ СЧИТАЕТСЯ ОБЯЗАТЕЛЬСТВОМ ───────────────────────────────
+    # Пометка duplicate_of в записи обязана доехать до счётчика: иначе
+    # график 700/800/950 из трёх строк читается как три обещания.
+    _dup_card = {"period_id": "t", "data_fingerprint": None, "coverage": {"commitments_total": 2},
+                 "snapshots": {"x": "2026"},
+                 "commitments": [{"id": "a", "amount_ils": 1, "quote_he": "א", "quote_ru": "а",
+                                  "conclusion": "x", "readings": [], "granularity": "exact_takana",
+                                  "codes": [], "confidence": "low"},
+                                 {"id": "b", "amount_ils": 1, "quote_he": "ב", "quote_ru": "б",
+                                  "conclusion": "y", "readings": [], "granularity": "exact_takana",
+                                  "codes": [], "confidence": "low", "duplicate_of": "a"}]}
+    import unittest.mock as _m
+    with _m.patch(__name__ + ".fingerprint", lambda *_a: None):
+        _html = budget_block([_dup_card], {}, [])
+    assert "Самостоятельных обязательств 1" in _html, "дубль не дошёл до счётчика"
+    assert "Разобрано 2 записи" in _html, _html[:200]
     doc, total, filled = build(m)
     assert total == 6, f"клеток {total}, а строк три по две колонки"
     assert filled == 0, "без решения в карточке клетка не имеет права заполниться"
@@ -592,10 +608,19 @@ def budget_block(cards: list, idx: dict, titles: list) -> str:
         cov = card.get("coverage") or {}
         n, total = len(card.get("commitments") or []), cov.get("commitments_total")
         tail = "весь список разобран" if n == total else "остальные не разобраны"
+        # Дубли (duplicate_of) — записи, а не самостоятельные обязательства:
+        # счётчик обязан это различать, иначе график из трёх строк считается
+        # за три обещания (ревью 18.10, F-07).
+        dups = [c for c in card.get("commitments") or [] if c.get("duplicate_of")]
+        uniq = n - len(dups)
+        dup_note = ("" if not dups else
+                    f" Самостоятельных обязательств {uniq}: "
+                    f"{len(dups)} {ru_plural(len(dups), 'запись', 'записи', 'записей')} — "
+                    "продолжение другого пункта (помечено в самой записи).")
         out.append(f'<section data-budget="{esc(card["period_id"])}">'
                    f'<p>Период: {esc(card["period_id"])}. Разобрано '
-                   f'{n} {ru_plural(n, "обязательство", "обязательства", "обязательств")} из '
-                   f'{esc(total)}; {tail}.</p>')
+                   f'{n} {ru_plural(n, "запись", "записи", "записей")} из '
+                   f'{esc(total)}; {tail}.{esc(dup_note)}</p>')
         out.append('<p>Снимки источников: ' + esc(
             "; ".join(f"{k} — {v}" for k, v in sorted(card["snapshots"].items()))) + '</p>')
         for c in card.get("commitments") or []:
