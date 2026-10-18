@@ -21,7 +21,7 @@
 
 Запуск (данные лежат на Studio, §19):
     ssh larry@studio 'cd ~/knesset && python3 -u scripts/map_commitments.py --agreement CA37-Shas.txt'
-Самопроверка (без сети и без данных):
+Самопроверка (без сети; нужны OCR и текущие commitment_map_*.json):
     python3 scripts/map_commitments.py --selftest
 """
 from __future__ import annotations
@@ -226,6 +226,36 @@ def candidates(lines: list[str], units: list[str]) -> list[dict]:
     бюджета». Первая редакция его не видела, и семь обязательств теряли и то
     и другое: они находились по слову «ремонт», которое стоит в сотнях статей.
     """
+    # Общий объект пункта видит и глагол ПОСЛЕ строки с суммой.
+    # Пустая строка сбрасывает пункт; маркер страницы не участвует.
+    # Глагол ищется в тексте пункта, СКЛЕЕННОМ пробелами (v1.4, уточнение
+    # 18.10): OCR рвёт «שיעמוד / על סך» по строкам, построчный поиск слеп.
+    # Совпадение — по границам слова (verb_in): «ייעודיות» и «המתוקצבות» —
+    # прилагательное и причастие, не глаголы выделения.
+    paragraphs, paragraph, members = {}, {}, []
+
+    def _close() -> None:
+        if not members:
+            return
+        joined = " ".join(t for _, t in members)
+        verb = verb_in(joined)
+        if verb:
+            first = next((n for n, t in members if verb.split()[0] in t), members[0][0])
+            paragraph.update(verb=verb, line=first,
+                             quote_he=next(t for n, t in members if n == first))
+
+    for i, raw in enumerate(lines, 1):
+        s = raw.strip()
+        if re.fullmatch(r"⟦(\d+)⟧", s):
+            continue
+        if not s:
+            _close()
+            paragraph, members = {}, []
+            continue
+        paragraphs[i] = paragraph
+        members.append((i, s))
+    _close()
+
     page, out, heading = None, [], None
     for i, raw in enumerate(lines, 1):
         s = raw.strip()
@@ -238,7 +268,7 @@ def candidates(lines: list[str], units: list[str]) -> list[dict]:
         has_money = bool(re.search(r"[0-9]", s)) and any(u in s for u in units)
         is_item = bool(ITEM_RE.match(s))
 
-        if not has_money and any(v in s for v in VERBS_COMMIT) and (
+        if not has_money and any(v in s for v in VERBS_HEADING) and (
                 s.endswith(":") or s.endswith(": ") or any(h in s for h in HEADING_MARK)):
             heading = {"quote_he": s, "line": i, "in_base": _in_base(s)}
             continue
@@ -247,18 +277,39 @@ def candidates(lines: list[str], units: list[str]) -> list[dict]:
 
         if has_money:
             out.append({"line": i, "page": page, "quote_he": s,
-                        "heading": heading if (heading and is_item) else None})
+                        "heading": heading if (heading and is_item) else None,
+                        "paragraph_verb": paragraphs[i] or None})
     return out
 
 
 VERBS_COMMIT = ("יוקצו", "יוקצה", "תתוקצב", "תתקצב", "יתקצב", "יעמוד על",
                 "יתווסף", "לייעד", "ייעוד", "הקצאה", "תוקצב", "ייכנס לבסיס",
                 "ייכנסו לבסיס", "יוכנס לבסיס", "תוסיף", "יתוקצב")
+# v1.4 не меняет наследование предмета и базы от заголовка перечня.
+VERBS_HEADING = VERBS_COMMIT
+VERBS_COMMIT += ("תקצה", "יקצה", "יתוקצבו", "מתקצבים", "הקצאת", "יועבר",
+                 "יועברו", "לא יפחת", "לא יפחתו", "תנתן תוספת",
+                 "תינתן תוספת", "יקבל תוספת")
+# При вложенных формах фиксируем полную встретившуюся форму.
+VERBS_COMMIT = tuple(sorted(VERBS_COMMIT, key=len, reverse=True))
+MARK_ESTIMATE = ("המשמעות התקציבית", "עלותו התקציבית", "אנו מניחים", "שלא יעלה על")
+# Префиксы-клитики, после которых начинается глагол: ו, ש, וש, כש. Слово
+# обязано КОНЧАТЬСЯ глаголом: суффикс превращает его в другую часть речи.
+_VERB_RE = {v: re.compile(r"(?<![\w])(?:וש|כש|ו|ש)?" + re.escape(v) + r"(?![\w])")
+            for v in VERBS_COMMIT}
+
+
+def verb_in(text: str) -> str | None:
+    """Глагол выделения в тексте по границам слова; самая длинная форма первой."""
+    for v in VERBS_COMMIT:
+        if _VERB_RE[v].search(text):
+            return v
+    return None
 MARK_STATUS_QUO = ("ניתן כיום", "הנמצאים כיום", "כיום", "צפויות", "המקובלים")
 MARK_UNIT_RATE = ("לחודש", "לחודש.", "ערך הנקודה", "ערך נקודה", "לתלמיד", "למיטה")
 
 
-def classify(quote: str) -> tuple[str, str]:
+def classify(quote: str, paragraph_verb: dict | None = None) -> tuple[str, str]:
     """Категория кандидата и правило, которое сработало. Закрытый список."""
     for m in MARK_UNIT_RATE:
         if m in quote:
@@ -266,13 +317,19 @@ def classify(quote: str) -> tuple[str, str]:
     for m in MARK_STATUS_QUO:
         if m in quote:
             return "status_quo", f"маркер существующего положения: {m}"
-    for v in VERBS_COMMIT:
-        if v in quote:
-            return "commitment", f"глагол выделения: {v}"
+    for m in MARK_ESTIMATE:
+        if m in quote:
+            return "estimate", f"маркер оценки: {m}"
+    v = verb_in(quote)
+    if v:
+        return "commitment", f"глагол выделения: {v}"
     # Пункт перечня без глагола («א. שיפוץ בתי כנסת - 30 מלש"ח») наследует
     # глагол заголовка списка. Помечается отдельно, а не молча отбрасывается.
     if re.match(r"^[א-ת]\.\s|^\+\s|^\d+\.\s", quote):
         return "commitment", "пункт перечня, глагол в заголовке списка"
+    if paragraph_verb:
+        return "commitment", (f"глагол пункта: {paragraph_verb['verb']} "
+                              f"(стр. {paragraph_verb['line']})")
     return "continuation", "нет глагола выделения и нет номера пункта"
 
 
@@ -464,8 +521,7 @@ def selftest() -> int:
     assert "מלש" in ds and "הבאים" in ds and "באים" in ds, ds
     assert "מלש" not in terms_of('שיפוץ - 30 מלש"ח', ds)
     assert "כנסת" in terms_of('שיפוץ בתי כנסת - 30 מלש"ח', ds)
-    # Подложенные входы. Реальные соглашения кроме ШАС
-    # здесь не читаются: §3. Мутанты обязаны отказать тем же путём, что CLI.
+    # Подложенные входы. Мутанты обязаны отказать тем же путём, что CLI.
     from copy import deepcopy
     from tempfile import TemporaryDirectory
     from unittest.mock import patch
@@ -586,16 +642,87 @@ def selftest() -> int:
         assert (data / "mapping_review_fixture.html").exists()
         print("GREEN: CLI --all — два JSON и две HTML-страницы, разные имена и метаданные")
 
-    # Настоящий OCR ШАС при наличии; без данных проверяем объявленные 42
-    # на подложенном тексте. Полная регрессия прежнего JSON — отдельный прогон.
-    source = ROOT / "data" / "agreements_ocr" / shas["file"]
-    shas_lines = source.read_text(encoding="utf-8").splitlines() if source.exists() else lines * 42
+    # v1.4: тот же build_map, что в CLI, без запросов к книге бюджета.
+    cases = [
+        (["טקסט", "50 מיליון"], "continuation", None),
+        (["א. טקסט", "50 מיליון"], "continuation", None),
+        (["יוקצו", "המשמעות התקציבית 50 מיליון"], "estimate", None),
+        (["יוקצו", "50 מיליון"], "commitment", "глагол пункта: יוקצו (стр. 1)"),
+        (["50 מיליון", "⟦2⟧", "יוקצו"], "commitment", "глагол пункта: יוקצו (стр. 3)"),
+        (["יוקצו", "  ", "50 מיליון"], "continuation", None),
+        (["50 מיליון", "", "יוקצו"], "continuation", None),
+        (["⟦2⟧", "50 מיליון"], "continuation", None),
+    ]
+    empty_budget = {"fetched_at": "fixture", "table": "raw_budget", "rows": []}
+    for fixture, category, reason in cases:
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = build_map(rule, "fixture-sha", other, fixture, empty_budget, [])
+        item = result["items"][0]
+        assert item["category"] == category, (fixture, item)
+        if reason:
+            assert item["category_rule"] == reason, item
+        if category != "commitment":
+            assert item["rejection_reason"] == "not_budgetary", item
+    for verb in ("תקצה", "יקצה", "יתוקצבו", "מתקצבים", "הקצאת", "יועבר",
+                 "יועברו", "לא יפחת", "לא יפחתו", "תנתן תוספת",
+                 "תינתן תוספת", "יקבל תוספת"):
+        assert classify(f"{verb} 50 מיליון") == ("commitment", f"глагол выделения: {verb}")
+    for marker in MARK_ESTIMATE:
+        assert classify(f"א. יוקצו {marker} 50 מיליון")[0] == "estimate"
+        assert classify(f"כיום {marker} 50 מיליון")[0] == "status_quo"
+        assert classify(f"לחודש כיום {marker} 50 מיליון")[0] == "unit_rate"
+    assert classify("א. 50 מיליון", {"verb": "יוקצו", "line": 1})[1].startswith("пункт перечня")
     with contextlib.redirect_stdout(io.StringIO()):
-        shas_map = build_map(rule, "fixture-sha", shas, shas_lines,
-                             {"fetched_at": "fixture", "table": "raw_budget", "rows": []}, [])
-    assert len(shas_map["items"]) == 42
-    print(f"GREEN: ШАС 42; OCR {'настоящий' if source.exists() else 'подложенный'}, бюджет подложенный")
-    print("самопроверка канала Б пройдена: базовые проверки, мутанты, два соглашения")
+        duplicates = build_map(rule, "fixture-sha", dict(other, candidate_lines_expected=2),
+                               ["יוקצו", "50 מיליון", "50 מיליון"], empty_budget, [])
+    assert [i["line"] for i in duplicates["items"]] == [2, 3]
+    assert all(i["category"] == "commitment" for i in duplicates["items"])
+    assert classify("יוקצו 50 מיליון", {"verb": "תקצה", "line": 1})[1] == "глагол выделения: יוקצו"
+    # границы слова: прилагательное/причастие — не глагол; клитика — глагол
+    assert verb_in("תכניות ייעודיות 50") is None
+    assert verb_in("שעות הלימוד המתוקצבות 50") is None
+    assert verb_in("תקציב שיעמוד על סך של 500") == "יעמוד על"
+    assert verb_in("ויוקצו 50") == "יוקצו"
+    with contextlib.redirect_stdout(io.StringIO()):
+        split = build_map(rule, "fixture-sha", other, ["תקציב שיעמוד", "על סך של 500 מיליון"], empty_budget, [])
+    assert split["items"][0]["category_rule"] == "глагол пункта: יעמוד על (стр. 1)", split["items"][0]
+    print("GREEN: v1.4 — границы пунктов, маркеры страниц, оба направления, формы и приоритеты")
+
+    baseline_counts = {"shas": (42, 21), "rz": (27, 13), "otzma": (10, 2),
+                       "noam": (5, 3), "yt": (25, 9), "app-ay": (0, 0),
+                       "unity": (0, 0), "u-right": (1, 0)}
+    entries = agreement_entries(rule)
+    assert {slug(a) for a in entries} == set(baseline_counts)
+    for entry in entries:
+        key = slug(entry)
+        data = ROOT / "data"
+        old = json.loads((data / f"commitment_map_{key}.json").read_text(encoding="utf-8"))
+        source_lines = (data / "agreements_ocr" / entry["file"]).read_text(encoding="utf-8").splitlines()
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = build_map(rule, "fixture-sha", entry, source_lines, empty_budget, [])
+        expected, previous = baseline_counts[key]
+        assert old["counts"]["candidates"] == result["counts"]["candidates"] == expected
+        old_items = {i["line"]: i for i in old["items"]}
+        new_items = {i["line"]: i for i in result["items"]}
+        assert len(old_items) == len(new_items) == expected
+        assert old_items.keys() == new_items.keys(), key
+        preserved = [i for i in old["items"] if i["category"] == "commitment"]
+        assert len(preserved) == previous, key
+        for line, item in old_items.items():
+            assert item["quote_he"] == new_items[line]["quote_he"], (key, line)
+            assert item.get("heading") == new_items[line].get("heading"), (key, line)
+        assert all(new_items[i["line"]]["category"] == "commitment" for i in preserved), key
+        added = [i for i in result["items"] if i["category"] == "commitment"
+                 and old_items[i["line"]]["category"] != "commitment"]
+        print(f"GREEN: {entry['file']}: candidates={expected}; сохранено commitment={previous}; "
+              f"новых commitment={len(added)}; строки={[i['line'] for i in added]}")
+        for item in added:
+            print(f"  NEW {item['line']}: {item['category_rule']}")
+        for item in result["items"]:
+            if item["category"] == "estimate":
+                assert item["rejection_reason"] == "not_budgetary"
+                print(f"  ESTIMATE {item['line']}: {item['category_rule']}")
+    print("самопроверка канала Б пройдена: базовые проверки, мутанты, v1.4, 48 прежних commitment")
     return 0
 
 
@@ -630,7 +757,7 @@ def build_map(text: str, sha: str, agreement: dict, lines: list[str],
     df_cache = {}
     for c in cands:
         require_quotes([c])
-        cat, rule_fired = classify(c["quote_he"])
+        cat, rule_fired = classify(c["quote_he"], c.get("paragraph_verb"))
         item = {
             **c,
             "category": cat,
