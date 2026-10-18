@@ -551,6 +551,18 @@ def selftest() -> int:
     bc[0]["data_fingerprint"] = fingerprint(bc[0], idx, [])
     block = budget_block(bc, idx, [])
     shas = faction_page(fcard, frow, fv, block)
+    # R18-F02: журнал правок Ноам (why версии с «блок noam-p2-79») доходит
+    # до читателя через budget_block переведённым — снятый вызов
+    # reader_terms у why краснеет здесь, а не только в отдельной функции.
+    nb = copy.deepcopy(load_cards("party_period")[1107])
+    nidx = {(code, int(year)): {"net_allocated": 1000, "net_executed": 2000}
+            for c in nb[0]["commitments"] for code, year, _ in REF_NUM.findall(repr(c))}
+    nidx.update({(code, int(year)): {"net_allocated": 1000, "net_executed": 2000}
+                 for code, year, _ in REF_NUM.findall(repr(nb[0]))})
+    nb[0]["data_fingerprint"] = fingerprint(nb[0], nidx, [])
+    nvis = re.sub(r"<[^>]+>", " ", budget_block(nb, nidx, []))
+    assert "блок запись строки 79" in nvis and "noam-p2-79" not in nvis, \
+        "журнал правок Ноам показал читателю внутренний ID"
     check_budget_page(shas, bc, idx, [])
     assert "123 000 ₪" in shas and "{0022010213" not in shas
     assert jargon(shas) is None, jargon(shas)
@@ -564,10 +576,29 @@ def selftest() -> int:
                  '"coverage.why"', "conclusion.PY"):
         assert reader_terms(keep) == keep, (keep, reader_terms(keep))
     assert reader_terms("дубль noam-p2-79") == "дубль запись строки 79"
+    # R18-F01/F02: ID и имена файлов в буквальных формах сохраняются целиком;
+    # каждое семейство ID в прозе переводится. Ожидания записаны руками.
+    for keep in ("«дубль noam-p2-79»", '"дубль shas-p32-1653"', "`rz-p10-477`",
+                 "noam-p2-79.pdf", "conclusion.sql", "conclusion.png",
+                 "prefix-noam-p2-79-suffix", "prefix-noam-p2-79", "noam-p2-79-x",
+                 "файл otzma-p7-420.json"):
+        assert reader_terms(keep) == keep, (keep, reader_terms(keep))
+    for raw, want in (("дубль shas-p32-1653.", "дубль запись строки 1653."),
+                      ("см. rz-p10-477", "см. запись строки 477"),
+                      ("и yt-p5-945,", "и запись строки 945,"),
+                      ("(otzma-p7-420)", "(запись строки 420)"),
+                      ("блок noam-p2-79", "блок запись строки 79"),
+                      ("uright-p1-12 —", "запись строки 12 —"),
+                      ("поле coverage.why.", "поле пояснение к охвату.")):
+        assert reader_terms(raw) == want, (raw, reader_terms(raw))
     # R13-F02/R15-F04: поле выгрузки не выдаётся за порядковую глубину
     assert reader_terms("в title_level6") == "в название родительского узла", \
         reader_terms("в title_level6")
     assert "уровень" not in reader_terms("title_level6 и title_level4")
+    # R18-F03: направление родства — точный текст, не отсутствие слова
+    # (цепочка 0054500124 → 00545001 → 005450 проверена по JSON)
+    assert reader_terms("title_level4") == "название узла уровнем выше", \
+        reader_terms("title_level4")
     # Ключи схемы не доходят до читателя ни в выводах, ни в журнале правок
     # (R10-F07): журнал ШАС содержит «coverage.why» — без перевода краснеет.
     import html as _html
@@ -713,10 +744,15 @@ def reader_terms(text: str) -> str:
     трогаются: `код`, «цитата», "цитата", имена файлов (R13-F03, R15-F02).
     Внутренние ID записей (shas-p32-1653) показываются как «запись строки N»
     (R15-F01): читателю они ничего не говорят."""
+    # Имя файла — любое латинское расширение 2–5 знаков (R18-F01: список
+    # py|md|… портил .pdf/.sql/.png). Ключ схемы с точкой (coverage.why)
+    # выглядит так же, поэтому токен-ключ отдаётся прозе.
     lit = re.compile(r"`[^`]*`|«[^»]*»|\"[^\"]*\"|"
-                     r"\S+\.(?:py|md|ya?ml|json|txt|html?|log|csv|sh)\b", re.I)
+                     r"[^\s(]+\.[A-Za-z0-9]{2,5}\b")
     out, pos = [], 0
     for m in lit.finditer(text):
+        if m.group(0) in READER_TERMS:
+            continue
         out.append(_terms_prose(text[pos:m.start()]))
         out.append(m.group(0))
         pos = m.end()
@@ -725,7 +761,9 @@ def reader_terms(text: str) -> str:
 
 
 def _terms_prose(text: str) -> str:
-    text = re.sub(r"\b(?:shas|rz|yt|otzma|noam|uright)-p\d+-(\d+)\b",
+    # Только полный токен: часть составного имени (prefix-noam-p2-79-x) —
+    # не ID записи (R18-F01).
+    text = re.sub(r"(?<![\w.-])(?:shas|rz|yt|otzma|noam|uright)-p\d+-(\d+)(?![\w-])",
                   r"запись строки \1", text)
     for k in sorted(READER_TERMS, key=len, reverse=True):
         text = re.sub(r"(?<![\w./`«-])" + re.escape(k) + r"(?![\w`»-])",
