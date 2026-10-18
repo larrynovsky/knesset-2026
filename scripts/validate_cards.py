@@ -851,6 +851,14 @@ def selftest() -> int:
         print(f"САМОПРОВЕРКА ПРОВАЛЕНА: не покраснели {bad}", file=sys.stderr)
         return 1
     problems.clear()
+    # CLI: путь в аргументах раньше молча игнорировался (ecce333, R11-F02)
+    import subprocess
+    rc = subprocess.run([sys.executable, __file__, "cards/x.yaml"],
+                        capture_output=True).returncode
+    if rc != 2:
+        print(f"САМОПРОВЕРКА ПРОВАЛЕНА: позиционный аргумент принят (rc={rc})",
+              file=sys.stderr)
+        return 1
     print(f"самопроверка карточки пройдена: {len(cases)} нарушений, "
           "каждое поймано своим правилом")
     return 0

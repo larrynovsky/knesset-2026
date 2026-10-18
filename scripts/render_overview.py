@@ -377,13 +377,18 @@ def selftest() -> int:
              "votes": {"theme_caveat_ru": "по вопросам правового государства",
                        "census": {"votes": 2, "acts": 2, "from": "2022-12-13",
                                   "to": "2026-07-14",
-                                  "acts_without_participation": 1}}}
+                                  "acts_without_participation": 1}},
+             "snapshots": {"votes_25": "2099-01-02T00:00:00"}}
     frow = {"a": {"status": "observed"},
             "b": {"status": "not_exposed", "note": "соглашения не подписывала"}}
     fv = [{"date": "2022-12-13", "name_ru": "Законопроект",
            "name_he": "\u05d4\u05e6\u05e2\u05ea", "for_option_desc": "\u05dc\u05d4\u05e2\u05d1\u05d9\u05e8",
            "pos": "против 5"}]
     fp = faction_page(fcard, frow, fv)
+    # R8-F10/F11: дата снимка — из карточки, исход поиска — по-русски
+    assert "Снимок голосований: 2099-01-02" in fp, "дата снимка в подвале не из карточки"
+    assert "честный поиск ничего не дал" in fp and ">nothing<" not in fp \
+        and "опровергнуть:</b> nothing" not in fp, "исход поиска выведен служебным ключом"
     # ── §7: СТРОКА БЕЗ СВЯЗИ НЕ ПОЛУЧАЕТ СТРЕЛКУ НИ ОТ КАКОЙ КАРТОЧКИ ────
     # not_transferred.связь запрещает заполнять клетку у lineage_unresolved:
     # там неизвестно, ЧЬЯ это фракция. Валидатор смотрит card.status, а
@@ -511,6 +516,13 @@ def selftest() -> int:
     check_budget_page(shas, bc, idx, [])
     assert "123 000 ₪" in shas and "{0022010213" not in shas
     assert jargon(shas) is None, jargon(shas)
+    # Ключи схемы не доходят до читателя ни в выводах, ни в журнале правок
+    # (R10-F07): журнал ШАС содержит «coverage.why» — без перевода краснеет.
+    import html as _html
+    vis = _html.unescape(re.sub(r"<[^>]+>", " ", shas))
+    for key in ("coverage.why", "subset_of_line", "not_budgetary", "quote_ru",
+                "title_level6", "human_undecided", "absence_is_about"):
+        assert key not in vis, f"служебный ключ {key!r} виден читателю"
 
     def rejects(label, action):
         try:
@@ -611,6 +623,29 @@ def ru_plural(n: int, one: str, few: str, many: str) -> str:
     return many
 
 
+# Журнал правок хранится как написан (§15), но читатель видит не ключи схемы,
+# а их названия (ревью 18.10, R8-F11, R10-F07). Перевод — только при показе.
+READER_TERMS = {
+    "coverage.why": "пояснение к охвату", "quote_ru": "русский перевод цитаты",
+    "quote_he": "ивритская цитата", "duplicate_of": "пометка дубля",
+    "not_budgetary": "«не денежное обязательство»",
+    "subset_of_line": "«часть строки бюджета»",
+    "spread_over_lines": "«размазано по нескольким строкам»",
+    "exact_takana": "«одна бюджетная статья»", "not_found": "«не найдено»",
+    "required_in_base": "«требуется в базе»", "human_undecided": "«носитель не выбран»",
+    "title_level6": "шестой уровень бюджетной иерархии",
+    "title_level4": "четвёртый уровень бюджетной иерархии",
+    "granularity": "категория сопоставления", "counter_search": "поиск опровержения",
+    "readings": "прочтения", "conclusion": "вывод", "rejection_reason": "причина отказа",
+}
+
+
+def reader_terms(text: str) -> str:
+    for k in sorted(READER_TERMS, key=len, reverse=True):
+        text = text.replace(k, READER_TERMS[k])
+    return text
+
+
 def budget_block(cards: list, idx: dict, titles: list) -> str:
     """§11: проверка и подстановка читают один индекс; старый CLI не вызывается."""
     out = []
@@ -645,12 +680,14 @@ def budget_block(cards: list, idx: dict, titles: list) -> str:
         out.append('<p>Снимки источников: ' + esc(
             "; ".join(f"{k} — {v}" for k, v in sorted(card["snapshots"].items()))) + '</p>')
         for c in card.get("commitments") or []:
+            amt = ("не указана" if c.get("amount_ils") is None
+                   else money(c["amount_ils"]))
             out.append(f'<article id="{esc(c["id"])}"><p>Сумма в соглашении: '
-                       f'{money(c["amount_ils"])}</p>'
+                       f'{amt}</p>'
                        + render_commitment(c, idx, titles, []) + '</article>')
         out.append('<p>Журнал исправлений:</p><ul>' + ''.join(
             f'<li>{esc(r["date"])} · версия {esc(r["version"])}: '
-            f'{esc(r["what"])} — {esc(r["why"])}</li>'
+            f'{esc(reader_terms(str(r["what"])))} — {esc(reader_terms(str(r["why"])))}</li>'
             for r in card.get("revisions") or []) + '</ul></section>')
     return "".join(out)
 
@@ -662,7 +699,9 @@ def check_budget_page(page: str, cards: list, idx: dict, titles: list) -> None:
             if esc(date) not in page:
                 raise Refuse("дата снимка бюджетного разбора потеряна")
         for c in card.get("commitments") or []:
-            if money(c["amount_ils"]) not in page:
+            amt = ("не указана" if c.get("amount_ils") is None
+                   else money(c["amount_ils"]))
+            if f"Сумма в соглашении: {amt}" not in page:
                 raise Refuse(f"сумма обязательства {c['id']} потеряна")
             if render_commitment(c, idx, titles, []) not in page:
                 raise Refuse(f"бюджетный разбор {c['id']} потерян на странице")

@@ -188,6 +188,11 @@ def selftest() -> int:
               "carries", "none", "inverts", "a_obs", "b_obs", "c_obs", "lines"):
         assert str(f[k]) in page, f"на странице нет {k}={f[k]}"
     assert f["window"][1] in page, "граница среза не напечатана"
+    # R8-F12: число моделей не зашито словом «Две» при другом составе
+    import copy as _copy
+    g3 = _copy.deepcopy(f)
+    g3["models"] = {"a": "m1", "b": "m2", "c": "m3"}
+    assert "Две модели" not in build(g3), "«Две модели» при трёх в метаданных"
     assert f["carries"] + f["none"] + f["inverts"] == f["votes_rows"], \
         "классы «за» не складываются в число записей"
     print(f"  OK: все замеры на странице; α={f['alpha']} при пороге "

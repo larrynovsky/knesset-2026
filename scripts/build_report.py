@@ -612,17 +612,31 @@ def selftest() -> int:
         "строка {0022010213:2023:allocated}"]
     c6c["commitments"][0]["counter_search"]["note"] = "n {0022010213:2023:allocated}"
     c6c["commitments"][0]["what_would_falsify"] = "w {0022010213:2023:executed}"
+    c6c["commitments"][0]["confidence_reason"] = "r {0022010213:2023:executed}"
     h6c = build([("t", c6c)], idx, titles)
     assert not re.search(r"\{\d{10}:\d{4}:", h6c), \
         "ссылка в прочтении или в области поиска не подставлена"
     assert "код статьи назван" not in h6c, \
         "метка exact_takana утверждает, что код назван в соглашении"
-    c6d = card(conclusion="нет {absent:מוסדות דת זמני}")
-    c6d["commitments"][0]["readings"][1]["text"] = "b {0022010213:2023:executed}"
+    # Каждое из пяти полей — отдельно: ссылка только в нём, меняется ровно
+    # её ячейка (R11-F01: удаление одного поля из extra проходило зелёным).
     idx2 = {k: dict(v) for k, v in idx.items()}
     idx2[("0022010213", 2023)]["net_executed"] = 501
-    assert fingerprint(c6d, idx, titles) != fingerprint(c6d, idx2, titles), \
-        "§11: отпечаток не краснеет на ячейке, прочитанной в прочтении"
+    ref = "x {0022010213:2023:executed}"
+    for field in ("readings", "searched_where", "note",
+                  "what_would_falsify", "confidence_reason"):
+        c6d = card(conclusion="нет {absent:מוסדות דת זמני}")
+        cm = c6d["commitments"][0]
+        if field == "readings":
+            cm["readings"][1]["text"] = ref
+        elif field in ("searched_where", "note"):
+            cm["counter_search"][field] = [ref] if field == "searched_where" else ref
+        else:
+            cm[field] = ref
+        assert fingerprint(c6d, idx, titles) != fingerprint(c6d, idx2, titles), \
+            f"§11: отпечаток не краснеет на ячейке, прочитанной в поле {field}"
+    # R8-F06: сводная метка года не возвращается
+    assert "год плана и факта" not in h6c, "вернулась метка «год плана и факта»"
 
     # 7: §13 — сортировать нечем, потому что нечего и незачем
     if "<table" in ok or "<script" in ok:
@@ -733,7 +747,7 @@ def selftest() -> int:
     finally:
         globals()["votes_of"] = orig
 
-    print("самопроверка отчёта пройдена: 17 утверждений + 8 на карточку канала А. Напоминание: "
+    print("самопроверка отчёта пройдена: 22 утверждений + 8 на карточку канала А. Напоминание: "
           "проверено, что документ СОБИРАЕТСЯ и не врёт механически; "
           "осмысленность выводов машиной не проверяется (§24)")
     return 0
