@@ -594,11 +594,20 @@ def owner_law_positions(fids: list[str], personal: dict | None = None) -> list[d
             raise Refuse(f"акт {bill}: нет последней стадии")
         final = vs[-1]
         if personal is not None:
-            c = final["by_faction"]["yashar|ישר!"]
-            pos = next((label for key, label in (("for", "за"), ("against", "против"),
-                        ("abstain", "воздержались"), ("absent", "не голосовали")) if c.get(key)), "нет позиции")
+            # v68 (сверка Codex по сырым голосам): для 4 законов — то же правило, что у фракций на сайте:
+            # голосовала хотя бы треть пары (≥1 из 2) → большинство голосовавших; поровну → нет позиции.
+            # Прежнее «строгое большинство двоих» (нужны оба одинаковых ответа) превращало «против» Тропера
+            # по юрсоветнику (vote 44617; Айзенкота в этом голосовании нет) в «не голос.». Стрелки тем — по-прежнему строгие.
             words = {"for": "за", "against": "против", "abstain": "воздержался", "absent": "не голосовал"}
             raw_counts = Counter(final["personal_positions"].values())
+            directed = {k: raw_counts[k] for k in ("for", "against", "abstain") if raw_counts[k]}
+            top = sorted(directed.values(), reverse=True)
+            if not directed:
+                pos = "не голосовали"
+            elif len(top) > 1 and top[0] == top[1]:
+                pos = "нет позиции"
+            else:
+                pos = {"for": "за", "against": "против", "abstain": "воздержались"}[max(directed, key=directed.get)]
             detail = (f'за {raw_counts["for"]}, против {raw_counts["against"]}, воздержались {raw_counts["abstain"]}; '
                       f'не голосовали {raw_counts["absent"]}; ' +
                       "; ".join(f"{name}: {words[value]}" for name, value in final["personal_positions"].items()))
@@ -996,6 +1005,9 @@ def selftest() -> int:
         if result.get("arrow"):
             assert robustness_note("yashar", topic, arrow={"up": "↑", "down": "↓", "both": "↕"}[result["arrow"]]) in yashar
     assert next(r for r in ballot_input["lists"] if r["ru"] == "Яшар!")["personal"] == ["Гади Айзенкот", "Хили Тропер"]
+    # v68: независимый пересчёт по сырым голосам — Тропер «против» по юрсоветнику (vote 44617), Айзенкота нет.
+    # Правило законов для пары = правило фракций (≥1/3 голосовавших → большинство); строгое «оба одинаково» здесь врало.
+    assert [law["positions"]["yashar"] for law in personal_result()["laws"]][3] == "против", "Яшар × юрсоветник"
     # Личные клетки обязаны следовать личному расчёту, не стрелкам Ганца.
     sample = dict(personal_result(), axis={"arrow": "down"}, themes={
         t: {"arrow": a} for t, a in zip(("religion_state", "economy", "security"), ("up", "both", "down"))})
