@@ -2,7 +2,7 @@
 """Read-only independent slices oracle (stdlib, no project imports).
 
 Usage: python3 scripts/crosscheck_slices.py [--root REPO] [--selftest]
-Contract/disposability: reviews/build_v75.md. Exit 1: mismatch/invalid input;
+Contract/disposability: reviews/build_v75.md; personal extension: reviews/build_v77.md. Exit 1: mismatch/invalid input;
 exit 0 may include SKIP and is NOT evidence of full coverage (§20–24).
 """
 import argparse
@@ -69,6 +69,40 @@ def recount(rows, signs, options, drop, split):
     return result
 
 
+def personal_rows(rows, members, load, cache):
+    """One person's positions, with the original chamber denominator."""
+    if len(members) != 1:
+        raise ValueError('personal oracle requires exactly one member per line')
+    name, (mid, surname) = next(iter(members.items()))
+    converted, voted = [], set()
+    codes = {6: 'absent', 7: 'for', 8: 'against', 9: 'abstain', 10: 'absent'}
+    for row in rows:
+        vid = row['vote_id']
+        data = load(cache / f'{vid}.json')
+        named = data['rows']
+        if (data['vote_id'] != vid or len(named) != row['named_total']
+                or any(r['VoteID'] != vid for r in named)
+                or len({r['MkId'] for r in named}) != len(named)):
+            raise ValueError(f'personal: invalid/incomplete cache vote_id={vid}')
+        found = [r for r in named if r['MkId'] == mid]
+        position = 'absent'
+        if found:
+            person = found[0]
+            if person['LastName'] != surname:
+                raise ValueError(f'personal: mk_id/name mismatch: {name}')
+            code = person['ResultCode']
+            if type(code) is not int or code not in codes:
+                raise ValueError(f'personal: unknown ResultCode: {code!r}')
+            position = codes[code]
+            if code in (7, 8, 9):
+                voted.add(vid)
+        chamber = {k: sum(c.get(k, 0) for c in row['by_faction'].values())
+                   for k in ('for', 'against')}
+        converted.append(dict(row, by_faction={'personal': {position: 1}},
+                              chamber_counts=chamber))
+    return converted, {name: len(voted)}
+
+
 def threshold(text, section, key):
     block = re.search(r'^' + section + r':\s*\n((?:[ \t].*\n|\n|#.*\n)*)', text, re.M)
     hits = re.findall(r'^  ' + key + r':\s*([0-9.]+)\s*(?:#.*)?$', block[1] if block else '', re.M)
@@ -101,7 +135,8 @@ def check(root):
     if not ready:
         print('NO COVERAGE: 0 cells checked; no available votes/signs pair')
         return 0
-    lin = load(root / 'criteria' / 'slice_lineage_2026-10-19.json')['lines']
+    lineage = load(root / 'criteria' / 'slice_lineage_2026-10-19.json')
+    lin = lineage['lines']
     tables = sorted((root / 'docs/reference').glob('for_option_sign_*.json'))
     rules = sorted((root / 'criteria').glob('declared_before_arrow_*.yaml'))
     if not tables or not rules:
@@ -118,10 +153,15 @@ def check(root):
         errors.append('missing data/slices.json (votes/signs available)')
     for extra in set(actual) - set(lin):
         errors.append(f'extra ballot line {extra}')
-    checked = 0
+    checked = personal_checked = 0
     for n, paths in ready:
         votes, raw = load(paths[0])['rows'], load(paths[1])['signs']
-        expected = {}
+        expected, theme_signs = {}, {}
+        named_cache = {}
+        def named_load(path):
+            if path not in named_cache:
+                named_cache[path] = load(path)
+            return named_cache[path]
         for th in THEMES:
             if th not in raw:
                 print(f'SKIP K{n}/{th}: theme signs missing')
@@ -132,6 +172,7 @@ def check(root):
                 if type(sign) is not int or sign not in (-1, 0, 1):
                     raise ValueError(f'invalid sign K{n}/{th}/{bid}')
                 signs[int(bid)] = sign
+            theme_signs[th] = signs
             expected[th] = recount(votes, signs, options, drop, split)
         for line, by_k in lin.items():
             loc = f'{line}/K{n}'
@@ -156,8 +197,34 @@ def check(root):
                     for key in ('up', 'down', 'arrow'):
                         if key not in got or type(got[key]) is not type(exp[key]) or got[key] != exp[key]:
                             errors.append(f'{loc}/link[{i}] fid={spec[0]}/{th}/{key}: expected {exp[key]!r}, got {got.get(key, "<missing>")!r}')
-            if 'personal' in cell:
-                print(f'SKIP {loc}/personal: requires named-vote cache, outside faction-link inputs')
+            members = lineage.get('personal_ids', {}).get(line, {})
+            if members and expected:
+                personal_checked += 1
+                pv, stats = personal_rows(votes, members, named_load,
+                                         root / 'data/named_votes_cache_slices')
+                got = cell.get('personal')
+                if not isinstance(got, dict):
+                    errors.append(loc + '/personal: missing personal cell')
+                elif 'none' in got:
+                    if any(stats.values()) or 'stats' in got or 'themes' in got:
+                        errors.append(f'{loc}/personal/none: expected zero votes, recounted {stats}')
+                else:
+                    if (got.get('stats') != stats or not all(stats.values())
+                            or any(type(v) is not int for v in got.get('stats', {}).values())):
+                        errors.append(f'{loc}/personal/stats: expected {stats}, got {got.get("stats")}')
+                    for th, signs in theme_signs.items():
+                        exp = recount(pv, signs, options, drop, split).get(
+                            'personal', dict(up=None, down=None, arrow=None))
+                        values = got.get('themes', {}).get(th, {})
+                        for key, val in exp.items():
+                            if key not in values or type(values[key]) is not type(val) or values[key] != val:
+                                errors.append(f'{loc}/personal/{th}/{key}: expected {val!r}, got {values.get(key, "<missing>")!r}')
+                print(f'PERSONAL {loc}: {stats}')
+            elif 'personal' in cell:
+                if not members:
+                    errors.append(loc + '/personal: no personal_ids specification')
+                else:
+                    print(f'SKIP {loc}/personal: theme signs missing')
         print(f'RECOUNT K{n}: {len(votes)} raw rows, {len(expected)} themes')
     for path, digest in fingerprints.items():
         if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
@@ -165,7 +232,7 @@ def check(root):
         print(f'INPUT {path.relative_to(root)} sha256={digest}')
     for error in errors:
         print('FAIL ' + error)
-    print(f'CHECKED {checked} link-theme cells; mismatches={len(errors)}; skipped inputs are not verified')
+    print(f'CHECKED {checked} link-theme cells; {personal_checked} personal cells; mismatches={len(errors)}; skipped inputs are not verified')
     return int(bool(errors))
 
 
@@ -189,11 +256,13 @@ def selftest():
         put('docs/reference/for_option_sign_test.json', {'options': {'pass': {'sign': 'carries'}}})
         (root / 'criteria/declared_before_arrow_test.yaml').write_text(
             'cleaning:\n  drop_lopsided_below: 0.025\nfaction_position:\n  split_below: 0.5\n')
-        def run(label, code):
+        def run(label, code, message=None):
             p = subprocess.run([sys.executable, str(Path(__file__).resolve()), '--root', str(root)],
                                capture_output=True, text=True)
-            if p.returncode != code or (code == 1 and 'FAIL ' not in p.stdout):
+            if p.returncode != code or (code == 1 and 'FAIL ' not in p.stdout + p.stderr):
                 raise AssertionError((label, p.returncode, p.stdout, p.stderr))
+            if message and message not in p.stdout + p.stderr:
+                raise AssertionError((label, 'missing diagnostic', message, p.stdout, p.stderr))
             print(f'PASS {label}: exit {code}')
         run('clean fixture', 0)
         changed = copy.deepcopy(signs)
@@ -210,6 +279,59 @@ def selftest():
         run('mutated slices word', 1)
         put('data/slices.json', slices)
         run('restored fixture', 0)
+        # Expected values are literal; only the named vote changes in the mutant.
+        lineage['personal_ids'] = {'A': {'Хили Тропер': [30683, 'טרופר']}}
+        lineage['lines']['B'] = {'20': []}
+        lineage['personal_ids']['B'] = {'Йоаз Хендель': [30680, 'הנדל']}
+        slices['lines']['A']['20']['personal'] = {
+            'stats': {'Хили Тропер': 3},
+            'themes': {'economy': dict(up=3, down=0, arrow='up')}}
+        slices['lines']['B'] = {'20': {'links': [], 'personal': {'none': 'no votes'}}}
+        for row in rows:
+            row.update(vote_id=row['bill_id'], named_total=1)
+            put(f"data/named_votes_cache_slices/{row['vote_id']}.json", {
+                'vote_id': row['vote_id'], 'rows': [dict(VoteID=row['vote_id'],
+                    MkId=30683, LastName='טרופר', ResultCode=7)]})
+        put('data/votes_20.json', {'rows': rows + [rows[0]]})  # stats deduplicates vote_id
+        put('criteria/slice_lineage_2026-10-19.json', lineage)
+        put('data/slices.json', slices)
+        run('personal clean fixture and absent Hendel', 0)
+        cache_path = root / 'data/named_votes_cache_slices/1.json'
+        original = json.loads(cache_path.read_text())
+        changed = copy.deepcopy(original)
+        changed['rows'][0]['ResultCode'] = 8
+        put('data/named_votes_cache_slices/1.json', changed)
+        run('mutated Troper vote code', 1, 'A/K20/personal/economy/up: expected 2, got 3')
+        put('data/named_votes_cache_slices/1.json', original)
+        changed = copy.deepcopy(slices)
+        changed['lines']['A']['20']['personal'] = {'none': 'no votes'}
+        put('data/slices.json', changed)
+        run('false personal.none with actual votes', 1)
+        changed = copy.deepcopy(slices)
+        changed['lines']['A']['20']['personal']['stats']['Хили Тропер'] = 4
+        put('data/slices.json', changed)
+        run('mutated personal stats', 1)
+        put('data/slices.json', slices)
+        changed = copy.deepcopy(original)
+        changed['rows'] = []
+        put('data/named_votes_cache_slices/1.json', changed)
+        run('incomplete named cache', 1)
+        put('data/named_votes_cache_slices/1.json', original)
+        run('personal restored fixture', 0)
+        for code in (9, 6, 10, None):
+            changed = copy.deepcopy(original)
+            changed['rows'] = ([] if code is None else
+                               [dict(original['rows'][0], ResultCode=code)])
+            put('data/named_votes_cache_slices/1.json', changed)
+            adjusted = [dict(r, named_total=0) if r['vote_id'] == 1 and code is None else r
+                        for r in rows]
+            put('data/votes_20.json', {'rows': adjusted})
+            target = copy.deepcopy(slices)
+            target['lines']['A']['20']['personal'] = {
+                'stats': {'Хили Тропер': 3 if code == 9 else 2},
+                'themes': {'economy': dict(up=2, down=0, arrow=None)}}
+            put('data/slices.json', target)
+            run(f'personal abstain/present/absent code={code}', 0)
     opts = {v: {'sign': v} for v in ('carries', 'inverts', 'none')}
     def calc(extra, signs=None):
         return recount(extra, signs or {i: 1 for i in range(1, 9)}, opts, Fraction(1, 40), Fraction(1, 2))
