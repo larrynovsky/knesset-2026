@@ -36,6 +36,37 @@ TAKANOT = ROOT / "data" / "budget_takanot.json"
 SEED = 20260731
 
 
+SELECTION_CAVEAT = ("свои ветки отобраны тем же поиском (по найденным кандидатам), "
+                    "поэтому преимущество своей ветки отчасти встроено в отбор — "
+                    "это не доказательство, что поиск различает предмет")
+
+
+def verdict_lines(hits_real: int, control_hits: list[int], n: int) -> tuple[list[str], bool, int]:
+    """Решение владельца 19.10 (вопрос 4, В): вердикт говорит только о пороге
+    и о сравнении своей ветки с контрольными, с оговоркой об отборе. Слово
+    «различает» снято: прежнее условие не смотрело на свою ветку. Пороги и
+    код выхода — как объявлено до прогона (§3).
+    Возвращает строки, достигнут ли порог отказа и знак S−M (-1/0/1)."""
+    ctl = sorted(control_hits)
+    med = ctl[len(ctl) // 2]          # верхняя медиана — как и прежде
+    share = med / n
+    sign = (hits_real > med) - (hits_real < med)
+    above_all = sum(1 for h in ctl if hits_real > h)
+    out = [f"своя ветка — {hits_real} из {n}; медиана контрольных — {med}; "
+           f"своя выше {above_all} из {len(ctl)} контрольных"]
+    if share >= 0.5:
+        out.append("ДОСТИГНУТ ОБЪЯВЛЕННЫЙ ПОРОГ ОТКАЗА: медианная доля совпадений "
+                   "на контрольных ветках не ниже 50%. Подкручивать порог запрещено.")
+    elif share <= 0.25:
+        out.append("Порог отказа не достигнут, ожидание «не выше четверти» выполнено.")
+    else:
+        out.append("Между порогами: ожидание не выполнено, порог отказа не достигнут.")
+    out.append("Своя ветка " + {1: "выше медианы", 0: "наравне с медианой",
+                                 -1: "ниже медианы"}[sign]
+               + " контрольных; " + SELECTION_CAVEAT + ".")
+    return out, share >= 0.5, sign
+
+
 def load_placebo_year(data_dir: Path, placebo_year: int) -> list[dict]:
     """Контрольный бюджет: существующий кеш либо полная выгрузка (§23)."""
     cache = data_dir / f"budget_takanot_{placebo_year}.json"
@@ -114,6 +145,7 @@ def probe(a: dict, mapping: dict, rows_now: list[dict], data_dir: Path) -> int:
     # при любой методике. Исправление: сопоставимый размер (±50% строк) и
     # десять веток вместо одной, зерно то же. Порог 50% не тронут.
     failed = False
+    signs = []
     for branch_real in branches:
         real = [r for r in rows_now if r["code"].startswith(branch_real) and len(r["code"]) == 10]
         size_real = len(real)
@@ -138,12 +170,13 @@ def probe(a: dict, mapping: dict, rows_now: list[dict], data_dir: Path) -> int:
             terms_by_c[c["id"]] = t
             dfs_by_c[c["id"]] = {x: mc.doc_freq(rows_now, x) for x in t}
 
-        shares = []
+        shares, control_hits = [], []
         for branch in picked:
             sub = by_branch[branch]
             hit = sum(1 for c in commitments
                       if mc.search(sub, terms_by_c[c["id"]], years, dfs_by_c[c["id"]]))
             shares.append(hit / len(commitments))
+            control_hits.append(hit)
             print(f"  ветка {branch} ({len(sub):3d} строк): кандидаты для "
                   f"{hit} из {len(commitments)}")
 
@@ -154,22 +187,39 @@ def probe(a: dict, mapping: dict, rows_now: list[dict], data_dir: Path) -> int:
         print(f"\nИТОГ 23.2: медианная доля по чужим веткам — {share:.0%}; "
               f"худшая {max(shares):.0%}; на своей ветке — {hits_real} из {n} "
               f"({hits_real/n:.0%})")
-        if share >= 0.5:
-            print("  ОТКАЗ МЕТОДИКИ ПОИСКА: он не различает предмет. Порог 50%")
-            print("  объявлен ДО прогона. Подкручивать пороги запрещено — это уже")
-            print("  делалось четырежды 30 июля и не дало ничего.")
-            failed = True
-        elif share <= 0.25:
-            print("  Ожидание подтвердилось: поиск различает предмет ветки.")
-        else:
-            print("  Между порогами: не различили. Записывается как исход.")
+        lines, refused, sign = verdict_lines(hits_real, control_hits, n)
+        for line in lines:
+            print("  " + line)
+        failed = failed or refused
+        signs.append(sign)
+    if signs:
+        print(f"\nСВОДКА 23.2: своя выше медианы контрольных — {signs.count(1)}, "
+              f"наравне — {signs.count(0)}, ниже — {signs.count(-1)} из {len(signs)}; "
+              + SELECTION_CAVEAT + ".")
     return int(failed)
+
+
+def verdict_selftest() -> int:
+    """Вердикт не говорит «различает» ни при каком входе; порог отказа — как
+    объявлен; поиск, молчащий везде, не получает «выше»."""
+    for own, ctl in ((0, [0] * 10), (4, [0] * 10), (1, [5] * 10), (5, [3] * 10)):
+        lines, _, _ = verdict_lines(own, ctl, 10)
+        assert not any("различает" in l and "не доказательство" not in l for l in lines), lines
+        assert SELECTION_CAVEAT in lines[-1], "оговорка об отборе потеряна"
+    assert verdict_lines(0, [0] * 10, 10)[2] == 0, "молчащий поиск получил «выше»"
+    assert verdict_lines(4, [0] * 10, 10)[2] == 1 and verdict_lines(1, [5] * 10, 10)[2] == -1
+    assert verdict_lines(1, [5] * 10, 10)[1] is True, "порог отказа 50% не сработал"
+    assert verdict_lines(4, [2] * 10, 10)[1] is False and \
+        verdict_lines(4, [3] * 10, 10)[0][1].startswith("Между порогами")
+    assert "выше 10 из 10" in verdict_lines(4, [0] * 10, 10)[0][0]
+    print("самопроверка вердикта плацебо пройдена")
+    return 0
 
 
 def main() -> int:
     args = mc.cli_args()
     if args.selftest:
-        return mc.selftest()
+        return mc.selftest() or verdict_selftest()
     text, sha = mc.rule_text_and_sha()
     selected = mc.select_agreements(text, args)
     rows = json.loads((args.data_dir / TAKANOT.name).read_text(encoding="utf-8"))["rows"]
