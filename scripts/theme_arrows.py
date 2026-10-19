@@ -30,6 +30,10 @@ def arrow_of(up: int, down: int) -> str | None:
     return "down" if share >= 2 / 3 else "up" if share <= 1 / 3 else "both"
 
 
+def names_ru_path() -> Path:
+    return sorted((ROOT / "docs" / "reference").glob("vote_names_ru_*.json"))[-1]
+
+
 def theme_arrows(theme: str, votes: dict | None = None) -> dict:
     """fid -> направление, счётчики законов и до двух примеров с каждой стороны."""
     signs = load_signs(theme)
@@ -43,8 +47,9 @@ def theme_arrows(theme: str, votes: dict | None = None) -> dict:
     votes = votes or json.loads((ROOT / "data" / "votes_25.json").read_text(encoding="utf-8"))
     rows = [r for r in votes["rows"] if r.get("bill_id") in signs]
     per, _, _ = compose(rows, signs, sign_table(), rule)
-    from build_report import NAMES_RU
-    translations = json.loads(NAMES_RU.read_text(encoding="utf-8"))["names"]
+    # Самый поздний справочник переводов: в 08-13 нет актов тем, и примеры
+    # выходили на иврите посреди русского текста (замечено глазами 19.10).
+    translations = json.loads(names_ru_path().read_text(encoding="utf-8"))["names"]
     names = {r["bill_id"]: translations.get(str(r["bill_id"]), {}).get("ru") or r["bill_name"]
              for r in rows}
     out = {}
@@ -91,7 +96,7 @@ def selftest() -> int:
         names.write_text(json.dumps({"names": {"1": {"ru": "Русское название"}}}))
         with patch(__name__ + ".load_signs", return_value={1: 1, 2: 1, 3: 1}), \
              patch("direction_confidence.sign_table", return_value={"test": {"sign": "carries"}}), \
-             patch("build_report.NAMES_RU", names):
+             patch(__name__ + ".names_ru_path", return_value=names):
             result = theme_arrows("security", {"rows": rows})[1]
         assert result["examples"] == {"up": ["Русское название"], "down": ["חוק 2"]}
         assert result["arrow"] is None and result["up"] + result["down"] == 2
