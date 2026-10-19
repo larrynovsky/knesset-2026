@@ -23,9 +23,9 @@ def load_signs(theme: str) -> dict:
     return {int(k): int(v["sign"] if isinstance(v, dict) else v) for k, v in d.items()}
 
 
-def arrow_of(up: int, down: int) -> str | None:
+def arrow_of(up: int, down: int, min_acts: int = 3) -> str | None:
     n = up + down
-    if n < 3:
+    if n < min_acts:
         return None
     share = down / n
     return "down" if share >= 2 / 3 else "up" if share <= 1 / 3 else "both"

@@ -262,6 +262,19 @@ def carry_history(body: str, old: str | None, snap: str, name: str = "?") -> str
 COVERAGE_FIRST = True   # решение владельца 19.10: покрытие вместо точности
 
 
+def axis_directions(directions_path: Path) -> tuple[dict, list]:
+    """Единый набор знаков оси, включая решающий голос Claude."""
+    from direction_confidence import load_directions
+    dirs, units, _ = load_directions(directions_path)
+    if COVERAGE_FIRST:
+        # 28 законов без большинства трёх моделей — решающий голос Claude
+        tb = ROOT / "criteria" / "claude_tiebreak_signs_2026-10-19.json"
+        if tb.exists():
+            for bill, sg in json.loads(tb.read_text(encoding="utf-8"))["signs"].items():
+                dirs.setdefault(int(bill), int(sg))
+    return dirs, units
+
+
 def arrows(votes: dict, directions_path: Path | None) -> dict:
     """Решения по оси для всех фракций, или пусто, если прогона нет.
 
@@ -274,16 +287,10 @@ def arrows(votes: dict, directions_path: Path | None) -> dict:
         return {}
     sys.path.insert(0, str(ROOT / "scripts"))
     from direction_confidence import (arrow_rule, cell, compose,
-                                      load_directions, alpha, sign_table)
+                                      alpha, sign_table)
     rule = arrow_rule()
     rule["split_below"] = float(_arrow_split())
-    dirs, units, _ = load_directions(directions_path)
-    if COVERAGE_FIRST:
-        # 28 законов без большинства трёх моделей — решающий голос Claude
-        tb = ROOT / "criteria" / "claude_tiebreak_signs_2026-10-19.json"
-        if tb.exists():
-            for bill, sg in json.loads(tb.read_text(encoding="utf-8"))["signs"].items():
-                dirs.setdefault(int(bill), int(sg))
+    dirs, units = axis_directions(directions_path)
     a = alpha(units)
     # Решение владельца 19.10: покрытие вместо точности, первая итерация.
     # Порог согласия моделей (tentative) не блокирует стрелку; измеренное
@@ -300,9 +307,8 @@ def arrows(votes: dict, directions_path: Path | None) -> dict:
             # фракции × знак закона (две трети — направление, иначе «↕»).
             n = (c.get("up") or 0) + (c.get("down") or 0)
             if n:
-                share = c["down"] / n
-                c["arrow"] = ("down" if share >= 2 / 3 else
-                              "up" if share <= 1 / 3 else "both")
+                from theme_arrows import arrow_of
+                c["arrow"] = arrow_of(c["up"], c["down"], min_acts=1)
                 c["text"] = ("по голосам фракции и знаку закона по большинству "
                              "трёх моделей")
         out[fid] = dict(c, up_bills=entry["up_bills"], down_bills=entry["down_bills"])
