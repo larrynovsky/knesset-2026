@@ -189,30 +189,38 @@ def party_names(matrix: dict, cards: dict) -> dict:
                              or by_he.get(r["line"], r["line"])) for r in matrix["lines"]}
 
 
-def grounds_block(matrix: dict, cards: dict) -> str:
-    """Последняя стадия: отбор и позиции берём из render_grounds."""
+def owner_law_positions(fids: list[str]) -> list[dict]:
+    """Единые последние стадии и позиции для обзора и сводок фракций."""
     from render_grounds import MARKS, read_marks, load_all, act_votes, vote_table
     votes, names, _, _, table, split = load_all()
     marked = [b for b, mark in read_marks(MARKS).items() if mark["mark"] == "недопустимо"]
-    ru = party_names(matrix, cards)
-    fids = [str(r["anchor_id"]) for r in matrix["lines"]]
     latest = {}
     for bill in marked:
         vs = act_votes(votes["rows"], bill, table)
         if not vs:
             raise Refuse(f"акт {bill}: нет последней стадии")
         latest[bill] = vote_table(vs[-1], table, {}, fids, split)
-    heads = ''.join(f'<th scope=col><a href="grounds.html#a{b}">{esc(names[str(b)]["ru"])}</a>'
-                    f'<span class=norec>{latest[b]["date"]}</span></th>' for b in marked)
+    return [dict(bill=b, name=names[str(b)]["ru"], date=latest[b]["date"],
+                 positions={fid: "за" if _al(fid) in latest[b]["groups"]["for"] else
+                            "против" if _al(fid) in latest[b]["groups"]["against"] else
+                            "нет позиции" for fid in fids}) for b in marked]
+
+
+def _al(fid) -> str:
+    """Строка бюллетеня → фракция, чьи голоса она несёт (ALIAS)."""
+    return str(ALIAS.get(int(fid), fid))
+
+
+def grounds_block(matrix: dict, cards: dict) -> str:
+    """Последняя стадия: общий источник со сводками фракций."""
+    laws = owner_law_positions([str(r["anchor_id"]) for r in matrix["lines"]])
+    ru = party_names(matrix, cards)
+    heads = ''.join(f'<th scope=col><a href="grounds.html#a{law["bill"]}">{esc(law["name"])}</a>'
+                    f'<span class=norec>{law["date"]}</span></th>' for law in laws)
     rows = []
     for r in matrix["lines"]:
         fid = str(r["anchor_id"])
-        cells = []
-        for bill in marked:
-            groups = latest[bill]["groups"]
-            sf = str(ALIAS.get(int(fid), fid))
-            position = "за" if sf in groups["for"] else "против" if sf in groups["against"] else "нет позиции"
-            cells.append(f'<td>{position}</td>')
+        cells = [f'<td>{law["positions"][fid]}</td>' for law in laws]
         # владелец 19.10: партии на двух языках
         rows.append(f'<tr data-owner-fid="{fid}"><th scope=row><a href="f-{fid}.html">{esc(ru[r["anchor_id"]])}</a>'
                     f' <span class=he lang=he dir=rtl><bdi>{esc(r["line"])}</bdi></span></th>{"".join(cells)}</tr>')
@@ -336,6 +344,33 @@ def selftest() -> int:
     assert 'Религиозный сионизм' in owner and 'Ликуд' in owner
     live_doc, _, _ = build(live_matrix, live_cards)
     assert live_doc.index('data-frame=full') < live_doc.index('class="owner-laws"') < live_doc.index('Сначала о том')
+    # Оракул сводки: все 16 строк, 64 позиции и непосредственное место под h1.
+    laws = owner_law_positions([str(r["anchor_id"]) for r in live_matrix["lines"]])
+    assert len(live_matrix["lines"]) == 16 and len(laws) == 4
+    for row in live_matrix["lines"]:
+        fid = row["anchor_id"]
+        card = live_cards.get(fid, {})
+        brief = faction_summary(row, card, "покрытие для проверки", laws)
+        assert brief.count('<p>') == 4
+        expected = re.findall(r'<td>(.*?)</td>', re.search(
+            rf'<tr data-owner-fid="{fid}">(.*?)</tr>', owner).group(1))
+        assert re.findall(r': <b>(.*?)</b>', brief) == expected
+        assert 'Деньги:</b> покрытие для проверки' in brief
+        page = (state_page(row, brief) if fid == 1097 else
+                faction_page(card, row, [], brief=brief))
+        assert re.search(r'</h1>\s*<section class="faction-summary"', page)
+        assert page.count('class="faction-summary"') == 1
+        if fid == 1105:
+            assert '↓ из 126 законов' in brief and '110 — в сторону ослабления' in brief
+            assert 'да: 2022-12-29 — окончание не указано' in brief
+        if fid == 1103:
+            assert '↑ из 105 законов' in brief and '96 — в сторону укрепления' in brief
+            assert 'Кнессете:</b> нет' in brief
+            assert 'коалиционного соглашения не подписывала' in faction_summary(row, card, "", laws)
+        if fid == 1097:
+            assert 'направление не установлено' in brief and 'да: 2022-12-29' in brief
+    assert 'денежных обещаний не найдено' in faction_summary(
+        dict(row, b={"status": "observed", "commitments": 0}), card, "", laws)
     # ── ЧИСЛИТЕЛЬНОЕ СОГЛАСУЕТСЯ С ЧИСЛОМ ────────────────────────────────
     # «2 обязательств» и «остальные не разобраны» при полном разборе — язык
     # сборщика, а не документа; страница Оцма (2 из 2) показала оба 10.10.
@@ -1062,7 +1097,35 @@ def check_index_links(site: Path) -> int:
     return len(parser.hrefs)
 
 
-def state_page(row: dict) -> str:
+def faction_summary(row: dict, card: dict, money_text: str, laws: list[dict]) -> str:
+    """Четыре строки из уже рассчитанных данных, без наследования фракций."""
+    from slice_party_theme import load_periods
+    fid = row["anchor_id"]
+    ax = card.get("axis_institutions") or {}
+    direction = "направление не установлено"
+    if row["a"]["status"] == "observed" and ax.get("arrow") in ("up", "down", "both") and alpha_ok(ax):
+        direction = (f'{CELL[ax["arrow"]][0]} из {ax["acts"]} законов темы, по которым '
+                     f'фракция голосовала, {ax["down"]} — в сторону ослабления, '
+                     f'{ax["up"]} — в сторону укрепления')
+    positions = '; '.join(
+        f'<a href="grounds.html#a{law["bill"]}">{esc(law["name"])}</a>: '
+        f'<b>{esc(law["positions"][str(fid)])}</b> ({esc(law["date"])})' for law in laws)
+    if not money_text:
+        money_text = ("коалиционного соглашения не подписывала" if row["b"]["status"] == "not_exposed"
+                      else "денежных обещаний не найдено" if row["b"].get("commitments") == 0
+                      else "сопоставление денежных обещаний с бюджетом не построено")
+    periods = load_periods(fid)
+    dates = '; '.join(p["start"] + ' — ' + (p["finish"] if p["finish"] != "null" else "окончание не указано")
+                      for p in periods)
+    government = "да: " + dates if periods else "нет"
+    return (f'<section class="faction-summary" aria-label="Коротко о фракции">'
+            f'<p><b>Суд, парламент, свободы:</b> {esc(direction)}.</p>'
+            f'<p><b>Четыре закона владельца — последняя стадия:</b> {positions}.</p>'
+            f'<p><b>Деньги:</b> {esc(money_text)}.</p>'
+            f'<p><b>В правительстве в 25-м Кнессете:</b> {esc(government)}.</p></section>')
+
+
+def state_page(row: dict, brief: str = "") -> str:
     """§7: отсутствие связи — отдельная страница, без наследования карточек."""
     names = json.loads((ROOT / "criteria/wikidata_crosscheck.json").read_text(encoding="utf-8"))
     ru = next((n["mine"] for group in ("agree", "differ", "missing")
@@ -1075,6 +1138,7 @@ def state_page(row: dict) -> str:
 <style>{css_from_mockup()}</style></head><body>
 <nav class=crumbs><a href="index.html">Все фракции</a></nav>{SHORT_FRAME}
 <h1>Строка {esc(row["anchor_id"])}: {esc(ru)} <span lang=he dir=rtl><bdi>{esc(row["line"])}</bdi></span></h1>
+{brief}
 <p class=lead>Связь строки бюллетеня с фракцией не установлена.</p>
 <p>Причина: {esc(row["a"].get("note"))}.</p>
 <p>Преемственность остаётся неразрешённой. Наследование запрещено:
@@ -1128,11 +1192,13 @@ def main() -> int:
         return 1
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(doc, encoding="utf-8")
+    laws = owner_law_positions([str(r["anchor_id"]) for r in m["lines"]])
     pages = 0
     for r in m["lines"]:
         c = cards.get(r["anchor_id"])
+        brief = faction_summary(r, c or {}, summaries.get(r["anchor_id"], ""), laws)
         if r["a"]["status"] == "lineage_unresolved":
-            page = state_page(r)
+            page = state_page(r, brief)
             check_money_same(doc, page, r["anchor_id"], unresolved=True)
         elif not c:
             raise Refuse(f"нет карточки наблюдаемой строки {r['anchor_id']}")
@@ -1140,7 +1206,7 @@ def main() -> int:
             bc = budgets.get(r["anchor_id"], [])
             budget = budget_block(bc, idx, titles) if bc else ""
             page = faction_page(c, r, votes_for(ALIAS.get(r["anchor_id"], r["anchor_id"])),
-                                budget, budget_summary(bc))
+                                budget, budget_summary(bc), brief)
             check_budget_page(page, bc, idx, titles)
             check_money_same(doc, page, r["anchor_id"])
         bad = jargon(page)
@@ -1194,7 +1260,7 @@ def _gloss(desc: str) -> str:
     return gloss(desc, _SIGNS)
 
 
-def faction_page(card: dict, row: dict, votes: list, budget: str = "", summary: str = "") -> str:
+def faction_page(card: dict, row: dict, votes: list, budget: str = "", summary: str = "", brief: str = "") -> str:
     """Страница фракции. Клетка оси — details, как в макете; счёт
     голосований уходит ВНУТРЬ раскрытия, а не вываливается на страницу."""
     ru, he = card.get("party_ru"), card.get("party_he")
@@ -1314,6 +1380,7 @@ def faction_page(card: dict, row: dict, votes: list, budget: str = "", summary: 
 <nav class=crumbs><a href="index.html">Все фракции</a> · {esc(ru)}</nav>
 {SHORT_FRAME}
 <h1>{esc(ru)} <span class=he lang=he dir=rtl><bdi>{esc(he)}</bdi></span></h1>
+{brief}
 {''.join(cells)}
 {''.join(body)}
 <div class=foot><p>Первая грубая итерация, 19.10.2026. Форма принята
