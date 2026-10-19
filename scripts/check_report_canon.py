@@ -239,13 +239,21 @@ def c_digits(src):
     return len(tds), bad[:3], f"{len(tds)} клеток"
 
 @check("лексика страниц партий",
-       [("старое состояние в методике", lambda s: edit(s, "method.html", "<h1>", "<p>мы сюда не дошли</p><h1>")),
+       [("пропал раздел методики", lambda s: edit(s, "method.html", "<h2>Устойчивость стрелки</h2>", "")),
+        ("старое состояние в методике", lambda s: edit(s, "method.html", "<h1>", "<p>мы сюда не дошли</p><h1>")),
         ("фракции названы строками", lambda s: edit(s, "index.html", "<h1>", "<p>пять-шесть строк бюллетеня из шестнадцати</p><h1>")),
         ("старые подписи примеров", lambda s: edit(s, "index.html", "<h1>", "<p>Примеры в плюс:</p><h1>")),
         ("старое денежное состояние", lambda s: edit(s, "index.html", "<h1>", "<p>сопоставление денежных обещаний с бюджетом не построено</p><h1>")),
         ("слово «валидатор» в прозе", lambda s: edit(s, party_page(s), "<h1>", "<p>Так решил валидатор.</p><h1>"))])
 def c_lex(src):
     pp, bad = party(src), []
+    method = src.get("method.html", "")
+    for heading in ("Списки бюллетеня и фракции", "Как ставился знак закона",
+                    "Устойчивость стрелки", "Темы", "Деньги", "Чего нет"):
+        if f"<h2>{heading}</h2>" not in method:
+            bad.append(f"method.html: нет раздела «{heading}»")
+    if "почему стрелки нет" in text_of(method).lower():
+        bad.append("method.html: устаревшее утверждение об отсутствии стрелок")
     # v26: видимый текст всех страниц; CSS-комментарий остаётся допустимым.
     for n, page in src.items():
         visible = text_of(page).lower()
