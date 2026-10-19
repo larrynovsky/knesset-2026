@@ -2211,15 +2211,15 @@ SLICE_ROLE = {"правительство": "в правительстве", "о
 
 
 def slice_word(t: dict | None, key: str) -> str:
-    """Слово среза — тем же словарём, что 25-й; мало законов — так и сказано."""
+    """Слово среза — тем же словарём, что 25-й; при «и так, и так» каждое число со своей стороной."""
+    up, down = (t or {}).get("up") or 0, (t or {}).get("down") or 0
     if not t or not t.get("arrow"):
-        n = (t or {}).get("up", 0) or 0
-        n += (t or {}).get("down", 0) or 0
-        return f"мало законов ({n})" if n else "нет учтённых законов"
-    word = dict(zip(("up", "down", "both"), THEME_WORDS[key]))[t["arrow"]]
-    up, down = t.get("up", 0) or 0, t.get("down", 0) or 0
-    count = f"{up} и {down}" if t["arrow"] == "both" else f'{up if t["arrow"] == "up" else down} из {up + down}'
-    return f'{word} <small>законов: {count}</small>'
+        return f"мало законов ({up + down})" if up + down else "законов по теме нет"
+    w_up, w_down, w_both = THEME_WORDS[key]
+    if t["arrow"] == "both":
+        return f'{w_both} <small>{up} — {w_up}, {down} — {w_down}</small>'
+    word = w_up if t["arrow"] == "up" else w_down
+    return f'{word} <small>законов: {up if t["arrow"] == "up" else down} из {up + down}</small>'
 
 
 def slice_block(letters: str, data: Path | None = None, ru: str = "") -> str:
@@ -2244,6 +2244,8 @@ def slice_block(letters: str, data: Path | None = None, ru: str = "") -> str:
             label = (esc(link["note"]) if link["note"] else esc(ru) if ru else "") + \
                 f' <span lang=he dir=rtl>{esc(he)}</span>'
             label = label.strip()
+            if link.get("ended"):
+                label += f' <small>(фракция существовала до {link["ended"]})</small>'
             if link["type"] == "joint":
                 label += " <small>(общий список — голоса одни на всех участников)</small>"
             units.append((f'<bdi>{label}</bdi>, {esc(link["role"])}', link["themes"]))
@@ -2253,6 +2255,8 @@ def slice_block(letters: str, data: Path | None = None, ru: str = "") -> str:
         elif "personal" in cell:
             rows.append(f'<tr data-slice-k="{k}">{head}<td colspan=4>личных голосов по законам этих тем нет</td></tr>')
             continue
+        for note in d.get("absent_notes", {}).get(letters, {}).get(str(k), []):
+            units.append((esc(note), None))
         if not units:
             text = ("фракции этого списка по законам нашей выборки не голосовали" if cell.get("silent")
                     else "в этом Кнессете списка и его людей не было")
@@ -2262,10 +2266,14 @@ def slice_block(letters: str, data: Path | None = None, ru: str = "") -> str:
             units.append(("", {}))
         for i, (label, themes) in enumerate(units):
             if empty:
-                text = label or ('законов этих тем с понятным направлением в нашей выборке нет: Кнессет '
+                text = label or ('среди отобранных законов этих тем с понятным направлением нет: Кнессет '
                                  'работал несколько месяцев. Это не значит, что партии ничего не делали')
                 rows.append(f'<tr data-slice-k="{k}">' + (head if i == 0 else '<td></td>') +
                             f'<td colspan=4 class=slice-who>{text}</td></tr>')
+                continue
+            if themes is None:
+                rows.append(f'<tr data-slice-k="{k}">' + (head if i == 0 else '<td></td>') +
+                            f'<td colspan=4 class=slice-who>{label}</td></tr>')
                 continue
             tds = "".join(f'<td data-slice-theme="{th}">{slice_word(themes.get(th), key)}</td>'
                           for th, key, _ in SLICE_THEMES)
@@ -2273,9 +2281,15 @@ def slice_block(letters: str, data: Path | None = None, ru: str = "") -> str:
                         f'<td colspan=4 class=slice-who>{label}</td></tr>'
                         f'<tr data-slice-k="{k}"><td></td>{tds}</tr>')
     return ('<section class="list-slices"><h2>Как голосовали раньше</h2>'
-            '<p>Те же темы в прошлых Кнессетах. Знаки законов прочитаны по названиям, грубее, чем в 25-м. '
-            'Число — сколько законов темы легли в эту сторону из всех, где позиция была. В правительстве и в оппозиции голосуют по-разному: '
-            'перемена слова вместе с переменой роли — не обязательно перемена взглядов.</p>'
+            '<p>Строки — фракции прошлых Кнессетов, чьи голоса мы читаем как прошлое этого списка: '
+            'та же партия, партия нынешнего лидера или общий список, куда она входила. '
+            'Темы те же, что в 25-м, и законы отобраны тем же способом.</p>'
+            '<p>В какую сторону тянет каждый закон, мы определили по его названию — грубее, чем в 25-м. '
+            '«Законов: 9 из 10» — из 10 законов темы, по которым фракция высказалась, 9 легли в названную сторону. '
+            'Направление называем, когда позиция фракции есть хотя бы по трём законам темы '
+            '(меньше — «мало законов»), а в одну сторону легли две трети; иначе — «и так, и так».</p>'
+            '<p>В правительстве партия голосует иначе, чем в оппозиции: если направление поменялось '
+            'вместе с ролью, это не обязательно смена взглядов.</p>'
             '<table class="list-short-table"><thead><tr><th scope="col">Кнессет</th>' +
             "".join(f'<th scope="col">{t}</th>' for _, _, t in SLICE_THEMES) + '</tr></thead><tbody>' +
             "".join(rows) + '</tbody></table><p class=dim>25-й Кнессет (2022–2026) — в таблице «Коротко» выше.</p></section>')

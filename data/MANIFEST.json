@@ -106,7 +106,7 @@
     "expected": 1189,
     "got": 1189,
     "pages": 12,
-    "at": "2026-10-19T20:31:33",
+    "at": "2026-10-19T20:51:25",
     "host": "MacBook-Pro-14-Alexander.local"
   },
   "KNS_PlenumVoteResult|VoteID eq 37683": {
@@ -14169,7 +14169,7 @@
     "expected": 2285,
     "got": 2285,
     "pages": 23,
-    "at": "2026-10-19T20:37:57",
+    "at": "2026-10-19T20:50:51",
     "host": "MacBook-Pro-14-Alexander.local"
   },
   "KNS_PlenumVoteResult|VoteID eq 34776": {
@@ -19931,6 +19931,405 @@
     "got": 36,
     "pages": 1,
     "at": "2026-10-19T20:46:06",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlmSessionItem|PlenumSessionID ge 562182 and PlenumSessionID le 2077876": {
+    "expected": 13018,
+    "got": 13018,
+    "pages": 131,
+    "at": "2026-10-19T20:50:20",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22034": {
+    "expected": 69,
+    "got": 69,
+    "pages": 1,
+    "at": "2026-10-19T20:51:27",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22071": {
+    "expected": 48,
+    "got": 48,
+    "pages": 1,
+    "at": "2026-10-19T20:51:28",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22092": {
+    "expected": 81,
+    "got": 81,
+    "pages": 1,
+    "at": "2026-10-19T20:51:31",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22136": {
+    "expected": 110,
+    "got": 110,
+    "pages": 2,
+    "at": "2026-10-19T20:51:35",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22137": {
+    "expected": 110,
+    "got": 110,
+    "pages": 2,
+    "at": "2026-10-19T20:51:38",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22138": {
+    "expected": 109,
+    "got": 109,
+    "pages": 2,
+    "at": "2026-10-19T20:51:42",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22139": {
+    "expected": 110,
+    "got": 110,
+    "pages": 2,
+    "at": "2026-10-19T20:51:45",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22140": {
+    "expected": 110,
+    "got": 110,
+    "pages": 2,
+    "at": "2026-10-19T20:51:48",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22141": {
+    "expected": 110,
+    "got": 110,
+    "pages": 2,
+    "at": "2026-10-19T20:51:51",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22142": {
+    "expected": 110,
+    "got": 110,
+    "pages": 2,
+    "at": "2026-10-19T20:51:55",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22143": {
+    "expected": 110,
+    "got": 110,
+    "pages": 2,
+    "at": "2026-10-19T20:51:58",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22144": {
+    "expected": 110,
+    "got": 110,
+    "pages": 2,
+    "at": "2026-10-19T20:52:01",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22145": {
+    "expected": 110,
+    "got": 110,
+    "pages": 2,
+    "at": "2026-10-19T20:52:05",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22146": {
+    "expected": 110,
+    "got": 110,
+    "pages": 2,
+    "at": "2026-10-19T20:52:08",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22147": {
+    "expected": 110,
+    "got": 110,
+    "pages": 2,
+    "at": "2026-10-19T20:52:11",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22148": {
+    "expected": 110,
+    "got": 110,
+    "pages": 2,
+    "at": "2026-10-19T20:52:14",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22213": {
+    "expected": 31,
+    "got": 31,
+    "pages": 1,
+    "at": "2026-10-19T20:52:16",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22215": {
+    "expected": 39,
+    "got": 39,
+    "pages": 1,
+    "at": "2026-10-19T20:52:18",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22244": {
+    "expected": 31,
+    "got": 31,
+    "pages": 1,
+    "at": "2026-10-19T20:52:21",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22264": {
+    "expected": 34,
+    "got": 34,
+    "pages": 1,
+    "at": "2026-10-19T20:52:23",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22269": {
+    "expected": 80,
+    "got": 80,
+    "pages": 1,
+    "at": "2026-10-19T20:52:24",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22270": {
+    "expected": 78,
+    "got": 78,
+    "pages": 1,
+    "at": "2026-10-19T20:52:26",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22301": {
+    "expected": 30,
+    "got": 30,
+    "pages": 1,
+    "at": "2026-10-19T20:52:28",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22339": {
+    "expected": 31,
+    "got": 31,
+    "pages": 1,
+    "at": "2026-10-19T20:52:30",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22361": {
+    "expected": 115,
+    "got": 115,
+    "pages": 2,
+    "at": "2026-10-19T20:52:34",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22362": {
+    "expected": 115,
+    "got": 115,
+    "pages": 2,
+    "at": "2026-10-19T20:52:37",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22363": {
+    "expected": 115,
+    "got": 115,
+    "pages": 2,
+    "at": "2026-10-19T20:52:40",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22364": {
+    "expected": 115,
+    "got": 115,
+    "pages": 2,
+    "at": "2026-10-19T20:52:43",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22365": {
+    "expected": 115,
+    "got": 115,
+    "pages": 2,
+    "at": "2026-10-19T20:52:46",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22366": {
+    "expected": 115,
+    "got": 115,
+    "pages": 2,
+    "at": "2026-10-19T20:52:50",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22367": {
+    "expected": 115,
+    "got": 115,
+    "pages": 2,
+    "at": "2026-10-19T20:52:54",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22368": {
+    "expected": 113,
+    "got": 113,
+    "pages": 2,
+    "at": "2026-10-19T20:52:57",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22369": {
+    "expected": 114,
+    "got": 114,
+    "pages": 2,
+    "at": "2026-10-19T20:53:00",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22370": {
+    "expected": 114,
+    "got": 114,
+    "pages": 2,
+    "at": "2026-10-19T20:53:04",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22371": {
+    "expected": 115,
+    "got": 115,
+    "pages": 2,
+    "at": "2026-10-19T20:53:07",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22372": {
+    "expected": 115,
+    "got": 115,
+    "pages": 2,
+    "at": "2026-10-19T20:53:11",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22373": {
+    "expected": 115,
+    "got": 115,
+    "pages": 2,
+    "at": "2026-10-19T20:53:14",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22374": {
+    "expected": 114,
+    "got": 114,
+    "pages": 2,
+    "at": "2026-10-19T20:53:17",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22375": {
+    "expected": 114,
+    "got": 114,
+    "pages": 2,
+    "at": "2026-10-19T20:53:22",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22376": {
+    "expected": 114,
+    "got": 114,
+    "pages": 2,
+    "at": "2026-10-19T20:53:25",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22377": {
+    "expected": 114,
+    "got": 114,
+    "pages": 2,
+    "at": "2026-10-19T20:53:27",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22378": {
+    "expected": 114,
+    "got": 114,
+    "pages": 2,
+    "at": "2026-10-19T20:53:30",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22379": {
+    "expected": 115,
+    "got": 115,
+    "pages": 2,
+    "at": "2026-10-19T20:53:33",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22380": {
+    "expected": 115,
+    "got": 115,
+    "pages": 2,
+    "at": "2026-10-19T20:53:36",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22381": {
+    "expected": 112,
+    "got": 112,
+    "pages": 2,
+    "at": "2026-10-19T20:53:39",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22382": {
+    "expected": 115,
+    "got": 115,
+    "pages": 2,
+    "at": "2026-10-19T20:53:42",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22383": {
+    "expected": 114,
+    "got": 114,
+    "pages": 2,
+    "at": "2026-10-19T20:53:45",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22384": {
+    "expected": 115,
+    "got": 115,
+    "pages": 2,
+    "at": "2026-10-19T20:53:48",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22385": {
+    "expected": 115,
+    "got": 115,
+    "pages": 2,
+    "at": "2026-10-19T20:53:50",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22386": {
+    "expected": 111,
+    "got": 111,
+    "pages": 2,
+    "at": "2026-10-19T20:53:53",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22387": {
+    "expected": 115,
+    "got": 115,
+    "pages": 2,
+    "at": "2026-10-19T20:53:56",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22388": {
+    "expected": 115,
+    "got": 115,
+    "pages": 2,
+    "at": "2026-10-19T20:53:59",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22389": {
+    "expected": 114,
+    "got": 114,
+    "pages": 2,
+    "at": "2026-10-19T20:54:02",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22390": {
+    "expected": 114,
+    "got": 114,
+    "pages": 2,
+    "at": "2026-10-19T20:54:05",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22391": {
+    "expected": 114,
+    "got": 114,
+    "pages": 2,
+    "at": "2026-10-19T20:54:09",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_PlenumVoteResult|VoteID eq 22392": {
+    "expected": 115,
+    "got": 115,
+    "pages": 2,
+    "at": "2026-10-19T20:54:13",
     "host": "MacBook-Pro-14-Alexander.local"
   }
 }

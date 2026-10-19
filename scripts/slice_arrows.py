@@ -25,7 +25,8 @@ KNESSETS = (20, 21, 22, 23, 24)
 THEMES4 = ("rule_of_law", "economy", "religion_state", "security")
 LINEAGE = ROOT / "criteria" / "slice_lineage_2026-10-19.json"
 OUT = ROOT / "data" / "slices.json"
-MIN_GOV_DAYS = 30   # звено в правительстве, если фракция жила в нём ≥30 дней (артефакты однодневных фракций)
+MIN_GOV_DAYS = 30
+WINDOW_END = {20: "2019-04-30", 21: "2019-10-03", 22: "2020-03-16", 23: "2021-04-06", 24: "2022-11-15"}   # звено в правительстве, если фракция жила в нём ≥30 дней (артефакты однодневных фракций)
 
 
 def load_signs(n: int, theme: str) -> dict | None:
@@ -96,7 +97,7 @@ def compute() -> dict:
     life = {r["Id"]: max(1, (date.fromisoformat((r.get("FinishDate") or r["StartDate"])[:10])
                              - date.fromisoformat(r["StartDate"][:10])).days) for r in fac_rows}
     check_lineage(lin, factions)
-    out = {"knessets": {}, "lines": {}}
+    out = {"knessets": {}, "lines": {}, "absent_notes": lin.get("absent_notes", {})}
     for n in KNESSETS:
         vp = ROOT / "data" / f"votes_{n}.json"
         if not vp.exists():
@@ -129,8 +130,11 @@ def compute() -> dict:
                     # голосовала по законам выборки — звена нет, но факт записан для страницы
                     cell.setdefault("silent", []).append(fid)
                     continue
+                fin = next(r.get("FinishDate") for r in fac_rows if r["Id"] == fid)[:10]
+                end = WINDOW_END[n]
+                ended = f"{fin[5:7]}.{fin[:4]}" if (date.fromisoformat(end) - date.fromisoformat(fin)).days > MIN_GOV_DAYS else ""
                 cell["links"].append({
-                    "fid": fid, "type": typ, "note": note[0] if note else "", "votes": voted,
+                    "fid": fid, "type": typ, "note": note[0] if note else "", "votes": voted, "ended": ended,
                     "role": "в коалиции, без министров" if fid in coalition else role(gd.get(fid, []), life[fid]),
                     "themes": {th: {k: arrows[th].get(fid, {}).get(k) for k in ("arrow", "up", "down")}
                                for th in have}})
