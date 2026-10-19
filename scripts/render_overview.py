@@ -604,7 +604,11 @@ def build(m: dict, cards: dict | None = None,
 .ballot .norec{{border:0;padding:0;margin:1px 0;font-size:11px;line-height:1.35}}
 .ballot tbody tr:nth-child(even){{background:var(--panel)}}
 .ballot-laws{{counter-reset:law}}
-.ballot-laws>span::before{{counter-increment:law;content:"закон " counter(law);display:block;font-size:9px;color:var(--dim);font-weight:400}}
+.ballot-laws>span::before{{display:block;font-size:9px;line-height:1.2;color:var(--dim);font-weight:400;white-space:normal}}
+.ballot-laws>span:nth-child(1)::before{{content:"Судебная власть, поправка 4"}}
+.ballot-laws>span:nth-child(2)::before{{content:"Судебная власть, поправка 3"}}
+.ballot-laws>span:nth-child(3)::before{{content:"Закон о судах, 105"}}
+.ballot-laws>span:nth-child(4)::before{{content:"Юрсоветник: разделение должности"}}
 @media(min-width:601px){{
  .ballot td.ballot-axis::before,.ballot td[data-l="Деньги"]::before{{content:attr(data-l);display:block;font-size:9px;color:var(--dim);text-transform:lowercase}}
  .ballot td.ballot-axis,.ballot td[data-l="Деньги"]{{font-size:15px;text-align:center}}
@@ -2155,6 +2159,10 @@ def main() -> int:
     OUT.write_text(doc, encoding="utf-8")
     (OUT.parent / "cheatsheet.html").write_text(ballot_table(m, cards, compact=True), encoding="utf-8")
     laws = owner_law_positions([str(r["anchor_id"]) for r in m["lines"]])
+    # CSS бюллетеня подписывает клетки законов по порядку (nth-child) — порядок обязан совпасть
+    for law, key in zip(laws, ("поправка № 4", "поправка № 3", "105", "юридического советника")):
+        if key not in law["name"]:
+            raise Refuse(f"порядок законов владельца сменился: «{law['name']}» вместо «{key}» — подписи в бюллетене соврут")
     pages = 0
     for r in m["lines"]:
         c = cards.get(r["anchor_id"])
