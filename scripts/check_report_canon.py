@@ -194,7 +194,7 @@ def c_ballot_money(src):
             bad.append(f"{_h.unescape(name)}: деньги или title расходятся с обзором")
     if '<th scope=col>Безопасность</th><th scope=col>Деньги</th>' not in doc:
         bad.append("порядок денежных колонок")
-    legend = "Деньги: 3/5 означает, что в бюджете нашлась статья под 3 из 5 денежных обещаний; это не значит, что деньги выделены полностью"
+    legend = "<b>3/5</b> — из пяти таких обещаний под три в бюджете нашлась своя статья, хотя бы частично. Статья может быть почти пустой: сколько денег дошло, число не показывает"
     if legend not in doc:
         bad.append("нет денежной легенды")
     return len(rows), bad, f"{len(rows)} строк; значения и полные title"
@@ -327,7 +327,8 @@ def c_list_table(src):
             page_laws = [["не голос." if v in ("не голосовали", "нет позиции") else v for v in positions]]
         if fids or personal:
             expected = ["/".join(dict.fromkeys(v[i] for v in page_laws)) for i in range(4)] if page_laws and all(len(v) == 4 for v in page_laws) else []
-            same("4 закона", [re.sub(r"\s*/\s*", "/", clean(v)) for v in table_laws], expected)
+            # имена фракций в смешанной клетке (<small>(Ликуд)</small>) — подпись, не позиция; порядок фракций тот же
+            same("4 закона", [re.sub(r"\s*/\s*", "/", clean(re.sub(r"\s*<small>\([^<]*\)</small>", "", v))) for v in table_laws], expected)
         else:
             same("4 закона без голосов", clean(law_cell[1]) if law_cell else "", "нет данных" if 'голосов в этом Кнессете нет' in page else "")
         table_axes = re.findall(r'<td class="ballot-axis"[^>]*>(.*?)</td>', row, re.S)

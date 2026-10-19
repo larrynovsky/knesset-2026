@@ -18,6 +18,8 @@ POS = {"за": "<b>за</b>", "против": "против", "воздержа�
        "не голосовали": "не голос.", "нет позиции": "не голос.", "—": "не голос."}
 # в печати короче: «не голос.» переносилось на две строки
 LEAN = {"down": "ослаблял", "up": "укреплял", "both": "и так, и так"}
+# Владелец 19.10: «↑ по религии — довод вычеркнуть список» (да). Поэтому «больше религии» жирным, как «за» по 4 законам.
+REL = {"up": "<b>за больше религии</b>", "down": "за меньше религии", "both": "и так, и так"}
 
 
 def _pos(label: str) -> str:
@@ -47,6 +49,9 @@ def build(m: dict, cards: dict) -> str:
             raise ro.Refuse(f"шпаргалка: порядок законов сменился ({law['name']})")
     rob = json.loads((ro.ROOT / "data" / "arrow_robustness.json").read_text(encoding="utf-8"))
     rob_axis = rob["topics"]["rule_of_law"]["factions"]
+    rob_rel = rob["topics"]["religion_state"]["factions"]
+    from theme_arrows import theme_arrows
+    rel_arrows = theme_arrows("religion_state")
     rows, likud = [], None
     for row in ballot["lists"]:
         fids = row.get("factions", [])
@@ -98,12 +103,36 @@ def build(m: dict, cards: dict) -> str:
         words = [w + (" (не уверены)" if u else "") + (" (уверенность не считали)" if personal else "") for w, u in merged.items()]
         lean = ("<b>" + " / ".join(words) + "</b><br><small>" + "; ".join(parts)
                 + "</small>") if words else "нет данных"
+        # религия: направление по голосам, полярность — владельца
+        if personal:
+            x = personal["themes"]["religion_state"]
+            rels = [(x.get("arrow"), x.get("up", 0), x.get("down", 0), None, "")]
+        else:
+            rels = []
+            for f in fids:
+                a = rel_arrows.get(f) or rel_arrows.get(ro._al(f)) or {}
+                e = rob_rel.get(str(ro._al(f)))
+                rels.append((a.get("arrow"), a.get("up", 0), a.get("down", 0),
+                             e["rates"]["0.10"] if e else None, _short(names[f]).split(" (")[0] if len(fids) > 1 else ""))
+        rel_words = {}
+        rel_parts = []
+        for arrow, up, down, rate, who in rels:
+            w = REL.get(arrow, "мало данных")
+            unsure = arrow in REL and (personal or (rate is not None and rob_label(rate) != "устойчива"))
+            rel_words[w] = rel_words.get(w, False) or unsure
+            if arrow in REL:
+                rel_parts.append((f"{who}: " if who else "") + f"{up} за больше, {down} за меньше")
+        rel = (" / ".join(w + (" (не уверены)" if u else "") for w, u in rel_words.items())
+) if fids or personal else "нет данных"   # счёт по религии — на сайте: лист обязан влезть в одну A4
         tr = (f'<tr data-ballot-list="{esc(row["he"])}">'
               f'<th scope=row><span class="ballot-letters" lang="he" dir="rtl">{esc(row["letters"])}</span>'
               f'<b>{esc(row["ru"])}</b> <span lang=he dir=rtl><bdi>{esc(row["he"])}</bdi></span>'
-              f'<span class=norec>{esc(row["leaders"])}</span></th>'
+              f'<span class=norec>{esc(row["leaders"])}</span>'
+              # владелец 19.10: «чьи голоса» — только где список явно не равен своей фракции
+              + (f'<span class=norec><i>{esc(note)}</i></span>'
+                 if personal or any("Беннет" in a for a in row.get("absent", [])) else '') + '</th>'
               '<td class=laws-cells><span class="ballot-laws">' + "".join(f"<span>{c}</span>" for c in cells)
-              + f'</span></td><td class=lean>{lean}</td>'
+              + f'</span></td><td class=lean>{lean}</td><td class=lean>{rel}</td>'
               '<td><span class="crossout" aria-label="вычеркнуть"></span></td></tr>')
         rows.append(tr)
         if row["ru"] == "Ликуд":
@@ -132,7 +161,7 @@ a{{color:inherit}}a:focus-visible{{outline:2px solid currentColor;outline-offset
 table{{width:100%;border-collapse:collapse;table-layout:fixed}}
 th,td{{padding:.9mm 1mm;border-bottom:1px solid gray;vertical-align:middle;text-align:left}}
 thead th{{font-size:8pt;vertical-align:bottom}}thead th small{{font-weight:normal;color:#444}}
-thead th:first-child{{width:33%}}thead th.lawsh{{width:42%}}thead th.leanh{{width:18%}}thead th:last-child{{width:7%}}
+thead th:first-child{{width:25%}}thead th.lawsh{{width:37%}}thead th.leanh{{width:18%}}thead th.relh{{width:13%}}thead th:last-child{{width:7%}}
 .heads>span{{font-size:7.5pt;font-weight:bold;line-height:1.15}}
 tbody th{{font-weight:normal}}
 .ballot-letters{{float:left;min-width:12mm;margin-right:2mm;font-size:19pt;font-weight:bold;line-height:1.05}}
@@ -149,10 +178,11 @@ tr{{break-inside:avoid}}
 <p><b>Одна строка — один список в бюллетене.</b> Слева буквы — те же, что на бумажке на участке. Дальше — как депутаты этого списка голосовали в нынешнем Кнессете. Квадрат справа — отметить список, который ты для себя исключаешь.</p>
 <p><b>Четыре средние колонки</b> — законы о судах, которые ты сам 10.10 пометил «недопустимо», ещё не зная, кто за них голосовал. <b>за</b> — проголосовали ЗА такой закон; «против» — против; «не голос.» — не голосовали: у оппозиции это обычно бойкот (не поддержали, но и не нажали «против»). Юрсоветник — пока законопроект: голосовали на ранней стадии.</p>
 <p><b>Колонка «Суд и права в целом»</b> — около 130 законов о суде, контроле Кнессета над правительством и правах граждан (смысл каждого закона определили три модели ИИ и перепроверили по тексту). <b>ослаблял</b> — фракция чаще голосовала за ослабление; <b>укреплял</b> — наоборот; числа — сколько раз в какую сторону. <b>не уверены</b> — если смысл части законов прочитан с ошибкой, вывод может смениться.</p>
+<p><b>Колонка «Религия в государстве»</b> — законы о месте религии в государстве (та же проверка ИИ). <b>за больше религии</b> выделено жирным: ты 19.10 сказал, что для тебя это довод исключить список. «за меньше религии» — наоборот.</p>
 <p>{example}</p>
 <p>Где не работает: новые списки в этом Кнессете не голосовали — о них лист молчит. Это сводка голосований, а не совет, за кого голосовать.</p>
 </div>
-<table><thead><tr><th scope=col>Буквы · список · лидеры</th>{heads}<th scope=col class=leanh>Суд и права в целом</th><th scope=col>Ис&shy;клю&shy;чаю</th></tr></thead>
+<table><thead><tr><th scope=col>Буквы · список · лидеры</th>{heads}<th scope=col class=leanh>Суд и права в целом</th><th scope=col class=relh>Религия в государстве</th><th scope=col>Ис&shy;клю&shy;чаю</th></tr></thead>
 <tbody>{"".join(rows)}</tbody></table>
 <footer>Собрано {date.today():%d.%m.%Y} · <a href="index.html">подробно — на сайте</a></footer>
 </body></html>"""
@@ -167,3 +197,6 @@ def selftest(page: str) -> None:
         assert len(cells) == 4 and all(re.sub(r"<[^>]+>", "", c) for c in cells), "не 4 позиции словами"
         assert not re.search(r'[↑↓↕]', r), "стрелка без слова"
     assert "Пример: Ликуд голосовал «за»" in page, "нет примера"
+    noted = [r for r in rows if "Судим по" in r]
+    assert len(noted) == 2 and any("Беннет в этом Кнессете не заседал" in r for r in noted) \
+        and any("Айзенкота и Тропера" in r for r in noted), "«чьи голоса»: только Беяхад и Яшар! (владелец 19.10)"

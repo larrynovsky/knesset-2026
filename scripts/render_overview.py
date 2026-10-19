@@ -332,10 +332,17 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None, *, compact: b
                f'<span class=norec>{esc(row["leaders"])}</span>{absent}</th>')
         law_marks = []
         for law in (personal["laws"] if personal else laws):
+            def pos_of(fid, law=law):
+                v = "не голос." if law["positions"][_al(fid)] == "нет позиции" else (law.get("labels", law["positions"])[_al(fid)].split(" (")[0] if compact else law.get("labels", law["positions"])[_al(fid)])
+                return v.replace("—", "не голос.").replace("не голосовали", "не голос.")
             positions = dict.fromkeys("не голос." if law["positions"][_al(fid)] == "нет позиции"
                                       else (law.get("labels", law["positions"])[_al(fid)].split(" (")[0] if compact else law.get("labels", law["positions"])[_al(fid)]) for fid in (["yashar"] if personal else fids))
             positions = dict.fromkeys(pos.replace("—", "не голос.").replace("не голосовали", "не голос.") for pos in positions)
-            label = "/".join("<b>за</b>" if pos == "за" else esc(pos) for pos in positions)
+            if len(positions) > 1 and not personal:   # разные фракции списка — назвать, кто как
+                import render_cheatsheet
+                label = " / ".join(("<b>за</b>" if pos_of(fid) == "за" else esc(pos_of(fid))) + f" <small>({esc(render_cheatsheet._short(names[fid]).split(' (')[0])})</small>" for fid in fids)
+            else:
+                label = "/".join("<b>за</b>" if pos == "за" else esc(pos) for pos in positions)
             detail = "; ".join(f'{names[fid]}: {law.get("counts", {}).get(_al(fid), "")}' for fid in fids)
             if personal:
                 detail = law["counts"]["yashar"]
@@ -421,12 +428,20 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None, *, compact: b
             f'<p>{esc(example)}</p>'
             '<p>Где не работает: новые списки сами в этом Кнессете не голосовали. У «Резервистов» нет данных; у «Яшар» показаны личные голоса Айзенкота и Тропера. Список — не фракция; после выборов люди и союзы меняются. Это сводка голосований, а не совет, за кого голосовать.</p>'
             '<p>«Со всеми» и число в скобках — сколько законопроектов голосовали почти единогласно; эти случаи не определяют направление. «Мало законов» — данных для направления мало; прочерк в теме — направление не установлено.</p>'
-            '<details><summary>Что значат колонки тем и денег</summary>'
-            '<p>Религия: вверх — больше места религии в государстве, вниз — меньше.</p>'
-            '<p>Экономика: вверх — на стороне производителя, вниз — потребителя.</p>'
-            '<p>Безопасность: вверх — расширял полномочия армии, полиции и силовых структур, вниз — сужал.</p>'
-            '<p>Деньги: 3/5 означает, что в бюджете нашлась статья под 3 из 5 денежных обещаний; это не значит, что деньги выделены полностью. Прочерк — не подписывал соглашение; «не уверены» — нет сопоставления.</p>'
-            '</details></section>'
+            '<h4>Что значат колонки тем и денег</h4>'
+            '<p><b>Религия:</b> ↑ — голосовал за больше места религии в государстве, ↓ — за меньше.</p>'
+            '<p><b>Экономика:</b> ↑ — на стороне производителя, ↓ — на стороне потребителя.</p>'
+            '<p><b>Безопасность:</b> ↑ — расширял полномочия армии, полиции и силовых структур, ↓ — сужал.</p>'
+            '<p><b>Деньги</b> — что партия выбила в бюджет, когда была в правительстве. '
+            'Входя в коалицию, партия подписывает соглашение: «на такое-то дело выделить столько-то». '
+            '<b>3/5</b> — из пяти таких обещаний под три в бюджете нашлась своя статья, хотя бы частично. '
+            'Статья может быть почти пустой: сколько денег дошло, число не показывает. '
+            'Само по себе число не хорошо и не плохо — всё зависит от того, на что деньги; суммы — на странице партии. '
+            'При меньше чем пяти обещаниях (1/1, 2/3) число почти ничего не говорит. '
+            '<b>«вторая сторона»</b> — у Ликуда и Еш Атида своих денежных обещаний нет: они возглавляли правительство и сами раздавали обещания партнёрам; число — сколько розданного попало в бюджет. '
+            '<b>—</b> — в правительстве не был, сверять нечего (не плюс и не минус). '
+            '<b>не разбирали</b> — был в правительстве, но обещания мы ещё не разобрали.</p>'
+            '</section>'
             '<table class="ballot"><thead><tr><th scope=col>Список и лидеры</th>'
             '<th scope=col>4 закона</th>'
             f'<th scope=col>Суд</th>{heads}</tr></thead>'
@@ -608,10 +623,10 @@ def build(m: dict, cards: dict | None = None,
 .ballot td.ballot-axis{{white-space:normal}}
 .ballot-laws{{counter-reset:law}}
 .ballot-laws>span::before{{display:block;font-size:9px;line-height:1.2;color:var(--dim);font-weight:400;white-space:normal}}
-.ballot-laws>span:nth-child(1)::before{{content:"Судебная власть, поправка 4"}}
-.ballot-laws>span:nth-child(2)::before{{content:"Судебная власть, поправка 3"}}
-.ballot-laws>span:nth-child(3)::before{{content:"Закон о судах, 105"}}
-.ballot-laws>span:nth-child(4)::before{{content:"Юрсоветник: разделение должности"}}
+.ballot-laws>span:nth-child(1)::before{{content:"Выбор судей"}}
+.ballot-laws>span:nth-child(2)::before{{content:"Отмена «неразумности»"}}
+.ballot-laws>span:nth-child(3)::before{{content:"Закон о судах (105)"}}
+.ballot-laws>span:nth-child(4)::before{{content:"Разделить юрсоветника"}}
 @media(min-width:601px){{
  .ballot td.ballot-axis::before,.ballot td[data-l="Деньги"]::before{{content:attr(data-l);display:block;font-size:9px;color:var(--dim);text-transform:lowercase}}
  .ballot td.ballot-axis,.ballot td[data-l="Деньги"]{{font-size:15px;text-align:center}}
@@ -802,7 +817,7 @@ def selftest() -> int:
                  labels=dict.fromkeys(law["positions"], "против")) for law in altered_laws]):
         changed = ballot_table(live_matrix, altered_cards)
     reading = changed.split('<section class="ballot-reading"')[1].split('</section>')[0]
-    assert reading.count('<details>') == 1
+    assert reading.count('<details>') == 0   # пояснения тем и денег видны сразу (shining 19.10: свёрнутое не читают)
     assert '«за» по 0 из 4' in reading and 'в целом укреплял' in reading
     assert '2 раза голосовал за ослабление' in reading and '17 раз — за укрепление' in reading
     assert changed.index('Как читать эту таблицу') < changed.index('Что значат колонки тем и денег') < changed.index('<table class="ballot">')
@@ -824,13 +839,14 @@ def selftest() -> int:
         with patch(__name__ + '._al', side_effect=lambda fid: str(fid) if str(fid) == 'yashar' else '1096' if int(fid) != 1108 else '1108'):
             split_laws = ballot_table(live_matrix, live_cards)
     likud = next(r for r in re.findall(r'<tr data-ballot-list=.*?</tr>', split_laws) if 'Ликуд' in r)
-    assert likud.count('<b>за</b>/против') == 4 and '<b>против</b>' not in likud
+    # смешанная клетка называет фракции: читатель не сверит «4 из 4» с «за/не голос.» без имён (shining 19.10)
+    assert likud.count('<b>за</b> <small>(Ликуд)</small> / против <small>(') == 4 and '<b>против</b>' not in likud
     assert 'title="Закон &quot;пример&quot;; ' in likud
     fake_laws[0]['positions']['1108'] = 'нет позиции'
     with patch(__name__ + '.owner_law_positions', return_value=fake_laws):
         with patch(__name__ + '._al', side_effect=lambda fid: str(fid) if str(fid) == 'yashar' else '1096' if int(fid) != 1108 else '1108'):
             compact = ballot_table(live_matrix, live_cards)
-    assert compact.count('<b>за</b>/не голос.') == 4
+    assert compact.count('<b>за</b> <small>(Ликуд)</small> / не голос. <small>(') == 4
     table = ballot_html.split('<table class="ballot">')[1].split('</table>')[0]
     assert table.count('scope=col') == 7 and 'нет позиции' not in table
     assert 'Читается по голосам фракций' not in table
@@ -925,7 +941,7 @@ def selftest() -> int:
             assert all('ненадёжна: 75.00%' in c for c in axis_cells)
             law_cell = re.search(r'<span class="ballot-laws">(.*?)</td>', rendered).group(1)
             assert re.findall(r'<span title="Пример[^"]*">(.*?)</span>', law_cell) == [
-                '<b>за</b>' if second == "down" else '<b>за</b>/против'] * 4, "v44: позиции законов"
+                '<b>за</b>' if second == "down" else '<b>за</b> <small>(A)</small> / против <small>(B)</small>'] * 4, "v44: позиции законов"
 
     check_v44(ballot_table)
     # Мутант реально убирает группировку в рендере: одинаковые стрелки всегда через /.
