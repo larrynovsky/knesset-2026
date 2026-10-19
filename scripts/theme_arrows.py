@@ -40,7 +40,7 @@ def theme_arrows(theme: str, votes: dict | None = None) -> dict:
     if not signs:
         return {}
     sys.path.insert(0, str(ROOT / "scripts"))
-    from direction_confidence import arrow_rule, compose, sign_table
+    from direction_confidence import arrow_rule, compose, sign_table, lopsided
     from build_line_cards import _arrow_split
     rule = arrow_rule()
     rule["split_below"] = float(_arrow_split())
@@ -52,12 +52,30 @@ def theme_arrows(theme: str, votes: dict | None = None) -> dict:
     translations = json.loads(names_ru_path().read_text(encoding="utf-8"))["names"]
     names = {r["bill_id"]: translations.get(str(r["bill_id"]), {}).get("ru") or r["bill_name"]
              for r in rows}
+    # Закон считается один раз; любое различающее чтение исключает его
+    # из consensus для всех фракций. Нулевое участие не является голосом.
+    consensus_bills, retained = {}, set()
+    for r in rows:
+        bid, bf = r["bill_id"], r.get("by_faction") or {}
+        fors = sum(int(c.get("for", 0)) for c in bf.values())
+        against = sum(int(c.get("against", 0)) for c in bf.values())
+        if not lopsided(fors, against, rule["drop_below"]):
+            retained.add(bid)
+        elif fors + against and signs[bid] in (-1, 1):
+            for fac, c in bf.items():
+                if any(int(c.get(k, 0)) > 0 for k in ("for", "against", "abstain")):
+                    consensus_bills.setdefault(fac, set()).add(bid)
     out = {}
-    for fac, entry in per.items():
+    for fac in per.keys() | consensus_bills.keys():
+        entry = per.get(fac, {})
         fid = int(str(fac).split("|")[0])
         up, down = int(entry.get("up", 0)), int(entry.get("down", 0))
+        consensus = len(consensus_bills.get(fac, set()) - retained)
         out[fid] = {"arrow": arrow_of(up, down), "up": up, "down": down,
-                    "examples": {side: [names[b] for b in entry[side + "_bills"][:2]]
+                    "consensus": consensus,
+                    "text": (f"голосовали со всеми ({consensus} законов приняты почти единогласно)"
+                             if consensus >= 3 else f"мало законов ({up + down})"),
+                    "examples": {side: [names[b] for b in entry.get(side + "_bills", [])[:2]]
                                  for side in ("up", "down")}}
     return out
 
@@ -98,6 +116,44 @@ def selftest() -> int:
              patch("direction_confidence.sign_table", return_value={"test": {"sign": "carries"}}), \
              patch(__name__ + ".names_ru_path", return_value=names):
             result = theme_arrows("security", {"rows": rows})[1]
+            unanimous = [{"bill_id": b, "vote_id": i, "bill_name": "test",
+                          "for_option_desc": "test",
+                          "by_faction": {"1|A": {"for": 10}, "2|B": {"for": 10},
+                                         "3|Absent": {"for": 0}}}
+                         for i, b in enumerate((1, 1, 2, 3))]
+            agreed = theme_arrows("security", {"rows": unanimous})
+            assert agreed[1]["consensus"] == agreed[2]["consensus"] == 3
+            assert 3 not in agreed
+            assert agreed[1]["arrow"] is None and agreed[1]["up"] == agreed[1]["down"] == 0
+            text = "голосовали со всеми (3 законов приняты почти единогласно)"
+            assert agreed[1]["text"] == text
+            # Проходим настоящие рендеры, а не проверяем только поле данных.
+            import render_overview as view
+            sample = {t: {1096: agreed[1]} for t in THEMES}
+            matrix = {"lines": [{"anchor_id": 1096, "line": "test", "a": {"status": "observed"}}]}
+            with patch.dict(view._THEME_CACHE, sample, clear=True), \
+                 patch("theme_arrows.theme_arrows", return_value={1096: agreed[1]}), \
+                 patch.object(view, "party_names", return_value={1096: "test"}), \
+                 patch.object(view, "load_ballot", return_value={"unmapped_factions": {}, "lists": [{
+                     "factions": [1096], "absent": [], "ru": "test", "he": "test", "leaders": "test"}]}), \
+                 patch.object(view, "owner_law_positions", return_value=[{
+                     "name": "test", "positions": {view._al(1096): "нет позиции"}}] * 4):
+                assert text in view._theme_lines({"anchor_id": 1096})
+                assert f"<td>{text}</td>" in view.theme_table(matrix, {})
+                assert text in view.ballot_table(matrix, {})
+            for n in (0, 1, 2):
+                small = theme_arrows("security", {"rows": unanimous[:0] if n == 0 else
+                                                    [r for r in unanimous if r["bill_id"] <= n]})
+                if n:
+                    assert small[1]["consensus"] == n
+                    assert small[1]["text"] == "мало законов (0)"
+                else:
+                    assert small == {}
+            mixed = theme_arrows("security", {"rows": unanimous + rows})[1]
+            assert mixed["consensus"] == 0, "различающие чтения исключают закон целиком"
+            empty = [dict(r, by_faction={"1|A": {"abstain": 10}}) for r in unanimous]
+            assert theme_arrows("security", {"rows": empty}) == {}, "нет за/против — не единогласие"
+
         assert result["examples"] == {"up": ["Русское название"], "down": ["חוק 2"]}
         assert result["arrow"] is None and result["up"] + result["down"] == 2
     print("самопроверка theme_arrows пройдена")

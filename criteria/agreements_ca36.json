@@ -1,0 +1,71 @@
+{
+  "government": 36,
+  "budget_years": [
+    2021,
+    2022
+  ],
+  "period_start": "2021-06-13",
+  "period_finish": "2022-12-29",
+  "declaration": "User v28, 19.10.2026; declared before OCR. Uncommitted by explicit request. Extraction rule unchanged.",
+  "candidate_lines_expected": null,
+  "reason_if_unchecked": "No independent count of monetary lines in unread scans. Exact page counts protect corpus completeness, not semantic recall.",
+  "agreements": [
+    {
+      "file": "CA36-BW.txt",
+      "pages": 6,
+      "faction_id": 1110,
+      "party_he": "כחול לבן",
+      "period_id": "1110-gov36"
+    },
+    {
+      "file": "CA36-Labor.txt",
+      "pages": 6,
+      "faction_id": 1100,
+      "party_he": "העבודה",
+      "period_id": "1100-gov36"
+    },
+    {
+      "file": "CA36-Meretz.txt",
+      "pages": 4,
+      "faction_id": null,
+      "party_he": "מרצ",
+      "period_id": "meretz-gov36"
+    },
+    {
+      "file": "CA36-NH.txt",
+      "pages": 7,
+      "faction_id": 1108,
+      "party_he": "תקווה חדשה",
+      "period_id": "1108-gov36"
+    },
+    {
+      "file": "CA36-Raam.txt",
+      "pages": 7,
+      "faction_id": 1099,
+      "party_he": "רע\"ם",
+      "period_id": "1099-gov36"
+    },
+    {
+      "file": "CA36-YB.txt",
+      "pages": 5,
+      "faction_id": 1104,
+      "party_he": "ישראל ביתנו",
+      "period_id": "1104-gov36"
+    },
+    {
+      "file": "CA36-Yemina.txt",
+      "pages": 9,
+      "faction_id": null,
+      "party_he": "ימינה",
+      "period_id": "yemina-gov36"
+    },
+    {
+      "file": "CA36-KaveiYesod.txt",
+      "pages": 5,
+      "faction_id": null,
+      "party_he": "קווי יסוד",
+      "period_id": "kaveiyesod-gov36"
+    }
+  ],
+  "page_count_evidence": "User counts in sorted filename order, verified independently with pdfinfo before completed OCR; initial party-order interpretation rejected."
+}

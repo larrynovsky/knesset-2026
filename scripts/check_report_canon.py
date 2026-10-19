@@ -182,6 +182,11 @@ def c_frame(src):
         if n == "index.html" and m.group(1) != "full": bad.append("index.html: рамка не full")
     return len(src), bad, f"{len(src)}/{len(src)}, позиция верна"
 
+# v28: exact wording requested by owner, no free-form numeric verdicts.
+MONEY_PATTERN = (r"в бюджете нашлась строка под [0-9]+ из [0-9]+ обещаний"
+                 r"|в соглашении 2021 года найдено [0-9]+ денежных обещаний; "
+                 r"(?:бюджет этих лет не выгружен|сопоставление требует проверки)")
+
 @check("значение клетки из закрытого списка, стрелка ↔ значение",
        [("денежное отсутствие со стрелкой", lambda s: cell_edit(s, lambda w: "<span class=a>↑</span>&#8201;денежных обещаний пока не разбирали")),
         ("значение вне списка", lambda s: cell_edit(s, lambda w: "скорее ослабляла")),
@@ -193,7 +198,7 @@ def c_closed(src):
     cells = [(a, t) for a, t in cells_of(src["index.html"]) if t]
     bad = []
     for a, t in cells:
-        if t not in CLOSED[:-1] and not re.fullmatch(r"в бюджете нашлась строка под [0-9]+ из [0-9]+ обещаний", t): bad.append(f"вне списка: {t[:40]!r}")
+        if t not in CLOSED[:-1] and not re.fullmatch(MONEY_PATTERN, t): bad.append(f"вне списка: {t[:40]!r}")
         elif a != ARROW.get(t, ""): bad.append(f"{t!r} со стрелкой {a!r}")
     return len(cells), sorted(set(bad))[:4], f"{len(cells)} клеток со значением"
 
@@ -202,7 +207,7 @@ def c_closed(src):
 def c_digits(src):
     tds = re.findall(r"<td class=c-(?:inst|eq)[^>]*>(.*?)</td>", src["index.html"], flags=re.S)
     bad = [t[:30] for t in tds if re.search(r"\d", re.sub(
-        r"в бюджете нашлась строка под [0-9]+ из [0-9]+ обещаний", "",
+        MONEY_PATTERN, "",
         _h.unescape(re.sub(r"<[^>]+>", "", t))))]
     return len(tds), bad[:3], f"{len(tds)} клеток"
 
@@ -507,6 +512,9 @@ def reproduce(root):
         (snapshot / "data").mkdir()
         for name in ("coverage_matrix.json", "votes_25.json", "budget_takanot.json"):
             shutil.copyfile(root / "data" / name, snapshot / "data" / name)
+        shutil.copytree(root / "data/agreements_ocr", snapshot / "data/agreements_ocr")
+        shutil.copyfile(root / "data/agreements_ocr_report_ca36.json",
+                        snapshot / "data/agreements_ocr_report_ca36.json")
         for path in (root / "data").glob("commitment_map_*.json"):
             shutil.copyfile(path, snapshot / "data" / path.name)
         first, second = pathlib.Path(tmp) / "first", pathlib.Path(tmp) / "second"

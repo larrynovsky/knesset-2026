@@ -125,7 +125,21 @@ def slug(agreement: dict) -> str:
     return Path(agreement["file"]).stem.removeprefix("CA37-").lower()
 
 
+def ca36_entries() -> list[dict]:
+    declared = json.loads((ROOT / "criteria/agreements_ca36.json").read_text())
+    if declared["budget_years"] != [2021, 2022] or declared["government"] != 36:
+        raise SystemExit("§11: CA36 must use 2021–2022")
+    return [dict(a, budget_years=declared["budget_years"],
+                 candidate_lines_expected=declared["candidate_lines_expected"],
+                 reason_if_unchecked=declared["reason_if_unchecked"])
+            for a in declared["agreements"] if a["file"] != "CA36-KaveiYesod.txt"]
+
+
 def validate_agreement(a: dict) -> None:
+    if isinstance(a, dict) and a.get("file", "").startswith("CA36-"):
+        if a not in ca36_entries():
+            raise SystemExit("§1/§11: CA36 declaration mismatch")
+        return
     required = ("file", "period_id", "faction_id", "party_he", "budget_years",
                 "candidate_lines_expected")
     if not isinstance(a, dict) or any(k not in a for k in required):
@@ -172,12 +186,13 @@ def cli_args():
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--agreement", help="имя файла из agreements в правиле")
+    group.add_argument("--ca36", action="store_true", help="government 36, declared by user v28")
     group.add_argument("--all", action="store_true", help="все объявленные соглашения")
     parser.add_argument("--selftest", action="store_true")
     parser.add_argument("--data-dir", type=Path, default=ROOT / "data")
     parser.add_argument("--output-dir", type=Path)
     args = parser.parse_args()
-    if not (args.selftest or args.agreement or args.all):
+    if not (args.selftest or args.agreement or args.all or args.ca36):
         parser.error("укажите --agreement FILE или --all")
     return args
 
@@ -204,7 +219,7 @@ def validate_mapping(d: dict, a: dict, sha: str) -> None:
     if d["rule_sha256"] != sha:
         raise SystemExit("§3 ОТКАЗ: rule_sha256 карты расходится с текущим правилом")
     actual, expected = len(d["items"]), a["candidate_lines_expected"]
-    if actual != expected or d["counts"]["candidates"] != actual:
+    if (expected is not None and actual != expected) or d["counts"]["candidates"] != actual:
         raise SystemExit(f"§23 ОТКАЗ: кандидатов {actual}, правило объявляет {expected}, counts={d['counts']['candidates']}")
 
 
@@ -624,7 +639,7 @@ def selftest() -> int:
         (data / "agreements_ocr" / other["file"]).write_text("\n".join(lines), encoding="utf-8")
         (data / TAKANOT.name).write_text(json.dumps(dict(budget, rows=[])), encoding="utf-8")
         (data / CHANGES.name).write_text('{"rows": []}', encoding="utf-8")
-        args = argparse.Namespace(selftest=False, all=True, agreement=None, data_dir=data, output_dir=data)
+        args = argparse.Namespace(ca36=False, selftest=False, all=True, agreement=None, data_dir=data, output_dir=data)
         fixture_rule = declared + "\n" + rule
         fixture_sha = hashlib.sha256(fixture_rule.encode()).hexdigest()
         with patch.dict(globals(), cli_args=lambda: args,
@@ -687,6 +702,19 @@ def selftest() -> int:
         split = build_map(rule, "fixture-sha", other, ["תקציב שיעמוד", "על סך של 500 מיליון"], empty_budget, [])
     assert split["items"][0]["category_rule"] == "глагол пункта: יעמוד על (стр. 1)", split["items"][0]
     print("GREEN: v1.4 — границы пунктов, маркеры страниц, оба направления, формы и приоритеты")
+
+    ca36 = ca36_entries()[0]
+    with contextlib.redirect_stdout(io.StringIO()):
+        absent = build_map(rule, "fixture-sha", ca36,
+                           ['⟦1⟧', 'יוקצו 50 מיליון תקנה תקציבית 22010203'], budget, [])
+    assert absent["years"] == [2021, 2022]
+    assert absent["budget_missing_years"] == [2021, 2022]
+    assert absent["items"][0]["rejection_reason"] == "budget_years_missing"
+    assert absent["items"][0]["candidates"] == []
+    assert absent["items"][0]["granularity"] is None
+    refuses("CA36 future budget year", lambda: validate_agreement(dict(ca36, budget_years=[2023])),
+            "declaration mismatch")
+    print("GREEN: CA36 missing years cannot become a match, even with explicit code")
 
     # Контрольная выборка v1.3 зашита: живые карты пересобраны под v1.4 и
     # прежней выборкой служить не могут (ревью Кодекса 18.10).
@@ -754,13 +782,18 @@ def build_map(text: str, sha: str, agreement: dict, lines: list[str],
     dstop = _derived_stop(units, HEADING_MARK)
 
     cands = candidates(lines, units)
-    if len(cands) != expected:
+    # §23-exempt: unread scans have no independent monetary-line census.
+    # This exemption is explicit in the pre-OCR CA36 declaration.
+    if expected is None and not agreement.get("reason_if_unchecked"):
+        raise SystemExit("§23: missing candidate count or exemption")
+    if expected is not None and len(cands) != expected:
         sys.exit(f"§23 ОТКАЗ: кандидатов {len(cands)}, правило объявляет {expected}. "
                  "Ожидание объявлено до прогона; расхождение — повод остановиться, "
                  "а не подкрутить список единиц.")
-    print(f"кандидатов: {len(cands)} (совпало с объявленным)")
+    print(f"кандидатов: {len(cands)}; ожидание: {expected}; причина: {agreement.get('reason_if_unchecked', '—')}")
 
     rows = budget["rows"]
+    missing_years = sorted(set(years) - {r["year"] for r in rows})
     rows10 = [r for r in rows if len(r["code"]) == 10]
     by_cy = {(r["code"], r["year"]): r for r in rows}
     print(f"бюджет: {len(rows)} строк (снимок {budget['fetched_at']}), "
@@ -791,6 +824,10 @@ def build_map(text: str, sha: str, agreement: dict, lines: list[str],
             items.append(item)
             continue
 
+        if agreement["file"].startswith("CA36-") and missing_years:
+            item["rejection_reason"] = "budget_years_missing"
+            items.append(item)
+            continue
         m = re.search(code_pat, c["quote_he"])
         if m:
             code = m.group(1).zfill(10)
@@ -840,6 +877,11 @@ def build_map(text: str, sha: str, agreement: dict, lines: list[str],
         "party": agreement["party_he"], "period_id": agreement["period_id"], "years": years,
         "rule": RULE_REL, "rule_sha256": sha,
         "budget_snapshot": budget["fetched_at"],
+        "budget_missing_years": missing_years,
+        "budget_status": "бюджет этих лет не выгружен" if missing_years else "сопоставление требует проверки",
+        "faction_id": agreement["faction_id"],
+        "agreement_file": agreement["file"],
+        "candidate_count_exemption": agreement.get("reason_if_unchecked"),
         "source_table": budget["table"],
         "counts": {"candidates": len(cands), "by_category": by_cat,
                    "by_rejection": by_rej, "manual_decisions": manual},
@@ -857,18 +899,54 @@ def build_map(text: str, sha: str, agreement: dict, lines: list[str],
     return result
 
 
+
+def ca36_summaries() -> dict:
+    """Required CA36 inputs; missing map/OCR must stop publication (§24)."""
+    from ocr_agreements import validate_corpus
+    data = ROOT / "data"
+    declared = json.loads((ROOT / "criteria/agreements_ca36.json").read_text())
+    validate_corpus(json.loads((data / "agreements_ocr_report_ca36.json").read_text()),
+                    data / "agreements_ocr",
+                    {Path(a["file"]).stem: a["pages"] for a in declared["agreements"]})
+    out = {}
+    for a in ca36_entries():
+        d = json.loads((data / f"commitment_map_{slug(a)}.json").read_text())
+        validate_mapping(d, a, hashlib.sha256(RULE.read_bytes()).hexdigest())
+        if d["ocr_sha256"] != hashlib.sha256((data / "agreements_ocr" / a["file"]).read_bytes()).hexdigest():
+            raise SystemExit("§14: stale CA36 map")
+        if d["declaration_sha256"] != hashlib.sha256((ROOT / "criteria/agreements_ca36.json").read_bytes()).hexdigest():
+            raise SystemExit("§14: stale CA36 declaration")
+        n = sum(i["category"] == "commitment" for i in d["items"])
+        status = d["budget_status"]
+        out[a["faction_id"] or slug(a)] = (
+            f"в соглашении 2021 года найдено {n} денежных обещаний; {status}")
+    return out
+
+
 def main() -> int:
     args = cli_args()
     if args.selftest:
         return selftest()
     text, sha = rule_text_and_sha()
-    selected = select_agreements(text, args)
+    selected = ca36_entries() if args.ca36 else select_agreements(text, args)
+    if args.ca36:
+        from ocr_agreements import validate_corpus
+        declaration = json.loads((ROOT / "criteria/agreements_ca36.json").read_text())
+        expected = {Path(a["file"]).stem: a["pages"] for a in declaration["agreements"]}
+        validate_corpus(json.loads((args.data_dir / "agreements_ocr_report_ca36.json").read_text()),
+                        args.data_dir / "agreements_ocr", expected)
     budget = json.loads((args.data_dir / TAKANOT.name).read_text(encoding="utf-8"))
     changes = json.loads((args.data_dir / CHANGES.name).read_text(encoding="utf-8"))["rows"]
     for agreement in selected:
         lines = (args.data_dir / "agreements_ocr" / agreement["file"]).read_text(
             encoding="utf-8").splitlines()
         result = build_map(text, sha, agreement, lines, budget, changes)
+        if args.ca36:
+            result["government_period"] = [declaration["period_start"], declaration["period_finish"]]
+            result["period_basis"] = "criteria/agreements_ca36.json; full government, not truncated Knesset-25 exposure"
+        result["ocr_sha256"] = hashlib.sha256((args.data_dir / "agreements_ocr" / agreement["file"]).read_bytes()).hexdigest()
+        if args.ca36:
+            result["declaration_sha256"] = hashlib.sha256((ROOT / "criteria/agreements_ca36.json").read_bytes()).hexdigest()
         out = (args.output_dir or args.data_dir) / f"commitment_map_{slug(agreement)}.json"
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(result, ensure_ascii=False, indent=1), encoding="utf-8")

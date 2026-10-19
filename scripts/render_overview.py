@@ -178,14 +178,14 @@ def theme_table(m: dict | None, cards: dict | None) -> str:
         for t in THEMES:
             a = arr[t].get(fid)
             n = a["up"] + a["down"] if a else 0
-            cells.append(f"<td>мало законов ({n})</td>" if n < 3 else
+            cells.append(f"<td>{(a or {}).get('text', f'мало законов ({n})')}</td>" if n < 3 else
                          f"<td>{sym[a['arrow']]} {a['up']}/{a['down']}</td>")
         rows.append(f'<tr><th scope=row><a href="f-{r["anchor_id"]}.html">{esc(names[r["anchor_id"]])}</a>'
                     f' <span class=he lang=he dir=rtl><bdi>{esc(r["line"])}</bdi></span></th>{"".join(cells)}</tr>')
     return ('<h2>Другие темы — первая грубая итерация</h2>'
             '<p>Стрелка по голосам фракции и знаку закона по теме; рядом — сколько '
             'законов в сторону плюса / минуса. Экономика: плюс — на стороне '
-            'производителя; государство и религия: ↑ — больше места религии в государстве, ↓ — меньше; безопасность: ↑ — норма расширяет полномочия армии и силовых структур, ↓ — сужает. При числе законов со знаком меньше трёх — «мало законов (N)».</p>'
+            'производителя; государство и религия: ↑ — больше места религии в государстве, ↓ — меньше; безопасность: ↑ — норма расширяет полномочия армии и силовых структур, ↓ — сужает. Если нет стрелки и менее трёх законов с почти единогласными голосованиями — «мало законов (N)». «Голосовали со всеми» — фракция участвовала в голосованиях по N законам со знаком темы, все эти голосования отсечены как почти единогласные.</p>'
             f'<table class=acts><thead><tr><th scope=col>Фракция</th>{heads}</tr></thead>'
             f'<tbody>{"".join(rows)}</tbody></table>')
 
@@ -271,7 +271,7 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
                 ax = cards.get(fid, {}).get("axis_institutions") or {}
                 axes.append(sym[ax.get("arrow")] if fid in observed and alpha_ok(ax) else "—")
             values = [axes] + [[
-                f"мало законов ({arrows[t].get(fid, {}).get('up', 0) + arrows[t].get(fid, {}).get('down', 0)})"
+                arrows[t].get(fid, {}).get("text", "мало законов (0)")
                 if arrows[t].get(fid, {}).get("arrow") is None else
                 sym[arrows[t][fid]["arrow"]] for fid in fids] for t in themes]
             cells = "".join(
@@ -287,6 +287,7 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
             '<div>Государство и религия — ↑ больше места религии.</div>'
             '<div>Экономика — ↑ на стороне производителя.</div>'
             '<div>Безопасность — ↑ расширяет полномочия армии и силовых.</div>'
+            '<div>«Голосовали со всеми» — фракция участвовала в голосованиях по N законам со знаком темы, все эти голосования отсечены как почти единогласные.</div>'
             '<div>↕ — и туда и обратно; «—» — знаков нет.</div></div>'
             '<p>Колонка «4 закона» — как фракции списка голосовали по четырём законам, которые ты пометил „недопустимо“; „за“ выделено; «—» — нет позиции или фракция не голосовала; «/» — расхождение фракций списка.</p>'
             '<table class="ballot"><thead><tr><th scope=col>Список и лидеры</th>'
@@ -479,6 +480,8 @@ def _fixture_signs(extra: dict) -> None:
 
 
 def selftest() -> int:
+    from ocr_agreements import selftest as ocr_selftest
+    ocr_selftest()
     sys.path.insert(0, str(ROOT / "scripts"))
     _fixture_signs({"\u05dc\u05d4\u05e2\u05d1\u05d9\u05e8": {"gloss_ru": "передать акт дальше"}})
     m = {"lines": [
@@ -634,6 +637,15 @@ def selftest() -> int:
     # §20/§24: все списки, их содержание и отказ на пустом leaders.
     list_pages = ballot_pages(live_matrix, live_cards, {}, laws)
     assert set(list_pages) == {f"l-{n}.html" for n in range(1, 15)}
+    from map_commitments import ca36_summaries
+    historical = ca36_summaries()
+    ocr_report = json.loads((ROOT / "data/agreements_ocr_report_ca36.json").read_text())
+    assert ocr_report["total_pages"] == 49 and len(ocr_report["files"]) == 8
+    assert set(historical) == {1100, 1104, 1110, 1099, 1108, "ca36-yemina", "ca36-meretz"}
+    assert historical["ca36-yemina"] in list_pages["l-2.html"]
+    democrats = next(p for p in list_pages.values() if "<title>Демократы" in p)
+    assert historical["ca36-meretz"] in democrats
+    assert "KaveiYesod" not in repr(historical)
     assert 'Беннет' in list_pages['l-2.html'] and 'href="f-1102.html"' in list_pages['l-2.html']
     for n, entry in enumerate(ballot_input["lists"], 1):
         page = list_pages[f"l-{n}.html"]
@@ -1302,6 +1314,7 @@ def _money_td(doc: str, fid: int) -> str:
 def _cell_word(html: str, where: str) -> str:
     words = [w for w in [v[1] for v in CELL.values()] + ["денежных обещаний пока не разбирали"] if f">{w}<span class=lb>" in html
              or f">{w}</b>" in html]
+    words += re.findall(r"в соглашении 2021 года найдено [0-9]+ денежных обещаний; [^<]+(?=<span class=lb>|</b>)", html)
     words += re.findall(r"в бюджете нашлась строка под [0-9]+ из [0-9]+ обещаний(?=<span class=lb>|</b>)", html)
     if len(words) != 1:
         raise Refuse(f"{where}: значений клетки {words}, а не одно")
@@ -1322,7 +1335,7 @@ def check_overview_money(doc: str, reviewed: set | dict, lines: set | None = Non
         raise Refuse(f"разобранные вне строк бюллетеня: {sorted(set(reviewed) - lines)}")
     for fid in lines:
         if (fid in reviewed) != (_cell_word(_money_td(doc, fid), f"обзор {fid}")
-                                 .startswith("в бюджете нашлась строка под ")):
+                                 .startswith(("в бюджете нашлась строка под ", "в соглашении 2021 года"))):
             raise Refuse(f"клетка «деньги» строки {fid} не согласована с разбором")
         if isinstance(reviewed, dict) and fid in reviewed:
             if _cell_word(_money_td(doc, fid), f"обзор {fid}") != reviewed[fid]:
@@ -1345,7 +1358,8 @@ def check_money_same(doc: str, page: str, fid: int, unresolved: bool = False) ->
         raise Refuse(f"f-{fid}: клетка «деньги» в обзоре ({a}) и на странице расходятся")
 
 
-def check_budget_page(page: str, cards: list, idx: dict, titles: list) -> None:
+def check_budget_page(page: str, cards: list, idx: dict, titles: list,
+                      summary: str | None = None) -> None:
     """Отсутствие любого готового разбора — отказ, даже если остальная страница цела."""
     # Разбор есть — проза «не построено» / сырой счёт ожиданий карты
     # извлечения ему противоречит (R8-F04/F05): отказ, а не две версии.
@@ -1354,7 +1368,7 @@ def check_budget_page(page: str, cards: list, idx: dict, titles: list) -> None:
             if stale in page:
                 raise Refuse(f"страница с разбором обязательств говорит «{stale}»")
         # именно в заголовке денежной клетки (R19-F02, M11), не где угодно
-        if [_cell_word(h, "страница") for h in _money_summaries(page)] != [budget_summary(cards)]:
+        if [_cell_word(h, "страница") for h in _money_summaries(page)] != [summary if summary is not None else budget_summary(cards)]:
             raise Refuse("денежное покрытие в заголовке не совпало с карточками")
     for card in cards:
         for date in card["snapshots"].values():
@@ -1414,7 +1428,7 @@ def _theme_lines(row: dict) -> str:
     for t, title in THEMES.items():
         a = _THEME_CACHE[t].get(fid, {"up": 0, "down": 0, "examples": {}})
         n = a["up"] + a["down"]
-        direction = f"мало законов ({n})" if n < 3 else word[a["arrow"]]
+        direction = a.get("text", f"мало законов ({n})") if n < 3 else word[a["arrow"]]
         examples = "".join(
             "<p>" + label + ":</p><ul>" + ("".join("<li><bdi>" + esc(name) + "</bdi></li>" for name in a["examples"].get(side, [])) or "<li>нет</li>") + "</ul>"
             for side, label in (("up", "в сторону ↑"), ("down", "в сторону ↓")))
@@ -1464,9 +1478,18 @@ def ballot_pages(matrix: dict, cards: dict, summaries: dict,
     names = party_names(matrix, cards)
     institutions = arrows(json.loads(VOTES.read_text(encoding="utf-8")), ARROW)
     translations = json.loads(names_ru_path().read_text(encoding="utf-8"))["names"]
+    from map_commitments import ca36_summaries
+    historical = ca36_summaries()
     pages = {}
     for number, entry in enumerate(ballot["lists"], 1):
         body = "".join(f'<p>{esc(note)}</p>' for note in entry["absent"])
+        historical_key = {"Беяхад («Вместе»)": ("ca36-yemina", "Ямина (Беннет)"),
+                          "Демократы (Авода + Мерец)": ("ca36-meretz", "Мерец")}.get(entry["ru"])
+        if historical_key:
+            key, label = historical_key
+            body += (f'<p data-ca36="{key}"><b>{label}:</b> '
+                     f'{esc(historical[key])}. Это история участника списка; '
+                     'не обязательство нынешнего объединения. Автоматическое извлечение из скана.</p>')
         if not entry["factions"]:
             body += '<p>голосов в этом Кнессете нет</p>'
         for fid in entry["factions"]:
@@ -1557,7 +1580,10 @@ def main() -> int:
                                           party_he=r["line"])
             if budgets.get(src):
                 budgets[r["anchor_id"]] = budgets[src]
+    from map_commitments import ca36_summaries
+    ca36 = ca36_summaries()
     summaries = {fid: budget_summary(bc) for fid, bc in budgets.items() if bc}
+    summaries.update({fid: value for fid, value in ca36.items() if isinstance(fid, int)})
     doc, total, filled = build(m, cards, summaries)
     check_overview_money(doc, summaries,
                          {r["anchor_id"] for r in m["lines"]})
@@ -1580,9 +1606,17 @@ def main() -> int:
         else:
             bc = budgets.get(r["anchor_id"], [])
             budget = budget_block(bc, idx, titles) if bc else ""
+            if r["anchor_id"] in ca36:
+                if bc:
+                    budget = ("<p>Соглашение правительства 37: " + esc(budget_summary(bc))
+                              + ".</p>" + budget)
+                budget = ('<p>Автоматическое извлечение из скана; число относится к строкам, '
+                          'распознанным правилом как обещания. Полнота и отсутствие повторов '
+                          'не подтверждены ручным чтением. 2021–2022: '
+                          + esc(ca36[r["anchor_id"]]) + '.</p>' + budget)
             page = faction_page(c, r, votes_for(ALIAS.get(r["anchor_id"], r["anchor_id"])),
-                                budget, budget_summary(bc), brief)
-            check_budget_page(page, bc, idx, titles)
+                                budget, summaries.get(r["anchor_id"], budget_summary(bc)), brief)
+            check_budget_page(page, bc, idx, titles, summaries.get(r["anchor_id"]))
             check_money_same(doc, page, r["anchor_id"])
         bad = jargon(page)
         if bad:
