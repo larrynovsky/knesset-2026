@@ -202,6 +202,48 @@ def c_ballot_money(src):
     return len(rows), bad, f"{len(rows)} строк; значения и полные title"
 
 
+@check("живые примеры тем (v67)",
+       [(f"{theme} {sign:+d}: {action}",
+         lambda s, t=theme, d=sign, a=action: list_page_mutant(s,
+             rf'<p class="theme-example" data-theme="{t}" data-sign="{re.escape(f"{d:+d}")}" data-bill-id="[0-9]+">.*?</p>',
+             (lambda m: m[0].replace(f'data-sign="{d:+d}"', f'data-sign="{-d:+d}"'))
+             if a == "подмена знака" else '', "index.html"))
+        for theme in ("religion_state", "economy", "security")
+        for sign in (1, -1) for action in ("подмена знака", "удаление примера")])
+def c_theme_examples(src):
+    from render_overview import THEME_WORDS
+    from theme_arrows import names_ru_path
+    translations = json.loads(names_ru_path().read_text())["names"]
+    votes = json.loads((ROOT / "data/votes_25.json").read_text())
+    present = {r.get("bill_id") for r in votes["rows"]}
+    reading = re.search(r'<section class="ballot-reading".*?</section>', src["index.html"], re.S)
+    entries = re.findall(r'<p class="theme-example" data-theme="([^"]+)" data-sign="([+-]1)" data-bill-id="([0-9]+)">(.*?)</p>',
+                         reading[0] if reading else '', re.S)
+    bad = []
+    expected = {(t, str(s)) for t in ("religion_state", "economy", "security") for s in (1, -1)}
+    if len(entries) != 6 or {(t, str(int(s))) for t, s, _, _ in entries} != expected:
+        bad.append("нужно ровно по одному примеру каждого знака в каждой из трёх тем")
+    for theme, sign, bid, body in entries:
+        if (theme, str(int(sign))) not in expected:
+            continue
+        criteria = json.loads((ROOT / "criteria" / f"theme_signs_{theme}.json").read_text())["signs"]
+        entry = criteria.get(bid, {})
+        entry = entry if isinstance(entry, dict) else {"sign": entry}
+        why = " ".join(entry.get("why_ru", "").split())
+        ru = translations.get(bid, {}).get("ru")
+        label = THEME_WORDS[theme][0 if int(sign) == 1 else 1]
+        if entry.get("sign") != int(sign) or int(bid) not in present:
+            bad.append(f"{theme}/{bid}: знак или участие в окне не совпадает")
+        # Показ — суть без служебного «Полный просмотр …:», первой фразой; сверяем, что это дословный кусок why_ru.
+        head = f'«{label}», например: {ru} — '
+        shown = text_of(body).strip()
+        if (not ru or not why or any(w in why.lower() for w in ("предварительн", "сомнит"))
+                or not shown.startswith(head) or len(shown) - len(head) < 20
+                or shown[len(head):].rstrip(".") not in why):
+            bad.append(f"{theme}/{bid}: подпись, перевод или объяснение не совпадает")
+    return len(entries), bad, "6 примеров: знаки, подписи и источники"
+
+
 @check("компактные клетки бюллетеня (v42)",
        [("v66: подмена слова религии", lambda s: list_page_mutant(s,
            r'(data-l="Религия"><span title="[^"]*"><b>)за больше религии', r'\1за меньше религии', "index.html")),

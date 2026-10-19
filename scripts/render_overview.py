@@ -308,7 +308,71 @@ def personal_result():
             "laws": owner_law_positions(["yashar"], votes)}
 
 
-def ballot_table(m: dict, cards: dict, source: Path | None = None, *, compact: bool = False, money_rows: str = "") -> str:
+# Примеры подобраны Claude 19.10 вручную как ТИПИЧНЫЕ для слова (алгоритм по охвату выбирал законы вроде
+# «омбудсмен по жалобам на судей» для «больше религии» — верно по знаку, но читателя сбивает). Знак и участие
+# в расчёте проверяются как у любого кандидата; не прошёл — откат к алгоритму ниже.
+PREFERRED_EXAMPLES = {
+    ("religion_state", 1): 2229723,    # подсудность раввинских судов (алименты при разводе)
+    ("religion_state", -1): 2219982,   # без господдержки учёбы неслужившим, включая ешивы
+    ("economy", 1): 2196837,           # приватизация общественного вещателя (единственный «+» в расчёте)
+    ("economy", -1): 2198458,          # срок исков о дискриминации к работодателю 3 → 5 лет
+    ("security", 1): 2214085,          # продление увеличенных сроков задержания по делам безопасности
+    ("security", -1): 2226911,         # госкомиссия по 7 октября
+}
+
+
+def _why_short(why: str) -> str:
+    """Без служебного «Полный просмотр …:» и до первой точки: читателю нужна суть, не история проверки."""
+    head, sep, tail = why.partition(": ")
+    if sep and any(w in head for w in ("прочтение", "просмотр", "Сверка")):
+        why = tail
+    first = re.split(r"\.\s+(?=[А-ЯЁA-Z])", why)[0].rstrip(".")   # «ст. 4» — не конец фразы
+    return first + "."
+
+
+def theme_examples(theme: str, votes: dict | None = None) -> dict:
+    """Примеры направлений: проверенные двумя, затем охват фракций, затем ID."""
+    from theme_arrows import names_ru_path
+    from direction_confidence import compose, arrow_rule, sign_table
+    from build_line_cards import _arrow_split
+    signs = json.loads((ROOT / "criteria" / f"theme_signs_{theme}.json").read_text())["signs"]
+    translations = json.loads(names_ru_path().read_text())["names"]
+    votes = votes if votes is not None else json.loads((ROOT / "data/votes_25.json").read_text())
+    rows = [r for r in votes["rows"] if str(r.get("bill_id")) in signs]
+    rule = dict(arrow_rule(), split_below=float(_arrow_split()))
+    per, _, _ = compose(rows, {int(b): int(v["sign"] if isinstance(v, dict) else v) for b, v in signs.items()}, sign_table(), rule)
+    eligible = {b for entry in per.values() for side in ("up", "down") for b in entry[side + "_bills"]}
+    factions = {}
+    for row in rows:
+        for fid, counts in (row.get("by_faction") or {}).items():
+            if any(int(counts.get(k, 0)) > 0 for k in ("for", "against", "abstain")):
+                factions.setdefault(row["bill_id"], set()).add(str(fid).split("|")[0])
+    result = {}
+    for sign in (1, -1):
+        candidates = []
+        for bid in eligible:
+            entry = signs[str(bid)]
+            if not isinstance(entry, dict):
+                continue
+            why = " ".join(entry.get("why_ru", "").split())
+            lower = why.lower()
+            ru = translations.get(str(bid), {}).get("ru")
+            if entry["sign"] != sign or not why or not ru or any(w in lower for w in ("предварительн", "сомнит")):
+                continue
+            reviewed = any(w in lower for w in ("второе прочтение", "согласны"))
+            candidates.append(dict(bill_id=bid, ru=ru, why_ru=why,
+                                   reviewed=reviewed, factions=len(factions.get(bid, set()))))
+        if not candidates:
+            raise Refuse(f"нет живого примера темы {theme}, знак {sign:+d}")
+        # Множество eligible неупорядочено: последний ключ делает выбор стабильным.
+        preferred = [c for c in candidates if c["bill_id"] == PREFERRED_EXAMPLES.get((theme, sign))]
+        result[sign] = preferred[0] if preferred else min(
+            candidates, key=lambda c: (not c["reviewed"], -c["factions"], c["bill_id"]))
+    result["n"] = len(eligible)
+    return result
+
+
+def ballot_table(m: dict, cards: dict, source: Path | None = None, *, compact: bool = False, money_rows: str = "", theme_samples: dict | None = None) -> str:
     """Списки владельца 19.10; стрелки принадлежат указанным фракциям."""
     from theme_arrows import THEMES, theme_arrows
     ballot = load_ballot(source)
@@ -317,6 +381,17 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None, *, compact: b
     observed = {r["anchor_id"] for r in m["lines"] if r["a"]["status"] == "observed"}
     themes = ("religion_state", "economy", "security")
     arrows = {t: theme_arrows(t) for t in themes}
+    # Полный обзор передаёт примеры; страницы списков используют только строки таблицы.
+    examples = {}
+    for theme in themes:
+        examples[theme] = "".join(
+            f'<p class="theme-example" data-theme="{theme}" data-sign="{sign:+d}" data-bill-id="{entry["bill_id"]}">'
+            f'«{THEME_WORDS[theme][0 if sign == 1 else 1]}», например: '
+            f'{esc(entry["ru"])} — {esc(_why_short(entry["why_ru"]))}</p>'
+            for sign, entry in (theme_samples or {}).get(theme, {}).items() if sign in (1, -1))
+        n = (theme_samples or {}).get(theme, {}).get("n")
+        if n is not None:   # экономика держится на единицах законов — читатель должен видеть вес колонки
+            examples[theme] += f'<p class="theme-example-n">В расчёте этой темы {n} {plural_ru(n, "закон", "закона", "законов")}{" — слабый сигнал" if n < 10 else ""}.</p>'
     sym = {"up": "↑", "down": "↓", "both": "↕", None: "—", "miss": "—", "none": "—"}
     laws = owner_law_positions(list(dict.fromkeys(_al(fid) for row in lists for fid in row.get("factions", []))))
     if len(laws) != 4:
@@ -440,8 +515,11 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None, *, compact: b
             '<p>«Со всеми» и число в скобках — сколько законопроектов голосовали почти единогласно; эти случаи не определяют направление. «Нет законов» — ни одного закона для направления; «Мало законов (N)» — данных для направления мало; прочерк в теме — направление не установлено.</p>'
             '<h4>Что значат колонки тем и денег</h4>'
             f'<p><b>Религия:</b> «за больше религии» — голосовал за больше места религии в государстве; «за меньше религии» — за меньше. {OWNER_EXCLUDE_NOTE}.</p>'
+            f'{examples["religion_state"]}'
             '<p><b>Экономика:</b> «легче бизнесу» — меньше налогов, поборов, барьеров и обязанностей работодателя; «строже к бизнесу» — больше (чаще всего это защита работников: запреты увольнения, сроки исков).</p>'
+            f'{examples["economy"]}'
             '<p><b>Безопасность:</b> «шире силовикам» — расширял полномочия армии, полиции и силовых структур; «уже силовикам» — сужал.</p>'
+            f'{examples["security"]}'
             '<p>«И так, и так» во всех четырёх темах — голосовал в обе стороны, без преобладающего направления.</p>'
             '<p><b>Деньги</b> — что партия выбила в бюджет, когда была в правительстве: 2021–2022 (Беннет — Лапид) и нынешнем, с конца 2022 года. '
             'Входя в коалицию, партия подписывает соглашение: «на такое-то дело выделить столько-то». '
@@ -662,7 +740,7 @@ def build(m: dict, cards: dict | None = None,
 проголосовали».</p>
 <p>Мы смотрим на поступки, а не на заявления. Голос в Кнессете
 проверяем по сохранённой поимённой записи.</p>
-{ballot_table(m, cards or {}, money_rows=body)}
+{ballot_table(m, cards or {}, money_rows=body, theme_samples={t: theme_examples(t) for t in ("religion_state", "economy", "security")})}
 <details class="faction-details"><summary>Подробно по 16 записям о фракциях 25-го Кнессета (включая прежние составы)</summary>
 {grounds_block(m, cards or {})}
 <h2>Сначала о том, чего мы не знаем</h2>
@@ -819,6 +897,39 @@ def selftest() -> int:
         assert not any(a in row_html for a in ('↑', '↓', '↕', 'href="f-'))
     from tempfile import TemporaryDirectory
     from unittest.mock import patch
+    # v67: синтетическое окно отличает приоритет прочтения, охват и ID;
+    # отсутствующий, единогласный и сомнительный кандидаты не проходят.
+    with TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / "criteria").mkdir()
+        signs = {str(i): {"sign": 1, "why_ru": "второе прочтение: согласны"} for i in range(1, 9)}
+        signs["1"]["why_ru"] = "без второго читателя"
+        signs["4"]["why_ru"] += "; предварительный"
+        signs["5"]["why_ru"] += "; сомнительно"
+        signs["8"]["sign"] = -1
+        (root / "criteria/theme_signs_economy.json").write_text(json.dumps({"signs": signs}))
+        names = root / "names.json"
+        names.write_text(json.dumps({"names": {str(i): {"ru": f"Закон {i}"} for i in range(1, 9)}}))
+        example_rows = [{"bill_id": i, "vote_id": i, "for_option_desc": "test",
+                 "chamber_counts": {"for": 60, "against": 40},
+                 "by_faction": {str(f): {"for": 5} for f in range(4 if i == 1 else 2)}}
+                for i in range(1, 9) if i != 6]
+        example_rows[-2]["chamber_counts"] = {"for": 100, "against": 0}  # 7: не определяет направление
+        with patch(__name__ + ".ROOT", root), patch("theme_arrows.names_ru_path", return_value=names), \
+             patch("direction_confidence.sign_table", return_value={"test": {"sign": "carries"}}):
+            chosen = theme_examples("economy", {"rows": example_rows})
+            assert chosen[1]["bill_id"] == 2 and chosen[-1]["bill_id"] == 8
+            assert theme_examples("economy", {"rows": list(reversed(example_rows))}) == chosen
+            example_rows[2]["by_faction"]["9"] = {"for": 5}
+            assert theme_examples("economy", {"rows": example_rows})[1]["bill_id"] == 3
+            assert theme_examples("economy", {"rows": [r for r in example_rows if r["bill_id"] != 3]})[1]["bill_id"] == 2
+            for sample in ([], [r for r in example_rows if r["bill_id"] in (4, 5, 7, 8)]):
+                try:
+                    theme_examples("economy", {"rows": sample})
+                except Refuse:
+                    pass
+                else:
+                    raise AssertionError("окно без допустимого плюса выдало пример")
     # v49: изменённые данные должны изменить пример, а отсутствие права
     # на стрелку — убрать численный вывод. Ловит захардкоженный пример.
     altered_cards = dict(live_cards)
