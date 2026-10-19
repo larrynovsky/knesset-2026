@@ -2254,7 +2254,8 @@ def slice_block(letters: str, data: Path | None = None, ru: str = "") -> str:
             continue
         empty = kn.get("signed_bills") == 0
         units = []
-        for link in cell.get("links", []):
+        shown = cell.get("links", []) + (cell.get("silent", []) if empty else [])
+        for link in shown:
             he = names.get(link["fid"], str(link["fid"]))
             label = (esc(link["note"]) if link["note"] else esc(ru) if ru else "") + \
                 f' <span lang=he dir=rtl>{esc(he)}</span>'
@@ -2263,7 +2264,7 @@ def slice_block(letters: str, data: Path | None = None, ru: str = "") -> str:
                 label += f' <small>(фракция существовала до {link["ended"]})</small>'
             if link["type"] == "joint":
                 label += " <small>(общий список — голоса одни на всех участников)</small>"
-            units.append((f'<bdi>{label}</bdi>, {esc(link["role"])}', link["themes"]))
+            units.append((f'<bdi>{label}</bdi>, {esc(link["role"])}', link.get("themes", {})))
         if cell.get("personal", {}).get("themes"):
             who = ", ".join(cell["personal"]["stats"])
             units.append((f'личные голоса: {esc(who)}', cell["personal"]["themes"]))

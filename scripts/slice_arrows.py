@@ -128,7 +128,9 @@ def compute() -> dict:
                 if not voted:
                     # фракция возникла после последнего голосования (роспуск 30.06.2022) или не
                     # голосовала по законам выборки — звена нет, но факт записан для страницы
-                    cell.setdefault("silent", []).append(fid)
+                    cell.setdefault("silent", []).append({
+                        "fid": fid, "type": typ, "note": note[0] if note else "",
+                        "role": "в коалиции, без министров" if fid in coalition else role(gd.get(fid, []), life[fid])})
                     continue
                 fin = next(r.get("FinishDate") for r in fac_rows if r["Id"] == fid)[:10]
                 end = WINDOW_END[n]
