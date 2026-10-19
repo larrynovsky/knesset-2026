@@ -241,20 +241,22 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
         if any(fid not in names for fid in fids):
             raise Refuse(f"бюллетень: неизвестная фракция у {row['ru']}")
         absent = "".join(f'<span class=norec>{esc(note)}</span>' for note in row["absent"])
+        links = ", ".join(f'<a href="f-{fid}.html">{esc(names[fid])}</a>' for fid in fids)
+        sources = f'<span class=norec>по голосам: {links}</span>' if fids else ""
         who = (f'<th scope=row>{esc(row["ru"])} '
                f'<span lang=he dir=rtl><bdi>{esc(row["he"])}</bdi></span>'
-               f'<span class=norec>{esc(row["leaders"])}</span>{absent}</th>')
+               f'<span class=norec>{esc(row["leaders"])}</span>{sources}{absent}</th>')
         law_marks = []
         for law in laws:
-            positions = dict.fromkeys(law["positions"][_al(fid)] for fid in fids)
+            positions = dict.fromkeys("—" if law["positions"][_al(fid)] == "нет позиции"
+                                      else law["positions"][_al(fid)] for fid in fids)
             label = "/".join("<b>за</b>" if pos == "за" else esc(pos) for pos in positions)
             law_marks.append(f'<span title="{esc(law["name"])}">{label}</span>')
         law_cell = ('<td data-l="4 закона владельца"><span class="ballot-laws">' +
                     "".join(law_marks) + '</span></td>') if fids else '<td data-l="4 закона владельца">—</td>'
         if not fids:
-            cells = '<td colspan="5">голосов в этом Кнессете нет</td>'
+            cells = '<td colspan="4">голосов в этом Кнессете нет</td>'
         else:
-            links = "<br>".join(f'<a href="f-{fid}.html">{esc(names[fid])}</a>' for fid in fids)
             axes = []
             for fid in fids:
                 ax = cards.get(fid, {}).get("axis_institutions") or {}
@@ -263,7 +265,7 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
                 f"мало законов ({arrows[t].get(fid, {}).get('up', 0) + arrows[t].get(fid, {}).get('down', 0)})"
                 if arrows[t].get(fid, {}).get("arrow") is None else
                 sym[arrows[t][fid]["arrow"]] for fid in fids] for t in themes]
-            cells = f'<td>{links}</td>' + "".join(
+            cells = "".join(
                 f'<td class="ballot-axis" data-l="{esc(label)}">{" / ".join(dict.fromkeys(value))}</td>'
                 for label, value in zip(["Суд", "Религия", "Экономика", "Безопасность"], values))
         body.append(f'<tr data-ballot-list="{esc(row["he"])}">{who}{law_cell}{cells}</tr>')
@@ -277,11 +279,10 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
             '<div>Экономика — ↑ на стороне производителя.</div>'
             '<div>Безопасность — ↑ расширяет полномочия армии и силовых.</div>'
             '<div>↕ — и туда и обратно; «—» — знаков нет.</div></div>'
-            '<p>Колонка «4 закона» — как фракции списка голосовали по четырём законам, которые ты пометил „недопустимо“; „за“ выделено.</p>'
+            '<p>Колонка «4 закона» — как фракции списка голосовали по четырём законам, которые ты пометил „недопустимо“; „за“ выделено; «—» — нет позиции или фракция не голосовала; «/» — расхождение фракций списка.</p>'
             '<table class="ballot"><thead><tr><th scope=col>Список и лидеры</th>'
-            '<th scope=col>4 закона владельца</th>'
-            '<th scope=col>Читается по голосам фракций</th>'
-            f'<th scope=col>Суд и парламент</th>{heads}</tr></thead>'
+            '<th scope=col>4 закона</th>'
+            f'<th scope=col>Суд</th>{heads}</tr></thead>'
             f'<tbody>{"".join(body)}</tbody></table>'
             '<details><summary>Ещё 24 списка без мест в Кнессете</summary>'
             f'<ul>{small_lists}</ul></details><p class=dim>{unmapped}</p>')
@@ -374,13 +375,14 @@ def build(m: dict, cards: dict | None = None,
 <title>Что фракции делали — 25-й Кнессет</title>
 <style>{css_from_mockup()}
 .owner-laws{{width:100%;min-width:36rem;table-layout:fixed}} .owner-laws th,.owner-laws td{{padding:9px 6px;overflow-wrap:anywhere}} .owner-laws th{{font-size:13px}} .owner-laws td{{font-size:14px}}
-.ballot{{width:100%;table-layout:fixed;border-collapse:collapse;font:13px/1.4 system-ui,sans-serif}}
-.ballot th,.ballot td{{padding:8px 4px;text-align:left;vertical-align:top;border-bottom:1px dotted var(--rule);overflow-wrap:anywhere}}
-.ballot thead th{{overflow-wrap:anywhere;word-break:normal;hyphens:auto}}
+.ballot{{width:100%;table-layout:auto;border-collapse:collapse;font:13px/1.4 system-ui,sans-serif}}
+.ballot th,.ballot td{{padding:8px 4px;text-align:left;vertical-align:top;border-bottom:1px dotted var(--rule)}}
+.ballot,.ballot *{{overflow-wrap:normal;word-break:normal;hyphens:manual}}
+.ballot thead th{{white-space:nowrap}}
 .ballot-legend{{margin:1rem 0}}
-.ballot th:first-child{{width:22%}} .ballot th:nth-child(2){{width:28%}}
+.ballot th:first-child{{width:28%}}
 .ballot-laws{{display:flex;gap:4px;align-items:flex-start}}
-.ballot-laws>span{{flex:1;min-width:0;border:1px solid var(--rule);padding:2px;text-align:center;font-weight:400}}
+.ballot-laws>span{{flex:1;white-space:nowrap;hyphens:none;border:1px solid var(--rule);padding:2px;text-align:center;font-weight:400}}
 .ballot .norec{{display:block;font-size:12px;color:var(--dim)}}
 @media(max-width:600px){{
  .ballot,.ballot tbody,.ballot tr{{display:block;width:100%}}
@@ -496,6 +498,10 @@ def selftest() -> int:
     live_doc, _, _ = build(live_matrix, live_cards)
     assert live_doc.index('data-frame=full') < live_doc.index('class="owner-laws"') < live_doc.index('Сначала о том')
     assert live_doc.index('data-frame=full') < live_doc.index('id="ballot"') < live_doc.index('id="grounds"')
+    # Оракул CSS-контракта; геометрию браузера он не заменяет.
+    assert '.ballot,.ballot *{overflow-wrap:normal;word-break:normal;hyphens:manual}' in live_doc
+    assert '.ballot thead th{white-space:nowrap}' in live_doc
+    assert 'flex:1;white-space:nowrap;hyphens:none;' in live_doc
     ballot_html = ballot_table(live_matrix, live_cards)
     assert ballot_html.count('data-ballot-list=') == 14 and 'Беннет' in ballot_html
     # Проверка разметки, не геометрии: четыре подписи и значения в прежнем порядке.
@@ -508,7 +514,7 @@ def selftest() -> int:
     for name in ('Резервисты',):
         row_html = next(r for r in re.findall(r'<tr data-ballot-list=.*?</tr>', ballot_html) if name in r)
         assert '<td data-l="4 закона владельца">—</td>' in row_html
-        assert '<td colspan="5">голосов в этом Кнессете нет</td>' in row_html
+        assert '<td colspan="4">голосов в этом Кнессете нет</td>' in row_html
         assert not any(a in row_html for a in ('↑', '↓', '↕', 'href='))
     from tempfile import TemporaryDirectory
     from unittest.mock import patch
@@ -529,6 +535,18 @@ def selftest() -> int:
     likud = next(r for r in re.findall(r'<tr data-ballot-list=.*?</tr>', split_laws) if 'Ликуд' in r)
     assert likud.count('<b>за</b>/против') == 4 and '<b>против</b>' not in likud
     assert 'title="Закон &quot;пример&quot;"' in likud
+    fake_laws[0]['positions']['1108'] = 'нет позиции'
+    with patch(__name__ + '.owner_law_positions', return_value=fake_laws):
+        with patch(__name__ + '._al', side_effect=lambda fid: '1096' if int(fid) != 1108 else '1108'):
+            compact = ballot_table(live_matrix, live_cards)
+    assert compact.count('<b>за</b>/—') == 4
+    table = ballot_html.split('<table class="ballot">')[1].split('</table>')[0]
+    assert table.count('scope=col') == 6 and 'нет позиции' not in table
+    assert 'Читается по голосам фракций' not in table
+    for row in re.findall(r'<tr data-ballot-list=.*?</tr>', table):
+        if 'href=' in row:
+            first = row.split('</th>')[0]
+            assert 'по голосам: ' in first and row.count('href=') == first.count('href=')
     print("ЗЕЛЁНЫЙ: 4 закона в бюллетене — Ликуд за; Резервисты —; расхождения сохранены; пустой источник отклонён")
     ballot_input = json.loads((ROOT / "criteria/ballot_2026.json").read_text(encoding="utf-8"))
     for entry in ballot_input["lists"]:
