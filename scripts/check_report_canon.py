@@ -515,7 +515,7 @@ def reproduce(root):
             shutil.copytree(root / name, snapshot / name,
                             ignore=shutil.ignore_patterns("__pycache__"))
         (snapshot / "data").mkdir()
-        for name in ("coverage_matrix.json", "votes_25.json", "budget_takanot.json", "budget_takanot_2021_2022.json"):
+        for name in ("coverage_matrix.json", "votes_25.json", "budget_takanot.json", "budget_takanot_2021_2022.json", "direction_arrow_2026-10-07.json"):
             shutil.copyfile(root / "data" / name, snapshot / "data" / name)
         shutil.copytree(root / "data/agreements_ocr", snapshot / "data/agreements_ocr")
         shutil.copyfile(root / "data/agreements_ocr_report_ca36.json",
@@ -583,7 +583,7 @@ def selftest_reproduce():
         for name in ("scripts", "cards", "criteria", "docs/reference", "data"):
             (fixture / name).mkdir(parents=True)
         shutil.copytree(ROOT / "design/mockup_v5", fixture / "design/mockup_v5")
-        for name in ("coverage_matrix.json", "votes_25.json", "budget_takanot.json", "budget_takanot_2021_2022.json"):
+        for name in ("coverage_matrix.json", "votes_25.json", "budget_takanot.json", "budget_takanot_2021_2022.json", "direction_arrow_2026-10-07.json"):
             (fixture / "data" / name).write_text("{}")
         # Общий build_site вызывает все генераторы; здесь проверяется обёртка.
         for module in ("render_axes", "render_card_page"):
