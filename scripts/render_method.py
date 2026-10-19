@@ -74,6 +74,8 @@ def facts() -> dict:
     f["models"] = arrow.get("models") or {}
     f["attempted"] = arrow.get("attempted")
     f["arrow_published"] = f["alpha"] >= f["alpha_threshold"]
+    from build_line_cards import COVERAGE_FIRST
+    f["coverage_first"] = COVERAGE_FIRST
 
     cov = json.loads(COVERAGE.read_text(encoding="utf-8"))
     f["lines"] = cov["counts"]["lines"]
@@ -104,6 +106,9 @@ def build(f: dict) -> str:
     from render_overview import SHORT_FRAME, css_from_mockup, esc
     models = ", ".join(f"{k}: {esc(str(v))}" for k, v in sorted(f["models"].items()))
     verdict = ("публикуется" if f["arrow_published"]
+               else "публикуется как первая грубая итерация: порог, объявленный "
+               "до прогона, не достигнут и временно снят решением владельца "
+               "19.10 «покрытие вместо точности»" if f.get("coverage_first")
                else "НЕ публикуется — порог, объявленный до прогона, не достигнут")
     money_rows = "".join(
         f"<tr><td>{fid}</td><td>{v['candidates']}</td><td>{v['commitments']}</td>"
@@ -237,7 +242,7 @@ def selftest() -> int:
     g = dict(f, alpha_threshold=0.1, arrow_published=f["alpha"] >= 0.1)
     assert "публикуется" in build(g) and "НЕ публикуется" not in build(g), \
         "вердикт не следует за порогом — число на странице декоративно"
-    h = dict(f, alpha_threshold=0.99, arrow_published=False)
+    h = dict(f, alpha_threshold=0.99, arrow_published=False, coverage_first=False)
     assert "НЕ публикуется" in build(h)
     print("  OK: вердикт о стрелке вычисляется из порога, не вписан")
     # Провокация: без объявления чтения владельцем — отказ, не пустой раздел.
