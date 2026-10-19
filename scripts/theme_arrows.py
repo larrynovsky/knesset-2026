@@ -57,8 +57,8 @@ def theme_arrows(theme: str, votes: dict | None = None) -> dict:
     consensus_bills, retained = {}, set()
     for r in rows:
         bid, bf = r["bill_id"], r.get("by_faction") or {}
-        fors = sum(int(c.get("for", 0)) for c in bf.values())
-        against = sum(int(c.get("against", 0)) for c in bf.values())
+        fors = r.get("chamber_counts", {}).get("for", sum(int(c.get("for", 0)) for c in bf.values()))
+        against = r.get("chamber_counts", {}).get("against", sum(int(c.get("against", 0)) for c in bf.values()))
         if not lopsided(fors, against, rule["drop_below"]):
             retained.add(bid)
         elif fors + against and signs[bid] in (-1, 1):
@@ -68,7 +68,8 @@ def theme_arrows(theme: str, votes: dict | None = None) -> dict:
     out = {}
     for fac in per.keys() | consensus_bills.keys():
         entry = per.get(fac, {})
-        fid = int(str(fac).split("|")[0])
+        key = str(fac).split("|")[0]
+        fid = int(key) if key.isdigit() else key
         up, down = int(entry.get("up", 0)), int(entry.get("down", 0))
         consensus = len(consensus_bills.get(fac, set()) - retained)
         out[fid] = {"arrow": arrow_of(up, down), "up": up, "down": down,
@@ -80,6 +81,72 @@ def theme_arrows(theme: str, votes: dict | None = None) -> dict:
     return out
 
 
+# §2: личная история не наследует голоса фракции после ухода.
+PERSONAL = {"Гади Айзенкот": (30836, "איזנקוט"), "Хили Тропер": (30683, "טרופר")}
+PERSONAL_NOTE = "по личным голосам Айзенкота и Тропера в 25-м Кнессете (до ухода)"
+
+
+def personal_votes(votes=None, cache=None, members=None):
+    """Строгое большинство двоих: два одинаковых ответа; иначе нет позиции.
+
+    Отсутствующая строка означает не голосовал, а не голос против.
+    chamber_counts сохраняет зал без двойного счёта личных голосов.
+    """
+    from collections import Counter
+    from fetch_votes import RESULT
+    votes = votes if votes is not None else json.loads((ROOT / "data/votes_25.json").read_text())
+    cache = cache or ROOT / "data/named_votes_cache"
+    members = members if members is not None else PERSONAL
+    stats = {name: {"mk_id": mid, "dates": [], "positions": Counter(),
+                    "compared": 0, "matched": 0} for name, (mid, _) in members.items()}
+    from render_landmark_table import stance
+    from build_line_cards import _arrow_split
+    rows = []
+    seen_votes = set()
+    split = float(_arrow_split())
+    for row in votes["rows"]:
+        data = json.loads((cache / f'{row["vote_id"]}.json').read_text())
+        if (data["vote_id"] != row["vote_id"]
+                or len(data["rows"]) != row["named_total"]
+                or any(r["VoteID"] != row["vote_id"] for r in data["rows"])
+                or len({r["MkId"] for r in data["rows"]}) != len(data["rows"])):
+            raise ValueError("personal: неверный vote_id кэша")
+        positions = []
+        gantz = next((c for k, c in row["by_faction"].items() if k.startswith("1098|")), None)
+        gp = stance(gantz, split)
+        for name, (mid, surname) in members.items():
+            found = [r for r in data["rows"] if r["MkId"] == mid]
+            if len(found) > 1 or any(r["LastName"] != surname for r in found):
+                raise ValueError(f"personal: mk_id/name mismatch: {name}")
+            pos = "absent"
+            if found:
+                r = found[0]
+                if r["ResultCode"] not in RESULT:
+                    raise ValueError("personal: неизвестный ResultCode")
+                pos = RESULT[r["ResultCode"]]
+                st = stats[name]
+                if pos in ("for", "against", "abstain") and row["vote_id"] not in seen_votes:
+                    st["dates"].append(r["VoteDate"][:10])
+                    st["positions"][pos] += 1
+                    if gp in ("for", "against", "abstain"):
+                        st["compared"] += 1
+                        st["matched"] += pos == gp
+            positions.append("absent" if pos == "present" else pos)
+        seen_votes.add(row["vote_id"])
+        counts = Counter(positions)
+        personal = {k: n for k, n in counts.items() if n > len(members) / 2}
+        chamber = {k: sum(c.get(k, 0) for c in row["by_faction"].values())
+                   for k in ("for", "against")}
+        rows.append(dict(row, by_faction={"yashar|ישר!": personal}, chamber_counts=chamber,
+                         personal_positions=dict(zip(members, positions))))
+    for name, st in stats.items():
+        if not st["dates"]:
+            raise ValueError(f"personal: нет голосований для {name} mk_id={st['mk_id']}")
+        st.update(first=min(st["dates"]), last=max(st["dates"]), votes=len(st["dates"]))
+        del st["dates"]
+    return dict(votes, rows=rows), stats
+
+
 def selftest() -> int:
     assert arrow_of(1, 9) == "down" and arrow_of(9, 1) == "up" and arrow_of(5, 5) == "both"
     assert all(arrow_of(n, 0) is None for n in range(3))
@@ -88,6 +155,49 @@ def selftest() -> int:
         assert load_signs(theme), f"нет знаков темы {theme}"
     from unittest.mock import patch
     from tempfile import TemporaryDirectory
+    # §20: живой кеш, непустые уникальные голоса, и подмена личности.
+    personal, stats = personal_votes()
+    assert all(st["votes"] > 0 for st in stats.values())
+    raw_counts = {name: set() for name in PERSONAL}
+    for row in personal["rows"]:
+        raw = json.loads((ROOT / f'data/named_votes_cache/{row["vote_id"]}.json').read_text())["rows"]
+        for name, (mid, _) in PERSONAL.items():
+            if any(r["MkId"] == mid and r["ResultCode"] in (7, 8, 9) for r in raw):
+                raw_counts[name].add(row["vote_id"])
+    assert {n: st["votes"] for n, st in stats.items()} == {n: len(v) for n, v in raw_counts.items()}
+    for wrong_id in (-1, PERSONAL["Хили Тропер"][0]):
+        wrong = dict(PERSONAL, **{"Гади Айзенкот": (wrong_id, "איזנקוט")})
+        try:
+            personal_votes(members=wrong)
+        except ValueError as exc:
+            assert "нет голосований" in str(exc) or "mismatch" in str(exc)
+        else:
+            raise AssertionError("подмена mk_id не обнаружена")
+    # Фракционный агрегат постоянен; меняем только rows кеша — стрелка меняется.
+    with TemporaryDirectory() as tmp:
+        cache = Path(tmp)
+        fixture = {"rows": [dict(vote_id=i, bill_id=i, bill_name="test", date="2024-01-01",
+                                 named_total=2, for_option_desc="test",
+                                 by_faction={"1098|Gantz": {"for": 10}, "1|Other": {"against": 10}})
+                            for i in (1, 2, 3)]}
+        for codes, expected in (((7, 7), "up"), ((8, 8), "down"), ((7, 8), None),
+                                ((9, 9), None), ((6, 7), None)):
+            for row in fixture["rows"]:
+                raw = [dict(MkId=mid, LastName=surname, VoteID=row["vote_id"],
+                            VoteDate="2024-01-01", ResultCode=code)
+                       for (mid, surname), code in zip(PERSONAL.values(), codes)]
+                (cache / f'{row["vote_id"]}.json').write_text(json.dumps(dict(vote_id=row["vote_id"], rows=raw)))
+            # Present-only member needs one observed vote to pass identity coverage.
+            if codes == (6, 7):
+                raw[0]["ResultCode"] = 7
+                (cache / '3.json').write_text(json.dumps(dict(vote_id=3, rows=raw)))
+            pv, _ = personal_votes(fixture, cache)
+            with patch(__name__ + ".load_signs", return_value={1: 1, 2: 1, 3: 1}), \
+                 patch("direction_confidence.sign_table", return_value={"test": {"sign": "carries"}}):
+                assert theme_arrows("security", pv).get("yashar", {}).get("arrow") == expected
+            if codes == (7, 8):
+                assert all(r["by_faction"]["yashar|ישר!"] == {} for r in pv["rows"])
+    print("v38: личные голоса из кеша; уникальные N > 0; подмены mk_id отклонены; мутация rows меняет стрелку")
     # Удалённый вход обязан остановить расчёт, а не означать нулевое покрытие.
     with TemporaryDirectory() as tmp, patch(__name__ + ".ROOT", Path(tmp)):
         try:

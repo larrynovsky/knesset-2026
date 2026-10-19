@@ -164,11 +164,19 @@ def c_plural_ru(src):
         ("возвращено длинное единогласие", lambda s: edit(s, "index.html", "со всеми (9/3)",
           "голосовали со всеми (почти единогласно: 9 законов)")),
         ("снят title устойчивости", lambda s: dict(s, **{"index.html": re.sub(
-          r' title="устойчива: [0-9.]+%"', '', s["index.html"], count=1)}))])
+          r' title="устойчива: [0-9.]+%"', '', s["index.html"], count=1)})),
+        ("снята оговорка личной стрелки", lambda s: edit(s, "index.html",
+          ' title="Устойчивость личной стрелки не оценивалась"', ""))])
 def c_compact_ballot(src):
-    cells = re.findall(r'<td class="ballot-axis"[^>]*>(.*?)</td>', src["index.html"], re.S)
+    entries = re.findall(r'<td class="ballot-axis"([^>]*)>(.*?)</td>', src["index.html"], re.S)
+    cells = [cell for _, cell in entries]
     bad = []
-    for cell in cells:
+    for attrs, cell in entries:
+        if "data-personal=1" in attrs:
+            expected = re.findall(r'<span title="Устойчивость личной стрелки не оценивалась">[↑↓↕]</span>', cell)
+            if len(expected) != len(re.findall(r'[↑↓↕]', cell)):
+                bad.append("личная стрелка без оговорки об устойчивости")
+            continue
         notes = re.findall(r'<span title="(устойчива|шаткая|ненадёжна): ([0-9.]+)%">[↑↓↕]<small class="robustness">(.*?)</small></span>', cell)
         if len(notes) != len(re.findall(r'[↑↓↕]', cell)):
             bad.append("стрелка без title со словом и процентом")
@@ -269,7 +277,7 @@ def c_digits(src):
         ("потерян счёт в списке", lambda s: edit(s, "l-2.html", "не голосовали ≥22", "не голосовали неизвестно"))])
 def c_owner_votes(src):
     bad, inspected = [], 0
-    count = r"за [0-9]+, против [0-9]+, воздержались [0-9]+; не голосовали ≥[0-9]+"
+    count = r"за [0-9]+, против [0-9]+, воздержались [0-9]+; не голосовали ≥?[0-9]+"
     rows = re.findall(r'<tr data-owner-fid="([0-9]+)">(.*?)</tr>', src["index.html"])
     if len(rows) != 16:
         bad.append("нет 16 фракций четырёх законов")

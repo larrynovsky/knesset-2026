@@ -775,8 +775,8 @@ def compose(rows: list[dict], directions: dict, table: dict,
         # обязана останавливать стрелку, а не проскакивать потому, что
         # строку всё равно выбросило единогласие или отсутствие знака акта.
         vs = sign_of(r.get("for_option_desc"), table)
-        f_all = sum(int(c.get("for", 0)) for c in bf.values())
-        a_all = sum(int(c.get("against", 0)) for c in bf.values())
+        f_all = r.get("chamber_counts", {}).get("for", sum(int(c.get("for", 0)) for c in bf.values()))
+        a_all = r.get("chamber_counts", {}).get("against", sum(int(c.get("against", 0)) for c in bf.values()))
         if lopsided(f_all, a_all, rule["drop_below"]):
             dropped.add(r.get("vote_id"))
             stat["выброшено по единогласию"] += 1

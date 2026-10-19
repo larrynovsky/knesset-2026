@@ -313,7 +313,8 @@ def arrows(votes: dict, directions_path: Path | None) -> dict:
     per, theme, _ = compose(votes["rows"], dirs, sign_table(), rule)
     out = {}
     for fac, entry in per.items():
-        fid = int(str(fac).split("|")[0])
+        key = str(fac).split("|")[0]
+        fid = int(key) if key.isdigit() else key
         c = dict(cell(entry, len(theme), a_eff, RU.get(fid, str(fid)), rule),
                  alpha=round(a_eff, 4), alpha_measured=round(a, 4))
         if COVERAGE_FIRST:
