@@ -273,13 +273,14 @@ def axis_directions(directions_path: Path) -> tuple[dict, list]:
             for bill, sg in json.loads(tb.read_text(encoding="utf-8"))["signs"].items():
                 dirs.setdefault(int(bill), int(sg))
     # Фаза точности 19.10: второе независимое прочтение по полному тексту
-    # (Codex v32/v39). Где оно расходится со знаком большинства — знак снят:
+    # (Codex v32/v39). Где оно прямо расходится со знаком большинства — знак снят
+    # (отказ второго чтения — null — не считается доводом против):
     # спорный акт не голосует в стрелке. Нет файла — нет эффекта.
     second = ROOT / "criteria" / "axis_second_reading_2026-10-19.json"
     if second.exists():
         for bill, sg in json.loads(second.read_text(encoding="utf-8"))["signs"].items():
             b = int(bill)
-            if b in dirs and (sg is None or int(sg) != dirs[b]):
+            if b in dirs and sg is not None and int(sg) != dirs[b]:
                 dirs[b] = 0
     return dirs, units
 

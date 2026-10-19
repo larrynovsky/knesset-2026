@@ -235,9 +235,9 @@ def robustness_note(fid: int, topic: str) -> str:
     from arrow_robustness import label
     data = json.loads((ROOT / "data" / "arrow_robustness.json").read_text(encoding="utf-8"))
     entry = data["topics"][topic]["factions"].get(str(ALIAS.get(fid, fid)))
-    if entry is None or entry["rates"]["0.17"] is None:
+    if entry is None or entry["rates"]["0.10"] is None:
         return ""
-    return " (" + label(entry["rates"]["0.17"]) + ")"
+    return " (" + label(entry["rates"]["0.10"]) + ")"
 
 
 def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
@@ -556,7 +556,7 @@ def selftest() -> int:
     assert '.ballot thead th{white-space:nowrap}' in live_doc
     assert 'flex:1;white-space:nowrap;hyphens:none;' in live_doc
     ballot_html = ballot_table(live_matrix, live_cards)
-    assert "устойчивость — останется ли стрелка, если каждый шестой знак закона ошибочен" in ballot_html
+    assert "устойчивость — останется ли стрелка, если каждый десятый знак закона ошибочен (оценка по второму прочтению 19.10)" in ballot_html
     for axis_cell in re.findall(r'<td class="ballot-axis".*?</td>', ballot_html):
         assert len(re.findall(r"[↑↓↕]", axis_cell)) == len(re.findall(
             r"[↑↓↕] \((?:устойчива|шаткая|ненадёжна)\)", axis_cell))

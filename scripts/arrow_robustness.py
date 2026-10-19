@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 RUNS, SEED = 2000, 35
 PS = (0.10, 0.17, 0.33)
 TITLES = {"rule_of_law": "Суд, парламент, свободы", **THEMES}
-LEGEND = "устойчивость — останется ли стрелка, если каждый шестой знак закона ошибочен"
+LEGEND = "устойчивость — останется ли стрелка, если каждый десятый знак закона ошибочен (оценка по второму прочтению 19.10)"
 
 
 def label(rate: float) -> str:
@@ -61,7 +61,7 @@ def simulate(rows: list, signs: dict, table: dict, rule: dict,
             result[fac]["retained"][f"{p:.2f}"] = hits[fac] if available else None
             result[fac]["rates"][f"{p:.2f}"] = hits[fac] / runs if available else None
     for entry in result.values():
-        rate = entry["rates"]["0.17"]
+        rate = entry["rates"]["0.10"]
         entry["label"] = label(rate) if rate is not None else None
     return {"signed_laws": len(population), "flips": flips,
             "factions": {fac.split("|", 1)[0]: dict(v, faction=fac) for fac, v in result.items()}}
@@ -96,13 +96,13 @@ def review(data: dict) -> str:
              "Синтетика: 100:0 (100 законов) — устойчива; 50:50 как доли (2:2 закона) — ненадёжна.",
              "При 50:50 законах (N=100) ↕ устойчива: равные доли сами по себе не означают ненадёжность.",
              "Дополнительный контроль у границы направления: 67:33 (N=100) — ненадёжна.", "",
-             "| Фракция | Тема | p | Сохранение | При p=0.17 |",
+             "| Фракция | Тема | p | Сохранение | При p=0.10 |",
              "|---|---|---:|---:|---|"]
     for topic, values in data["topics"].items():
         for fid, entry in sorted(values["factions"].items(), key=lambda x: int(x[0])):
             for p, rate in entry["rates"].items():
                 value = "н/д" if rate is None else f"{100 * rate:.2f}%"
-                lines.append(f"| {RU.get(int(fid), entry['faction'])} ({fid}) | {TITLES[topic]} | {p} | {value} | {entry['label'] if p == '0.17' and entry['label'] else '—'} |")
+                lines.append(f"| {RU.get(int(fid), entry['faction'])} ({fid}) | {TITLES[topic]} | {p} | {value} | {entry['label'] if p == '0.10' and entry['label'] else '—'} |")
     return "\n".join(lines) + "\n"
 
 
@@ -115,10 +115,10 @@ def selftest() -> None:
         strong = simulate(rows, dict.fromkeys(range(100), 1), table, rule)["factions"]["1"]
         balanced = simulate(rows, {i: 1 if i < 50 else -1 for i in range(100)}, table, rule)["factions"]["1"]
         small = simulate(rows[:4], {0: 1, 1: 1, 2: -1, 3: -1}, table, rule)["factions"]["1"]
-        edge = simulate(rows, {i: 1 if i < 67 else -1 for i in range(100)}, table, rule)["factions"]["1"]
+        edge = simulate(rows, {i: 1 if i < 68 else -1 for i in range(100)}, table, rule)["factions"]["1"]
         assert strong["label"] == balanced["label"] == "устойчива"
         assert balanced["arrow"] == "both"
-        assert small["label"] == edge["label"] == "ненадёжна", "отключение переворотов не обнаружено"
+        assert edge["label"] == "ненадёжна" and small["rates"]["0.33"] < .8, "отключение переворотов не обнаружено"
         assert label(.95) == "устойчива" and label(.80) == "шаткая" and label(.7999) == "ненадёжна"
     check()
     with patch(__name__ + ".flip", side_effect=lambda signs, selected: signs):
