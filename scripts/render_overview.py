@@ -1908,6 +1908,10 @@ def main() -> int:
     for row in m["lines"]:
         if row["anchor_id"] in leaders:
             row["b"]["status"] = "observed"
+        # v37: ручной разбор соглашения 2021 есть — строка больше не «источника нет»
+        elif budgets.get(row["anchor_id"]) and row["b"]["status"] == "source_missing":
+            row["b"]["status"] = "observed"
+            row["b"]["note"] = budget_summary(budgets[row["anchor_id"]])
     doc, total, filled = build(m, cards, summaries)
     if budgets.get(1099):
         check_overview_money(doc, {1099: budget_summary(budgets[1099])})
