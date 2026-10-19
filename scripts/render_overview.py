@@ -210,7 +210,8 @@ def grounds_block(matrix: dict, cards: dict) -> str:
         cells = []
         for bill in marked:
             groups = latest[bill]["groups"]
-            position = "за" if fid in groups["for"] else "против" if fid in groups["against"] else "нет позиции"
+            sf = str(ALIAS.get(int(fid), fid))
+            position = "за" if sf in groups["for"] else "против" if sf in groups["against"] else "нет позиции"
             cells.append(f'<td>{position}</td>')
         # владелец 19.10: партии на двух языках
         rows.append(f'<tr data-owner-fid="{fid}"><th scope=row><a href="f-{fid}.html">{esc(ru[r["anchor_id"]])}</a>'
@@ -789,6 +790,9 @@ def load_cards(unit="faction_knesset") -> dict:
     return out
 
 
+ALIAS = {1097: 1105}   # строка бюллетеня → фракция с теми же голосами (владелец 19.10)
+
+
 def votes_for(fid: int) -> list:
     """Голосования фракции с переводом названия. Отказ, а не пустота."""
     src = ROOT / "data" / "votes_25.json"
@@ -1103,6 +1107,17 @@ def main() -> int:
     if reviewed != reviewed_from_files():
         raise Refuse(f"разборы загружены не все: {sorted(reviewed)} против "
                      f"{sorted(reviewed_from_files())} по файлам")
+    # Покрытие вместо точности (владелец 19.10): строка без собственных
+    # голосований получает данные фракции с той же цепочкой преемственности
+    # (1097 «הציונות הדתית» — цепочка 961→1073→1077… та же, что у 1105).
+    for r in m["lines"]:
+        src = ALIAS.get(r["anchor_id"])
+        if src and src in cards:
+            srow = next(x for x in m["lines"] if x["anchor_id"] == src)
+            r["a"], r["b"] = dict(srow["a"]), dict(srow["b"])
+            cards[r["anchor_id"]] = cards[src]
+            if budgets.get(src):
+                budgets[r["anchor_id"]] = budgets[src]
     summaries = {fid: budget_summary(bc) for fid, bc in budgets.items() if bc}
     doc, total, filled = build(m, cards, summaries)
     check_overview_money(doc, summaries,
@@ -1124,7 +1139,8 @@ def main() -> int:
         else:
             bc = budgets.get(r["anchor_id"], [])
             budget = budget_block(bc, idx, titles) if bc else ""
-            page = faction_page(c, r, votes_for(r["anchor_id"]), budget, budget_summary(bc))
+            page = faction_page(c, r, votes_for(ALIAS.get(r["anchor_id"], r["anchor_id"])),
+                                budget, budget_summary(bc))
             check_budget_page(page, bc, idx, titles)
             check_money_same(doc, page, r["anchor_id"])
         bad = jargon(page)
