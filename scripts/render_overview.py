@@ -232,6 +232,9 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
     themes = ("religion_state", "economy", "security")
     arrows = {t: theme_arrows(t) for t in themes}
     sym = {"up": "↑", "down": "↓", "both": "↕", None: "—", "miss": "—", "none": "—"}
+    laws = owner_law_positions(list(dict.fromkeys(_al(fid) for row in lists for fid in row["factions"])))
+    if len(laws) != 4:
+        raise Refuse("бюллетень: ожидаются 4 закона владельца")
     body = []
     for row in lists:
         fids = row["factions"]
@@ -241,6 +244,13 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
         who = (f'<th scope=row>{esc(row["ru"])} '
                f'<span lang=he dir=rtl><bdi>{esc(row["he"])}</bdi></span>'
                f'<span class=norec>{esc(row["leaders"])}</span>{absent}</th>')
+        law_marks = []
+        for law in laws:
+            positions = dict.fromkeys(law["positions"][_al(fid)] for fid in fids)
+            label = "/".join("<b>за</b>" if pos == "за" else esc(pos) for pos in positions)
+            law_marks.append(f'<span title="{esc(law["name"])}">{label}</span>')
+        law_cell = ('<td data-l="4 закона владельца"><span class="ballot-laws">' +
+                    "".join(law_marks) + '</span></td>') if fids else '<td data-l="4 закона владельца">—</td>'
         if not fids:
             cells = '<td colspan="5">голосов в этом Кнессете нет</td>'
         else:
@@ -256,7 +266,7 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
             cells = f'<td>{links}</td>' + "".join(
                 f'<td data-l="{esc(label)}">{" / ".join(dict.fromkeys(value))}</td>'
                 for label, value in zip(["Суд, парламент, свободы"] + [THEMES[t] for t in themes], values))
-        body.append(f'<tr data-ballot-list="{esc(row["he"])}">{who}{cells}</tr>')
+        body.append(f'<tr data-ballot-list="{esc(row["he"])}">{who}{law_cell}{cells}</tr>')
     heads = "".join(f'<th scope=col>{label}</th>' for label in ("Религия", "Экономика", "Безопасность"))
     small_lists = "".join(f"<li>{esc(name)}</li>" for name in SMALL_BALLOT_LISTS)
     unmapped = "<br>".join(esc(note) for note in ballot["unmapped_factions"].values())
@@ -267,7 +277,9 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
             '<div>Экономика — ↑ на стороне производителя.</div>'
             '<div>Безопасность — ↑ расширяет полномочия армии и силовых.</div>'
             '<div>↕ — и туда и обратно; «—» — знаков нет.</div></div>'
+            '<p>Колонка «4 закона» — как фракции списка голосовали по четырём законам, которые ты пометил „недопустимо“; „за“ выделено.</p>'
             '<table class="ballot"><thead><tr><th scope=col>Список и лидеры</th>'
+            '<th scope=col>4 закона владельца</th>'
             '<th scope=col>Читается по голосам фракций</th>'
             f'<th scope=col>Суд и парламент</th>{heads}</tr></thead>'
             f'<tbody>{"".join(body)}</tbody></table>'
@@ -366,7 +378,9 @@ def build(m: dict, cards: dict | None = None,
 .ballot th,.ballot td{{padding:8px 4px;text-align:left;vertical-align:top;border-bottom:1px dotted var(--rule);overflow-wrap:anywhere}}
 .ballot thead th{{overflow-wrap:normal;word-break:normal;hyphens:auto}}
 .ballot-legend{{margin:1rem 0}}
-.ballot th:first-child{{width:28%}} .ballot th:nth-child(2){{width:24%}}
+.ballot th:first-child{{width:22%}} .ballot th:nth-child(2){{width:28%}}
+.ballot-laws{{display:flex;gap:4px;align-items:flex-start}}
+.ballot-laws>span{{flex:1;min-width:0;border:1px solid var(--rule);padding:2px;text-align:center;font-weight:400}}
 .ballot .norec{{display:block;font-size:12px;color:var(--dim)}}
 @media(max-width:600px){{.ballot thead{{display:none}} .ballot tr{{display:block;margin:1rem 0}} .ballot th:first-child,.ballot td{{display:block;width:100%}} .ballot td[data-l]::before{{content:attr(data-l) " · ";font-weight:600}}}}
 </style></head><body>
@@ -478,10 +492,29 @@ def selftest() -> int:
     assert ballot_html.count('data-ballot-list=') == 14 and 'Беннет' in ballot_html
     for name in ('Резервисты',):
         row_html = next(r for r in re.findall(r'<tr data-ballot-list=.*?</tr>', ballot_html) if name in r)
+        assert '<td data-l="4 закона владельца">—</td>' in row_html
         assert '<td colspan="5">голосов в этом Кнессете нет</td>' in row_html
         assert not any(a in row_html for a in ('↑', '↓', '↕', 'href='))
     from tempfile import TemporaryDirectory
     from unittest.mock import patch
+    likud = next(r for r in re.findall(r'<tr data-ballot-list=.*?</tr>', ballot_html) if 'Ликуд' in r)
+    law_cell = re.search(r'<td data-l="4 закона владельца">(.*?)</td>', likud).group(1)
+    assert '<b>за</b>' in law_cell and law_cell.count('title=') == 4
+    with patch(__name__ + '.owner_law_positions', return_value=[]):
+        try:
+            ballot_table(live_matrix, live_cards)
+        except Refuse as e:
+            assert '4 закона владельца' in str(e)
+        else:
+            raise AssertionError("пустой owner_law_positions не обнаружен")
+    fake_laws = [dict(name='Закон "пример"', positions={'1096': 'за', '1108': 'против'})] * 4
+    with patch(__name__ + '.owner_law_positions', return_value=fake_laws):
+        with patch(__name__ + '._al', side_effect=lambda fid: '1096' if int(fid) != 1108 else '1108'):
+            split_laws = ballot_table(live_matrix, live_cards)
+    likud = next(r for r in re.findall(r'<tr data-ballot-list=.*?</tr>', split_laws) if 'Ликуд' in r)
+    assert likud.count('<b>за</b>/против') == 4 and '<b>против</b>' not in likud
+    assert 'title="Закон &quot;пример&quot;"' in likud
+    print("ЗЕЛЁНЫЙ: 4 закона в бюллетене — Ликуд за; Резервисты —; расхождения сохранены; пустой источник отклонён")
     ballot_input = json.loads((ROOT / "criteria/ballot_2026.json").read_text(encoding="utf-8"))
     for entry in ballot_input["lists"]:
         assert esc(entry["ru"]) in ballot_html and esc(entry["leaders"]) in ballot_html
