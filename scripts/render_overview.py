@@ -2271,6 +2271,11 @@ def slice_block(letters: str, data: Path | None = None, ru: str = "") -> str:
         elif "personal" in cell:
             rows.append(f'<tr data-slice-k="{k}">{head}<td colspan=4>личных голосов по законам этих тем нет</td></tr>')
             continue
+        if not empty:
+            for link in [x for x in cell.get("silent", []) if isinstance(x, dict)]:
+                he = names.get(link["fid"], str(link["fid"]))
+                lab = (esc(link["note"]) + " " if link["note"] else "") + f'<span lang=he dir=rtl>{esc(he)}</span>'
+                units.append((f'<bdi>{lab}</bdi>, {esc(link["role"])} — по отобранным законам этих тем не голосовала', None))
         for note in d.get("absent_notes", {}).get(letters, {}).get(str(k), []):
             units.append((esc(note), None))
         if not units:
