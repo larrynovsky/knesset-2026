@@ -174,9 +174,7 @@ def other_themes() -> str:
                  f'{esc(axis_state(t, counts)[1])}</li>' for t in rest)
     return (f'<h2>Ещё {len(rest)} темы</h2>'
             f'<p>Они не менее важные — просто по ним мы не вычёркиваем. '
-            f'Разница ровно в этом. Если бы вычёркивали по всем '
-            f'{len(rest) + 1}, промах нашёлся бы у каждого списка, и '
-            f'вычеркнуть пришлось бы весь бюллетень целиком.</p>'
+            f'Разница ровно в этом.</p>'
             f'<ul class=dim>{li}</ul>'
             f'<p><a href="axes.html">Что мы меряем и почему именно это</a> — '
             f'там про каждую тему отдельно. '
@@ -279,7 +277,17 @@ def jargon(page: str) -> str | None:
     return None
 
 
+def _fixture_signs(extra: dict) -> None:
+    """Selftest: настоящий справочник плюс смыслы опций фикстуры."""
+    from direction_confidence import sign_table
+    _SIGNS.clear()
+    _SIGNS.update(sign_table())
+    _SIGNS.update(extra)
+
+
 def selftest() -> int:
+    sys.path.insert(0, str(ROOT / "scripts"))
+    _fixture_signs({"\u05dc\u05d4\u05e2\u05d1\u05d9\u05e8": {"gloss_ru": "передать акт дальше"}})
     m = {"lines": [
         {"anchor_id": 1, "line": "правившая",
          "a": {"status": "observed"}, "b": {"status": "source_missing"}},
@@ -320,6 +328,8 @@ def selftest() -> int:
         _html = budget_block([_dup_card], {}, [])
     assert "Самостоятельных денежных обязательств 2" in _html, "снятие not_budgetary не сдвинуло счётчик"
     doc, total, filled = build(m)
+    # R27-F11: никакого заранее вынесенного «промаха» у всех списков
+    assert "промах" not in doc, "рамка снова выносит приговор всем спискам"
     assert total == 6, f"клеток {total}, а строк три по две колонки"
     assert filled == 0, "без решения в карточке клетка не имеет права заполниться"
 
@@ -416,6 +426,8 @@ def selftest() -> int:
            "name_he": "\u05d4\u05e6\u05e2\u05ea", "for_option_desc": "\u05dc\u05d4\u05e2\u05d1\u05d9\u05e8",
            "pos": "против 5"}]
     fp = faction_page(fcard, frow, fv)
+    # R27-F09: у «за» русский смысл рядом с оригиналом
+    assert "передать акт дальше<span class=he" in fp, "у опции голосования нет русского смысла"
     # R8-F10/F11: дата снимка — из карточки, исход поиска — по-русски
     assert "Снимок голосований: 2099-01-02" in fp, "дата снимка в подвале не из карточки"
     assert "честный поиск ничего не дал" in fp and ">nothing<" not in fp \
@@ -1093,6 +1105,19 @@ def det(summary: str, cert: str, inner: str, open_: bool = False) -> str:
             f'<div class=inner>{inner}</div></details>')
 
 
+_SIGNS = {}
+
+
+def _gloss(desc: str) -> str:
+    """Русский смысл опции голосования из справочника смыслов «за»."""
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from render_landmark_table import gloss
+    if not _SIGNS:
+        from direction_confidence import sign_table
+        _SIGNS.update(sign_table())
+    return gloss(desc, _SIGNS)
+
+
 def faction_page(card: dict, row: dict, votes: list, budget: str = "") -> str:
     """Страница фракции. Клетка оси — details, как в макете; счёт
     голосований уходит ВНУТРЬ раскрытия, а не вываливается на страницу."""
@@ -1192,7 +1217,10 @@ def faction_page(card: dict, row: dict, votes: list, budget: str = "") -> str:
         f'<tr><td data-l="дата">{esc(x["date"])}</td>'
         f'<td data-l="акт">{esc(x["name_ru"])}'
         f'<span class="he" lang=he dir=rtl><bdi>{esc(x["name_he"])}</bdi></span></td>'
-        f'<td data-l="«за» означало"><span class=he lang=he dir=rtl>'
+        # R27-F09: русский смысл опции рядом с оригиналом; нет перевода —
+        # сборка отказывает (gloss), а не показывает голый иврит.
+        f'<td data-l="«за» означало">{esc(_gloss(x["for_option_desc"]))}'
+        f'<span class=he lang=he dir=rtl>'
         f'<bdi>{esc(x["for_option_desc"])}</bdi></span></td>'
         f'<td data-l="фракция">{esc(x["pos"])}</td></tr>' for x in votes)
     body.append(det(f"Все {len(votes)} голосований этой фракции — {esc(cav)}",

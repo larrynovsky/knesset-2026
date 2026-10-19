@@ -33,10 +33,12 @@ BUCKETS = {
     "unanimous": ("палата голосовала почти единогласно",
                   "меньшинство меньше 2,5% голосов: такой акт не различает "
                   "фракции, и объявленное правило его отбрасывает"),
-    "none": ("«за» касалось оговорки, а не самого акта",
+    # R27-F04: возврат в комиссию по справочнику смыслов — тормоз (inverts),
+    # а не «не имеет отношения»; подписи согласованы со справочником.
+    "none": ("процедура без принятого направления",
              "§10: мы не предполагаем, что означает «за», а читаем это из "
-             "описания опции. Здесь «за» означало принять оговорку или "
-             "вернуть акт в комиссию — к направлению это отношения не имеет"),
+             "описания опции. Здесь «за» означало процедурное решение, "
+             "которому справочник смыслов опций направления не приписывает"),
     "split": ("фракция раскололась",
               "индекс Райса ниже объявленного порога: одной позиции у "
               "фракции в этом голосовании нет, и это третье состояние — "
@@ -50,8 +52,9 @@ BUCKETS = {
                 "«принимало»: на какой стадии шло голосование, видно в "
                 "описании опции рядом, и передача в комиссию — это тоже "
                 "продвижение, но ещё не закон"),
-    "inverts": ("«за» означало отклонить акт", "такое голосование в "
-                "направление идёт с перевёрнутым знаком"),
+    "inverts": ("«за» тормозило продвижение акта", "такое голосование в "
+                "направление идёт с перевёрнутым знаком: например, отклонить "
+                "акт или вернуть его на обсуждение в комиссию"),
 }
 ORDER = ["carries", "inverts", "none", "unanimous", "split", "nopos"]
 
@@ -95,13 +98,19 @@ def classify(rows: list, fid: int, table: dict, rule: dict) -> dict:
     return out
 
 
+def gloss_of(desc):
+    """R27-F09: русский смысл опции; отсутствие перевода — отказ сборки."""
+    from render_overview import _gloss
+    return _gloss(desc)
+
+
 def bucket_html(key: str, b: dict, names: dict, esc) -> str:
     title, why = BUCKETS[key]
     ex = "".join(
         f'<tr><td data-l="дата">{esc(r["date"][:10])}</td>'
         f'<td data-l="акт">{esc((names.get(str(r["bill_id"])) or {}).get("ru", ""))}'
         f'<span class="he" lang=he dir=rtl><bdi>{esc(r["bill_name"])}</bdi>'
-        f'</span></td><td data-l="«за» означало">'
+        f'</span></td><td data-l="«за» означало">{esc(gloss_of(r.get("for_option_desc")))}'
         f'<span class=he lang=he dir=rtl><bdi>'
         f'{esc(r.get("for_option_desc") or "")}</bdi></span></td></tr>'
         for r in b["examples"])
@@ -184,6 +193,8 @@ def selftest() -> int:
     R = dict(arrow_rule(), split_below=0.5)
     T = {"ЗА": {"sign": "carries"}, "ОТК": {"sign": "inverts"},
          "ОГВ": {"sign": "none"}}
+    from render_overview import _fixture_signs
+    _fixture_signs({k: dict(v, gloss_ru=f"смысл {k}") for k, v in T.items()})
 
     def v(vid, bid, opt, bf):
         return {"vote_id": vid, "bill_id": bid, "date": "2024-01-01",
@@ -243,7 +254,13 @@ def selftest() -> int:
     from render_overview import jargon
     bad = jargon(p)
     assert bad is None, f"внутренний язык на странице решения: {bad}"
-    print("самопроверка render_card_page: 12 утверждений")
+    # R27-F04/F09: подписи корзин согласованы со справочником смыслов, у
+    # опции есть русский смысл рядом с ивритом
+    assert "«за» тормозило продвижение акта" in p and "означало отклонить акт" not in p
+    assert "к направлению это отношения не имеет" not in p
+    assert "смысл ЗА<span class=he" in p or "смысл ОТК<span class=he" in p or \
+        "смысл ОГВ<span class=he" in p, "у опции нет русского смысла"
+    print("самопроверка render_card_page: 16 утверждений")
     return 0
 
 

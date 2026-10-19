@@ -91,7 +91,7 @@ axis_institutions:
 
 def card_yaml(fid: int, he: str, cen: dict, in_gov: bool, b_status: str,
               snap: str, ax: dict | None = None, reviewed: bool = False,
-              zero: bool = False) -> str:
+              zero: bool = False, gov_in_window: bool | None = None) -> str:
     ru = RU.get(fid, he)
     miss = cen["acts_without_participation"]
     share = miss / cen["acts_in_theme_total"]
@@ -105,11 +105,20 @@ def card_yaml(fid: int, he: str, cen: dict, in_gov: bool, b_status: str,
               f"{cen['from']} — {cen['to']}; в Кнессете 92% голосований "
               "электронные и пишут каждого депутата, так что «не голосовать» "
               "не является способом скрыть позицию")
+    if gov_in_window is None:
+        gov_in_window = in_gov
     if in_gov:
+        # R27-F02: «входила в правительство в наблюдаемый период» — только при
+        # пересечении дат участия с окном голосований этой строки, а не по
+        # одному факту участия когда-либо (1109, 1110).
         frame = ("фракция входила в правительство в наблюдаемый период, и её "
                  "голосование по правительственным законопроектам может "
                  "отражать коалиционную дисциплину, а не предпочтение по "
-                 "предмету; голосованиями это не разделяется")
+                 "предмету; голосованиями это не разделяется"
+                 if gov_in_window else
+                 "в окне этих голосований фракция в правительство не входила; "
+                 "по этим голосам нельзя отделить предпочтение по предмету от "
+                 "согласованного голосования с другими фракциями")
         # R8-F04: у партии с карточкой разбора обязательств прежняя проза
         # «не построено» противоречила бюджетному блоку той же страницы.
         bnote = ("партия правила; обязательства соглашения сверены с бюджетом "
@@ -295,6 +304,10 @@ def emit(directions: Path | None = None) -> int:
                      .read_text(encoding="utf-8"))
     per = load_yaml_ish(ROOT / "criteria" / "periods.yaml")
     gov = {p["faction_id"] for p in per["periods"]}
+    windows = {}
+    for p in per["periods"]:
+        windows.setdefault(p["faction_id"], []).append(
+            (str(p["start"]), str(p.get("finish") or "9999-12-31")))
     # Рукописные карточки не перегенерируются, базовые — перегенерируются.
     # Прежнее правило «есть файл с этим id — пропустить» годилось для первой
     # генерации и запрещало ВТОРУЮ: после перевыгрузки числа в базовых
@@ -323,8 +336,9 @@ def emit(directions: Path | None = None) -> int:
             skipped.append((fid, he, "карточка написана руками — не трогаем"))
             continue
         name = slug(RU.get(fid, "line"), fid) + ".yaml"
+        overlap = any(s <= cen["to"] and f >= cen["from"] for s, f in windows.get(fid, []))
         body = card_yaml(fid, he, cen, fid in gov, "", snap,
-                         ax_all.get(fid), fid in reviewed, fid in zero)
+                         ax_all.get(fid), fid in reviewed, fid in zero, overlap)
         # Проводка (R19-F02, M09): разобранная правившая партия обязана
         # получить прозу о сверке — иначе отказ здесь, а не на сайте.
         if fid in gov and fid in reviewed and "сверены с бюджетом" not in body:
@@ -387,6 +401,9 @@ def selftest() -> int:
     assert "должностей у этой строки пусты" not in b and "портфелей" not in b, \
         "R23: пустота денег и должностей снова названа одной причиной"
     z = card_yaml(1, "פ", cen, True, "", SNAP, zero=True)
+    w = card_yaml(1, "פ", cen, True, "", SNAP, gov_in_window=False)
+    assert "коалиционную дисциплину" not in w and "не входила" in w and \
+        "партия правила" in w, "R27-F02: участие вне окна голосований названо дисциплиной"
     assert "денежных обещаний не найдено" in z and "не построено" not in z, \
         "R19-F01: пустая карта извлечения названа «не построено»"
     assert "60%" in a, "доля пропуска не выведена из чисел этой строки"
