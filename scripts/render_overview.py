@@ -2265,20 +2265,19 @@ def dyn_block(entry: dict, names: dict, data: Path | None = None) -> str:
     fids = [str(f) for f in entry.get("factions", [])] or (["yashar"] if entry.get("personal") else [])
     if not fids:
         return ""
-    rows = []
+    blocks = []
     for fid in fids:
         ser = d["series"].get(fid, {})
         gov = [_in_gov(d["gov"].get(fid, []), a, b) for a, b in bins]
         who = "личные голоса Айзенкота и Тропера" if fid == "yashar" else names.get(int(fid), fid)
-        tds = "".join(f'<td>{spark(ser.get(th, [[0, 0]] * len(bins)), gov, labels, th)}</td>' for th, _, _ in DYN_THEMES)
-        rows.append(f'<tr><th scope="row"><bdi>{esc(who)}</bdi></th>{tds}</tr>')
-    head = "".join(f'<th scope="col">{t}<small>вверх — {esc(THEME_WORDS[k][0])}</small></th>' for _, k, t in DYN_THEMES)
+        figs = "".join(f'<figure class=dyn-fig><figcaption>{t}<small>вверх — {esc(THEME_WORDS[k][0])}</small></figcaption>'
+                       f'{spark(ser.get(th, [[0, 0]] * len(bins)), gov, labels, th)}</figure>' for th, k, t in DYN_THEMES)
+        blocks.append(f'<h3><bdi>{esc(who)}</bdi></h3><div class=dyn-grid>{figs}</div>')
     return ('<section class="list-dyn"><h2>Как менялось в 25-м Кнессете</h2>'
             '<p>Линия — по полугодиям с 11.2022 по 09.2026: какая доля законов темы легла в сторону, '
-            'названную под заголовком колонки. Верх — все законы в эту сторону, пунктир — поровну, низ — все в другую. '
-            'Точка — если законов в полугодии хотя бы три. Тень — фракция в правительстве. Наведите на точку — числа.</p>'
-            '<table class="list-short-table dyn-table"><thead><tr><th scope="col">Фракция</th>' + head +
-            '</tr></thead><tbody>' + "".join(rows) + '</tbody></table>'
+            'названную под заголовком графика. Верх — все законы в эту сторону, пунктир — поровну, низ — все в другую. '
+            'Точка — если законов в полугодии хотя бы три. Тень — фракция в правительстве. '
+            'На компьютере наведите на точку — числа по полугодию.</p>' + "".join(blocks) +
             '<p class="dyn-axis">В каждом графике слева — конец 2022, справа — лето 2026.</p></section>')
 
 
@@ -2544,7 +2543,7 @@ def ballot_pages(matrix: dict, cards: dict, summaries: dict,
 .spk{{width:100%;height:auto;display:block}} .spk .gov{{fill:var(--panel)}} .spk .mid{{stroke:var(--rule);stroke-dasharray:2 2}}
 .spk .ln{{fill:none;stroke-width:1.6}} .t-rule_of_law{{stroke:var(--ax-inst);fill:var(--ax-inst)}} .t-religion_state{{stroke:var(--ax-rel);fill:var(--ax-rel)}}
 .t-economy{{stroke:var(--ax-econ);fill:var(--ax-econ)}} .t-security{{stroke:var(--ax-sec);fill:var(--ax-sec)}}
-.dyn-table th small{{display:block;font-weight:400;color:var(--dim);font-size:.78rem}} .slice-spark{{max-width:11rem}} .dyn-axis{{font-size:.78rem;color:var(--dim)}}
+.dyn-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.6rem 1rem}} .dyn-fig{{margin:0}} .dyn-fig figcaption{{font-size:.78rem}} .dyn-fig small{{display:block;color:var(--dim)}} .list-dyn h3{{font-size:1rem;margin:1rem 0 .3rem}} .slice-spark{{max-width:11rem}} .dyn-axis{{font-size:.78rem;color:var(--dim)}}
 </style></head><body>
 <nav class=crumbs><a href="index.html#ballot">Все списки</a></nav>
 <h1><span class="ballot-letters" lang="he" dir="rtl" title="буквы на бюллетене">{esc(entry["letters"])}</span> {esc(entry["ru"])} <span lang=he dir=rtl><bdi>{esc(entry["he"])}</bdi></span></h1>
