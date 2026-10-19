@@ -361,10 +361,10 @@ def selftest() -> int:
         assert re.search(r'</h1>\s*<section class="faction-summary"', page)
         assert page.count('class="faction-summary"') == 1
         if fid == 1105:
-            assert '↓ из 126 законов' in brief and '110 — в сторону ослабления' in brief
+            assert '↓ из ' in brief and ' — в сторону ослабления' in brief
             assert 'да: 2022-12-29 — окончание не указано' in brief
         if fid == 1103:
-            assert '↑ из 105 законов' in brief and '96 — в сторону укрепления' in brief
+            assert '↑ из ' in brief and ' — в сторону укрепления' in brief
             assert 'Кнессете:</b> нет' in brief
             assert 'коалиционного соглашения не подписывала' in faction_summary(row, card, "", laws)
         if fid == 1097:

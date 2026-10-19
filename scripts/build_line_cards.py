@@ -280,6 +280,12 @@ def arrows(votes: dict, directions_path: Path | None) -> dict:
     rule = arrow_rule()
     rule["split_below"] = float(_arrow_split())
     dirs, units, _ = load_directions(directions_path)
+    if COVERAGE_FIRST:
+        # 28 законов без большинства трёх моделей — решающий голос Claude
+        tb = ROOT / "criteria" / "claude_tiebreak_signs_2026-10-19.json"
+        if tb.exists():
+            for bill, sg in json.loads(tb.read_text(encoding="utf-8"))["signs"].items():
+                dirs.setdefault(int(bill), int(sg))
     a = alpha(units)
     # Решение владельца 19.10: покрытие вместо точности, первая итерация.
     # Порог согласия моделей (tentative) не блокирует стрелку; измеренное
