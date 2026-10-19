@@ -264,7 +264,7 @@ def c_digits(src):
     return len(tds), bad[:3], f"{len(tds)} клеток"
 
 @check("v45: четыре закона — участие и счёт депутатов",
-       [("бойкот подменён голосом одного", lambda s: edit(s, "index.html", "не голосовали (0 за / 1 против)", "против")),
+       [("бойкот подменён голосом одного", lambda s: edit(s, "index.html", "— (1 против)", "против")),
         ("потерян счёт", lambda s: edit(s, "index.html", "не голосовали ≥22", "не голосовали неизвестно")),
         ("потерян счёт в списке", lambda s: edit(s, "l-2.html", "не голосовали ≥22", "не голосовали неизвестно"))])
 def c_owner_votes(src):
@@ -279,7 +279,7 @@ def c_owner_votes(src):
         if len(cells) != 4 or any(not re.fullmatch(count, title) for title, _ in cells):
             bad.append(f"фракция {fid}: нет четырёх счетов")
         if fid in ("1102", "1096") and cells:
-            expected = "не голосовали (0 за / 1 против)" if fid == "1102" else "за"
+            expected = "— (1 против)" if fid == "1102" else "за"
             if cells[0][1] != expected:
                 bad.append(f"фракция {fid}: неверная позиция 2201200")
     for name, page in src.items():
@@ -291,7 +291,7 @@ def c_owner_votes(src):
     for row in re.findall(r'<tr data-ballot-list=.*?</tr>', src["index.html"]):
         if 'href="f-1102.html"' in row:
             cell = re.search(r'<span class="ballot-laws">(.*?)</span></td>', row)
-            if not cell or not re.search(r'<span title="[^"]*">не голосовали \(0 за / 1 против\)</span>', cell[1]):
+            if not cell or not re.search(r'<span title="[^"]*">— \(1 против\)</span>', cell[1]):
                 bad.append("Беяхад: бойкот Еш Атид потерян")
     ballot = re.findall(r'<span class="ballot-laws">(.*?)</span></td>', src["index.html"])
     for cell in ballot:

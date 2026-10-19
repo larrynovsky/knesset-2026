@@ -420,7 +420,11 @@ def owner_law_positions(fids: list[str]) -> list[dict]:
             pos = ("не голосовали" if boycott else "за" if source in last["groups"]["for"]
                    else "против" if source in last["groups"]["against"] else "нет позиции")
             positions[fid] = pos
-            labels[fid] = pos + (f' ({c["for"]} за / {c["against"]} против)' if boycott else "")
+            if boycott:
+                bits = ([f'{c["for"]} за'] if c["for"] else []) + ([f'{c["against"]} против'] if c["against"] else [])
+                labels[fid] = "—" + (f' ({", ".join(bits)})' if bits else "")
+            else:
+                labels[fid] = pos
             details[fid] = (f'за {c["for"]}, против {c["against"]}, воздержались {c["abstain"]}; '
                             f'не голосовали ≥{seen - participated}')
         result.append(dict(bill=bill, name=names[str(bill)]["ru"], date=last["date"],
@@ -618,7 +622,7 @@ def selftest() -> int:
     assert 'grounds.html#a2199044' not in owner
     # У Еш Атид на последней стадии 2207472 позиции нет, прежнее «против» не наследуем.
     ya = re.search(r'<tr data-owner-fid="1102">(.*?)</tr>', owner).group(1)
-    assert re.findall(r'<td[^>]*>(.*?)</td>', ya) == ['не голосовали (0 за / 1 против)', 'не голосовали (0 за / 0 против)', 'не голосовали (0 за / 0 против)', 'против']
+    assert re.findall(r'<td[^>]*>(.*?)</td>', ya) == ['— (1 против)', '—', '—', 'против']
     assert 'Религиозный сионизм' in owner and 'Ликуд' in owner
     live_doc, _, _ = build(live_matrix, live_cards)
     assert live_doc.index('data-frame=full') < live_doc.index('class="owner-laws"') < live_doc.index('Сначала о том')
