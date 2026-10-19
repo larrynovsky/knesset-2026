@@ -278,9 +278,16 @@ def robustness_note(fid: int | str | list[int], topic: str, arrow: str = "") -> 
         return esc(arrow)
     rate = min(rates)
     word = label(rate)
-    mark = {"устойчива": "", "шаткая": "?", "ненадёжна": "??"}[word]
+    mark = "" if word == "устойчива" else " (не уверены)"
     if arrow:
-        return f'<span title="{word}: {rate:.2%}">{esc(arrow)}<small class="robustness">{mark}</small></span>'
+        meanings = {
+            "rule_of_law": ("укреплял", "ослаблял"),
+            "religion_state": ("больше места религии", "меньше места религии"),
+            "economy": ("на стороне производителя", "на стороне потребителя"),
+            "security": ("расширял полномочия силовых структур", "сужал полномочия силовых структур"),
+        }
+        meaning = dict(zip(("↑", "↓", "↕"), (*meanings[topic], "и так, и так")))[arrow]
+        return f'<span title="{meaning}; {word}: {rate:.2%}">{esc(arrow)}<small class="robustness">{mark}</small></span>'
     return f'<small class="robustness" title="{word}: {rate:.2%}"> ({word})</small>'
 
 
@@ -302,7 +309,6 @@ def personal_result():
 def ballot_table(m: dict, cards: dict, source: Path | None = None, *, compact: bool = False, money_rows: str = "") -> str:
     """Списки владельца 19.10; стрелки принадлежат указанным фракциям."""
     from theme_arrows import THEMES, theme_arrows
-    from arrow_robustness import LEGEND
     ballot = load_ballot(source)
     lists = ballot["lists"]
     names = party_names(m, cards)
@@ -326,15 +332,16 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None, *, compact: b
                f'<span class=norec>{esc(row["leaders"])}</span>{absent}</th>')
         law_marks = []
         for law in (personal["laws"] if personal else laws):
-            positions = dict.fromkeys("—" if law["positions"][_al(fid)] == "нет позиции"
+            positions = dict.fromkeys("не голос." if law["positions"][_al(fid)] == "нет позиции"
                                       else (law.get("labels", law["positions"])[_al(fid)].split(" (")[0] if compact else law.get("labels", law["positions"])[_al(fid)]) for fid in (["yashar"] if personal else fids))
+            positions = dict.fromkeys(pos.replace("—", "не голос.").replace("не голосовали", "не голос.") for pos in positions)
             label = "/".join("<b>за</b>" if pos == "за" else esc(pos) for pos in positions)
             detail = "; ".join(f'{names[fid]}: {law.get("counts", {}).get(_al(fid), "")}' for fid in fids)
             if personal:
                 detail = law["counts"]["yashar"]
             law_marks.append(f'<span title="{esc(law["name"] + "; " + detail)}">{label}</span>')
         law_cell = ('<td data-l="4 закона владельца"><span class="ballot-laws">' +
-                    "".join(law_marks) + '</span></td>') if fids or personal else '<td data-l="4 закона владельца">—</td>'
+                    "".join(law_marks) + '</span></td>') if fids or personal else '<td data-l="4 закона владельца">нет данных</td>'
         if not fids and not personal:
             cells = '<td colspan="4">голосов в этом Кнессете нет</td>'
         else:
@@ -371,10 +378,10 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None, *, compact: b
             money_marks = {}
             for fid in (fids if money_rows else []):
                 short, full = ballot_money(_money_td(money_rows, fid))
-                money_marks.setdefault(short, []).append(full)
+                money_marks.setdefault(short if short != "?" else "<small>не разбирали</small>", []).append(full)
             cells += '<td data-l="Деньги">' + ' / '.join(
                 f'<span title="{esc(" / ".join(dict.fromkeys(full)))}">{short}</span>'
-                for short, full in money_marks.items()) + ('?' if not money_marks else '') + '</td>'
+                for short, full in money_marks.items()) + ('<small>не разбирали</small>' if not money_marks else '') + '</td>'
         if compact:
             if not fids and not personal:
                 law_cell = '<td><span class="ballot-laws">' + '<span>—</span>' * 4 + '</span></td>'
@@ -400,30 +407,26 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None, *, compact: b
             and example_axis.get("arrow") in ("up", "down", "both")
             and all(k in example_axis for k in ("acts", "down", "up"))):
         yes = sum(law["positions"][_al(1096)] == "за" for law in laws)
-        example = (f'Пример: фракция «Ликуд» — «за» по {yes} из {len(laws)} твоих законов; '
-                   f'«суд, парламент, свободы» {sym[example_axis["arrow"]]}: '
-                   f'из {example_axis["acts"]} законов с определённым направлением '
-                   f'по {example_axis["down"]} её голоса шли в сторону ослабления, '
-                   f'по {example_axis["up"]} — укрепления.')
+        direction = {"up": "укреплял", "down": "ослаблял", "both": "и так, и так"}[example_axis["arrow"]]
+        uncertainty = " (не уверены)" if "не уверены" in robustness_note(1096, "rule_of_law", sym[example_axis["arrow"]]) else ""
+        example = (f'Пример: Ликуд голосовал «за» по {yes} из {len(laws)} законов, а по суду и правам в целом '
+                   f'{direction}{uncertainty}: {example_axis["down"]} {plural_ru(example_axis["down"], "раз", "раза", "раз")} голосовал за ослабление '
+                   f'и {example_axis["up"]} {plural_ru(example_axis["up"], "раз", "раза", "раз")} — за укрепление.')
     return ('<h2 id="ballot">Списки бюллетеня 27.10</h2>'
             '<section class="ballot-reading" aria-label="Как читать эту таблицу">'
             '<h3>Как читать эту таблицу</h3>'
-            '<div>Каждая строка — список на 27.10; рядом — как голосовали связанные с ним фракции нынешнего Кнессета.</div>'
-            '<div>Хочешь вычеркнуть 2–3 списка? Начни с четырёх законов, которые ты пометил «недопустимо», затем посмотри стрелки по темам.</div>'
-            f'<div>{esc(example)}</div>'
-            '<div>? и ?? — стрелке можно доверять меньше: она может смениться, если часть знаков законов ошибочна.</div>'
-            '<div>У «Резервистов» голосов списка нет — эта таблица не даёт по ним вывода; это не оценка прошлого каждого участника.</div>'
-            '<div>Где это не работает: список — не фракция; после выборов люди и союзы меняются.</div></section>'
-            '<div class="ballot-legend">'
-            '<div>Суд, парламент, свободы — ↑ укрепляла, ↓ ослабляла.</div>'
-            '<div>Государство и религия — ↑ больше места религии.</div>'
-            '<div>Экономика — ↑ на стороне производителя.</div>'
-            '<div>Безопасность — ↑ расширяет полномочия армии, полиции и силовых; ↓ — усиливает гражданский контроль (комиссии по 7 октября, надзор за полицией).</div>'
-            '<div>Деньги: N/M — для скольких денежных обещаний из коалиционного соглашения в бюджете нашлась статья; это не значит, что деньги выделены полностью</div>'
-            '<div>Со всеми (N) — по N законопроектам были почти единогласные голосования; эти случаи не определяют направление стрелки.</div>'
-            '<div>↕ — и туда и обратно; «—» — знаков нет.</div></div>'
-            f'<p>Колонка «4 закона» — как фракции списка голосовали по четырём законам, которые ты пометил „недопустимо“; „за“ выделено; {OWNER_LEGEND}; «/» — расхождение фракций списка.</p>'
-            f'<p>{LEGEND}</p>'
+            '<p><b>Одна строка — один список в бюллетене.</b> Слева буквы — те же, что на бумажке на участке. Дальше — как голосовали связанные с ним фракции нынешнего Кнессета; по ссылке на список видно, чьи это голоса.</p>'
+            '<p><b>Колонка «4 закона»</b> — законы о судах, которые ты сам 10.10 пометил «недопустимо», ещё не зная, кто за них голосовал. <b>за</b> — проголосовали ЗА такой закон; «против» — против; «не голос.» — не голосовали: у оппозиции это обычно бойкот (не поддержали, но и не нажали «против»). Если голосовала меньше трети фракции, здесь тоже «не голос.»; отдельные голоса указаны в скобках, полный счёт — в подсказке. Причины каждого неучастия мы не установили. Юрсоветник — пока законопроект: голосовали на ранней стадии. Через косую черту показаны разные позиции фракций одного списка.</p>'
+            '<p><b>Колонка «Суд»</b> — около 130 законов о суде, контроле Кнессета над правительством и правах граждан (смысл каждого закона определили три модели ИИ и перепроверили по тексту). <b>ослаблял</b> — список чаще голосовал за ослабление; <b>укреплял</b> — наоборот. Стрелка вниз означает «ослаблял», вверх — «укреплял», в обе стороны — «и так, и так». <b>не уверены</b> — если смысл части законов прочитан с ошибкой, вывод может смениться.</p>'
+            f'<p>{esc(example)}</p>'
+            '<p>Где не работает: новые списки сами в этом Кнессете не голосовали. У «Резервистов» нет данных; у «Яшар» показаны личные голоса Айзенкота и Тропера. Список — не фракция; после выборов люди и союзы меняются. Это сводка голосований, а не совет, за кого голосовать.</p>'
+            '<p>«Со всеми» и число в скобках — сколько законопроектов голосовали почти единогласно; эти случаи не определяют направление. «Мало законов» — данных для направления мало; прочерк в теме — направление не установлено.</p>'
+            '<details><summary>Что значат колонки тем и денег</summary>'
+            '<p>Религия: вверх — больше места религии в государстве, вниз — меньше.</p>'
+            '<p>Экономика: вверх — на стороне производителя, вниз — потребителя.</p>'
+            '<p>Безопасность: вверх — расширял полномочия армии, полиции и силовых структур, вниз — сужал.</p>'
+            '<p>Деньги: 3/5 означает, что в бюджете нашлась статья под 3 из 5 денежных обещаний; это не значит, что деньги выделены полностью. Прочерк — не подписывал соглашение; «не уверены» — нет сопоставления.</p>'
+            '</details></section>'
             '<table class="ballot"><thead><tr><th scope=col>Список и лидеры</th>'
             '<th scope=col>4 закона</th>'
             f'<th scope=col>Суд</th>{heads}</tr></thead>'
@@ -591,7 +594,6 @@ def build(m: dict, cards: dict | None = None,
 .ballot,.ballot *{{overflow-wrap:normal;word-break:normal;hyphens:manual}}
 .ballot thead th{{white-space:nowrap}}
 .ballot-reading{{margin:1rem 0}}
-.ballot-legend{{margin:1rem 0;font-size:var(--f0)}}
 .faction-details>summary{{cursor:pointer;font:14px/1.5 system-ui,sans-serif;overflow-wrap:normal}}
 .robustness{{font-size:.75em;white-space:nowrap}}
 .ballot th:first-child{{width:28%}}
@@ -602,6 +604,8 @@ def build(m: dict, cards: dict | None = None,
 .ballot thead th{{position:sticky;top:0;z-index:2;background:var(--bg);box-shadow:0 2px 0 var(--rule)}}
 .ballot .norec{{border:0;padding:0;margin:1px 0;font-size:11px;line-height:1.35}}
 .ballot tbody tr:nth-child(even){{background:var(--panel)}}
+.ballot td.ballot-axis .robustness{{display:block;font-size:9px;white-space:normal}}
+.ballot td.ballot-axis{{white-space:normal}}
 .ballot-laws{{counter-reset:law}}
 .ballot-laws>span::before{{display:block;font-size:9px;line-height:1.2;color:var(--dim);font-weight:400;white-space:normal}}
 .ballot-laws>span:nth-child(1)::before{{content:"Судебная власть, поправка 4"}}
@@ -765,12 +769,12 @@ def selftest() -> int:
     assert '.ballot thead th{white-space:nowrap}' in live_doc
     assert 'flex:1;white-space:nowrap;hyphens:none;' in live_doc
     ballot_html = ballot_table(live_matrix, live_cards)
-    assert "Устойчивость: ? — шаткая, ?? — ненадёжна (стрелка может смениться, если каждый десятый знак закона ошибочен)" in ballot_html
+    assert "<b>не уверены</b>" in ballot_html
     for axis_cell in re.findall(r'<td class="ballot-axis".*?</td>', ballot_html):
         if "data-personal=1" in axis_cell:
             continue  # Устойчивость фракции не переносится на личные голоса.
         assert len(re.findall(r"[↑↓↕]", axis_cell)) == len(re.findall(
-            r'<span title="(?:устойчива|шаткая|ненадёжна): [0-9.]+%">[↑↓↕]<small class="robustness">\?{0,2}</small></span>', axis_cell))
+            r'<span title="[^";]+; (?:устойчива|шаткая|ненадёжна): [0-9.]+%">[↑↓↕]<small class="robustness">(?: \(не уверены\))?</small></span>', axis_cell))
     assert ballot_html.count('data-ballot-list=') == 14 and 'Беннет' in ballot_html
     # Проверка разметки, не геометрии: четыре подписи и значения в прежнем порядке.
     for row_html in re.findall(r'<tr data-ballot-list=.*?</tr>', ballot_html):
@@ -781,7 +785,7 @@ def selftest() -> int:
             assert not axes
     for name in ('Резервисты',):
         row_html = next(r for r in re.findall(r'<tr data-ballot-list=.*?</tr>', ballot_html) if name in r)
-        assert '<td data-l="4 закона владельца">—</td>' in row_html
+        assert '<td data-l="4 закона владельца">нет данных</td>' in row_html
         assert '<td colspan="4">голосов в этом Кнессете нет</td>' in row_html
         assert not any(a in row_html for a in ('↑', '↓', '↕', 'href="f-'))
     from tempfile import TemporaryDirectory
@@ -798,13 +802,13 @@ def selftest() -> int:
                  labels=dict.fromkeys(law["positions"], "против")) for law in altered_laws]):
         changed = ballot_table(live_matrix, altered_cards)
     reading = changed.split('<section class="ballot-reading"')[1].split('</section>')[0]
-    assert reading.count('<div>') == 6
-    assert '«за» по 0 из 4' in reading and 'свободы» ↑' in reading
-    assert 'из 19 законов' in reading and 'по 2 её голоса' in reading and 'по 17 — укрепления' in reading
-    assert changed.index('Как читать эту таблицу') < changed.index('class="ballot-legend"') < changed.index('<table class="ballot">')
+    assert reading.count('<details>') == 1
+    assert '«за» по 0 из 4' in reading and 'в целом укреплял' in reading
+    assert '2 раза голосовал за ослабление' in reading and '17 раз — за укрепление' in reading
+    assert changed.index('Как читать эту таблицу') < changed.index('Что значат колонки тем и денег') < changed.index('<table class="ballot">')
     altered_cards[1096]["axis_institutions"]["alpha"] = 0
     no_example = ballot_table(live_matrix, altered_cards).split('</section>')[0]
-    assert 'из 19 законов' not in no_example and 'чьи голоса мы показываем' in no_example
+    assert '17 раз — за укрепление' not in no_example and 'чьи голоса мы показываем' in no_example
     likud = next(r for r in re.findall(r'<tr data-ballot-list=.*?</tr>', ballot_html) if 'Ликуд' in r)
     law_cell = re.search(r'<td data-l="4 закона владельца">(.*?)</td>', likud).group(1)
     assert '<b>за</b>' in law_cell and law_cell.count('title=') == 4
@@ -826,7 +830,7 @@ def selftest() -> int:
     with patch(__name__ + '.owner_law_positions', return_value=fake_laws):
         with patch(__name__ + '._al', side_effect=lambda fid: str(fid) if str(fid) == 'yashar' else '1096' if int(fid) != 1108 else '1108'):
             compact = ballot_table(live_matrix, live_cards)
-    assert compact.count('<b>за</b>/—') == 4
+    assert compact.count('<b>за</b>/не голос.') == 4
     table = ballot_html.split('<table class="ballot">')[1].split('</table>')[0]
     assert table.count('scope=col') == 7 and 'нет позиции' not in table
     assert 'Читается по голосам фракций' not in table
@@ -857,13 +861,13 @@ def selftest() -> int:
     with patch(__name__ + ".personal_result", return_value=sample):
         changed = ballot_table(live_matrix, live_cards)
     changed_row = next(r for r in re.findall(r'<tr data-ballot-list=.*?</tr>', changed) if 'Яшар!' in r)
-    assert [re.sub(r"<[^>]+>", "", c).rstrip("?") for c in re.findall(r'data-personal=1 data-l="[^"]+">(.*?)</td>', changed_row)] == ["↓", "↑", "↕", "↓"]
+    assert [re.sub(r"<[^>]+>", "", c).removesuffix(" (не уверены)") for c in re.findall(r'data-personal=1 data-l="[^"]+">(.*?)</td>', changed_row)] == ["↓", "↑", "↕", "↓"]
     details = re.search(r'<details><summary>Ещё 24 списка без мест в Кнессете</summary>(.*?)</details>', ballot_html).group(1)
     expected_small = "Amcha Yisrael|Achi Movement|Ani VeAta – Israel's People Party|Betach|Biblical Bloc Party|Black Color|Brit Olam|Electoral System Reform|Gan Eden|HaKahal|Israel First|Kol HaNashim|Lights of Dawn|Mishpat Tzedek|Partnership to All|Personal Safety|Seder Chadash|Sharshar for Love & Unity|Shma|Tekuma|The Haredi Public|The Pirates|Together We'll Make It|Tsomet".split('|')
     assert re.findall(r'<li>(.*?)</li>', details) == [esc(name) for name in expected_small]
     assert len(expected_small) == 24
-    assert ballot_html.index('ballot-legend') < ballot_html.index('<table')
-    assert ballot_html.index('<details>') > ballot_html.index('</table>')
+    assert ballot_html.index('Что значат колонки тем и денег') < ballot_html.index('<table')
+    assert ballot_html.index('<details><summary>Ещё 24 списка') > ballot_html.index('</table>')
     assert all(esc(note) in ballot_html for note in ballot_input["unmapped_factions"].values())
     with TemporaryDirectory() as tmp:
         path = Path(tmp) / "ballot.json"
@@ -880,7 +884,7 @@ def selftest() -> int:
         test_cards.update({fid: {"axis_institutions": {"arrow": arrow, "alpha": 1}} for fid, arrow in ((1096, "up"), (1108, "down"))})
         split_html = ballot_table(live_matrix, test_cards)
         likud = next(r for r in re.findall(r'<tr data-ballot-list=.*?</tr>', split_html) if 'Ликуд' in r)
-        assert len(re.findall(r'↑ / ↓', re.sub(r'<[^>]+>|\?', '', likud))) == 4
+        assert len(re.findall(r'↑ / ↓', re.sub(r'<[^>]+>| \(не уверены\)', '', likud))) == 4
         assert 'data-fids="1096,1108"' in likud
     print("ЗЕЛЁНЫЙ: бюллетень — 14 строк; 14 удалений из JSON отклонены; расхождения стрелок сохранены")
 
@@ -898,7 +902,7 @@ def selftest() -> int:
     read_text = Path.read_text
 
     def check_v44(render):
-        for second, expected in (("down", "↓??"), ("up", "↓ / ↑??")):
+        for second, expected in (("down", "↓ (не уверены)"), ("up", "↓ / ↑ (не уверены)")):
             sample_matrix["lines"][1]["b"]["status"] = "not_exposed" if second == "down" else "source_missing"
             sample_cards = {fid: {"axis_institutions": {"arrow": direction, "alpha": 1}}
                             for fid, direction in ((1096, "down"), (1108, second))}
@@ -914,7 +918,7 @@ def selftest() -> int:
                               else read_text(path, *a, **kw)):
                 rendered = render(sample_matrix, sample_cards, money_rows=rows(sample_matrix, sample_cards)[0])
             money_cell = re.search(r'<td data-l="Деньги">(.*?)</td>', rendered)[1]
-            assert re.sub(r'<[^>]+>', '', money_cell) == ("—" if second == "down" else "— / ?")
+            assert re.sub(r'<[^>]+>', '', money_cell) == ("—" if second == "down" else "— / не разбирали")
             axis_cells = re.findall(r'<td class="ballot-axis"[^>]*>(.*?)</td>', rendered)
             assert len(axis_cells) == 4
             assert [re.sub(r'<[^>]+>', '', c) for c in axis_cells] == [expected] * 4, "v44: стрелки/устойчивость"

@@ -186,40 +186,57 @@ def c_ballot_money(src):
                      "—" if "не подписывала" in full else "?")
             if value not in ("—", "?") and "подписала как вторая сторона" in full:
                 value = "вторая сторона: " + value
-            groups.setdefault(value, []).append(full)
+            groups.setdefault(value if value != "?" else "<small>не разбирали</small>", []).append(full)
         cells = re.findall(r'<td data-l="Деньги">(.*?)</td>', row)
         wanted = ' / '.join(f'<span title="{_h.escape(" / ".join(dict.fromkeys(full)), quote=True)}">{value}</span>'
-                            for value, full in groups.items()) or '?'
+                            for value, full in groups.items()) or '<small>не разбирали</small>'
         if cells != [wanted]:
             bad.append(f"{_h.unescape(name)}: деньги или title расходятся с обзором")
     if '<th scope=col>Безопасность</th><th scope=col>Деньги</th>' not in doc:
         bad.append("порядок денежных колонок")
-    legend = "Деньги: N/M — для скольких денежных обещаний из коалиционного соглашения в бюджете нашлась статья; это не значит, что деньги выделены полностью"
+    legend = "Деньги: 3/5 означает, что в бюджете нашлась статья под 3 из 5 денежных обещаний; это не значит, что деньги выделены полностью"
     if legend not in doc:
         bad.append("нет денежной легенды")
     return len(rows), bad, f"{len(rows)} строк; значения и полные title"
 
 
 @check("компактные клетки бюллетеня (v42)",
-       [("убран значок ненадёжной стрелки", lambda s: dict(s, **{"index.html": re.sub(
-           r'(title="ненадёжна: [0-9.]+%">[↑↓↕]<small class="robustness">)\?\?(</small>)', r'\1\2', s["index.html"], count=1)})),
+       [("удалено объяснение четырёх законов", lambda s: edit(s, "index.html", "ты сам 10.10 пометил «недопустимо», ещё не зная, кто за них голосовал", "выбраны четыре закона")),
+        ("удалено пояснение направления", lambda s: edit(s, "index.html", 'title="ослаблял;', 'title="подмена;')),
+        ("убран значок ненадёжной стрелки", lambda s: dict(s, **{"index.html": re.sub(
+           r'(title="[^";]+; ненадёжна: [0-9.]+%">[↑↓↕]<small class="robustness">) \(не уверены\)(</small>)', r'\1\2', s["index.html"], count=1)})),
         ("возвращено длинное единогласие", lambda s: dict(s, **{"index.html": re.sub(
           r'со всеми \(([0-9]+)(?:/[0-9]+)?\)', r'голосовали со всеми (почти единогласно: \1 законов)', s["index.html"], count=1)})),
         ("снят title устойчивости", lambda s: dict(s, **{"index.html": re.sub(
-          r' title="устойчива: [0-9.]+%"', '', s["index.html"], count=1)})),
+          r' title="[^";]+; устойчива: [0-9.]+%"', '', s["index.html"], count=1)})),
         ("снят значок личной стрелки", lambda s: dict(s, **{"index.html": re.sub(
-          r'(<td class="ballot-axis"[^>]*data-personal=1[^>]*><span title="[^"]*">[↑↓↕]<small class="robustness">)\?{1,2}(</small>)',
+          r'(<td class="ballot-axis"[^>]*data-personal=1[^>]*><span title="[^"]*">[↑↓↕]<small class="robustness">) \(не уверены\)(</small>)',
           r'\1\2', s["index.html"], count=1)}))])
 def c_compact_ballot(src):
     entries = re.findall(r'<td class="ballot-axis"([^>]*)>(.*?)</td>', src["index.html"], re.S)
     cells = [cell for _, cell in entries]
     bad = []
+    reading = re.search(r'<section class="ballot-reading".*?</section>', src["index.html"], re.S)
+    if not reading or any(text not in reading[0] for text in (
+            "Одна строка — один список", "ты сам 10.10 пометил «недопустимо», ещё не зная, кто за них голосовал",
+            "у оппозиции это обычно бойкот", "Где не работает:",
+            "Что значат колонки тем и денег", "Пример: Ликуд голосовал «за»")):
+        bad.append("нет читательского пояснения v63")
+    meanings = {"Суд": ("укреплял", "ослаблял"),
+                "Религия": ("больше места религии", "меньше места религии"),
+                "Экономика": ("на стороне производителя", "на стороне потребителя"),
+                "Безопасность": ("расширял полномочия силовых структур", "сужал полномочия силовых структур")}
     for attrs, cell in entries:
-        notes = re.findall(r'<span title="(устойчива|шаткая|ненадёжна): ([0-9.]+)%">[↑↓↕]<small class="robustness">(.*?)</small></span>', cell)
+        topic = re.search(r'data-l="([^"]+)"', attrs)[1]
+        for meaning, arrow in re.findall(r'<span title="([^";]+); [^"]*">([↑↓↕])', cell):
+            expected_word = dict(zip(("↑", "↓", "↕"), (*meanings[topic], "и так, и так")))[arrow]
+            if meaning != expected_word:
+                bad.append("title не объясняет направление")
+        notes = re.findall(r'<span title="[^";]+; (устойчива|шаткая|ненадёжна): ([0-9.]+)%">[↑↓↕]<small class="robustness">(.*?)</small></span>', cell)
         if len(notes) != len(re.findall(r'[↑↓↕]', cell)):
             bad.append("стрелка без title со словом и процентом")
         for word, percent, mark in notes:
-            expected = {"устойчива": "", "шаткая": "?", "ненадёжна": "??"}[word]
+            expected = {"устойчива": "", "шаткая": " (не уверены)", "ненадёжна": " (не уверены)"}[word]
             if mark != expected:
                 bad.append(f"{word}: неверный значок {mark!r}")
         if 'голосовали со всеми' in cell or 'почти единогласно' in cell:
@@ -304,15 +321,15 @@ def c_list_table(src):
             positions = re.findall(r'<li><a href="grounds.html#a\d+">.*?</a>: <b>(.*?)</b>', section)
             if len(positions) != 4:
                 bad.append(f"{name} ({filename}): 4 закона фракции {fid}: найдено {len(positions)}")
-            page_laws.append([clean(v).replace("нет позиции", "—") for v in positions])
+            page_laws.append([clean(v).replace("нет позиции", "не голос.").replace("—", "не голос.").replace("не голосовали", "не голос.") for v in positions])
         if personal:
             positions = re.findall(r'<p>[^<]+: (за|против|воздержались|не голосовали|нет позиции) \(\d{4}-', page)
-            page_laws = [["—" if v in ("не голосовали", "нет позиции") else v for v in positions]]
+            page_laws = [["не голос." if v in ("не голосовали", "нет позиции") else v for v in positions]]
         if fids or personal:
             expected = ["/".join(dict.fromkeys(v[i] for v in page_laws)) for i in range(4)] if page_laws and all(len(v) == 4 for v in page_laws) else []
             same("4 закона", [re.sub(r"\s*/\s*", "/", clean(v)) for v in table_laws], expected)
         else:
-            same("4 закона без голосов", clean(law_cell[1]) if law_cell else "", "—" if 'голосов в этом Кнессете нет' in page else "")
+            same("4 закона без голосов", clean(law_cell[1]) if law_cell else "", "нет данных" if 'голосов в этом Кнессете нет' in page else "")
         table_axes = re.findall(r'<td class="ballot-axis"[^>]*>(.*?)</td>', row, re.S)
         for i, topic in enumerate(("institutions", "religion_state", "economy", "security")):
             values = []
@@ -323,7 +340,7 @@ def c_list_table(src):
                 if arrow:
                     if not personal and not re.search(r"\((?:устойчива|шаткая|ненадёжна)\)", value):
                         bad.append(f"{filename}: нет подписи устойчивости {topic}")
-                    mark = "??" if "(ненадёжна)" in value else "?" if "(шаткая)" in value else ""
+                    mark = " (не уверены)" if "(ненадёжна)" in value or "(шаткая)" in value else ""
                     values.append(arrow[0] + mark)
                 else:
                     token = re.match(r'(?:со всеми|мало законов) \(\d+\)', value)
@@ -333,15 +350,13 @@ def c_list_table(src):
                     expected = "со всеми (" + "/".join(re.search(r'\d+', v)[0] for v in values) + ")"
                 else:
                     # Одинаковое направление сворачивается с худшей устойчивостью:
-                    # ↑? и ↑ → ↑?; разные направления сохраняют «/».
+                    # Неуверенность сохраняется; разные направления разделены «/».
                     grouped = {}
                     for v in values:
-                        key = v.rstrip("?")
+                        key = v.removesuffix(" (не уверены)")
                         grouped[key] = max(grouped.get(key, v), v, key=len)
                     expected = " / ".join(grouped.values()) if all(values) else ""
                 actual = clean(table_axes[i]) if len(table_axes) == 4 else ""
-                # HTML-теги между стрелкой и ? не создают смыслового пробела.
-                actual = re.sub(r'([↑↓↕])\s+(\?+)', r'\1\2', actual)
                 same(topic, actual, expected)
             else:
                 same(topic, "нет голосов" if 'голосов в этом Кнессете нет' in row else "", "нет голосов" if 'голосов в этом Кнессете нет' in page else "")
@@ -453,7 +468,8 @@ def c_digits(src):
     return len(tds), bad[:3], f"{len(tds)} клеток"
 
 @check("v45: четыре закона — участие и счёт депутатов",
-       [("бойкот подменён голосом одного", lambda s: edit(s, "index.html", "— (1 против)", "против")),
+       [("бойкот в бюллетене подменён голосом одного", lambda s: edit(s, "index.html", "не голос. (1 против)", "против")),
+        ("бойкот подменён голосом одного", lambda s: edit(s, "index.html", "— (1 против)", "против")),
         ("потерян счёт", lambda s: edit(s, "index.html", "не голосовали ≥22", "не голосовали неизвестно")),
         ("потерян счёт в списке", lambda s: edit(s, "l-2.html", "не голосовали ≥22", "не голосовали неизвестно"))])
 def c_owner_votes(src):
@@ -480,7 +496,7 @@ def c_owner_votes(src):
     for row in re.findall(r'<tr data-ballot-list=.*?</tr>', src["index.html"]):
         if re.search(r'data-fids="(?:[0-9]+,)*1102(?:,[0-9]+)*"', row):
             cell = re.search(r'<span class="ballot-laws">(.*?)</span></td>', row)
-            if not cell or not re.search(r'<span title="[^"]*">— \(1 против\)</span>', cell[1]):
+            if not cell or not re.search(r'<span title="[^"]*">не голос\. \(1 против\)</span>', cell[1]):
                 bad.append("Беяхад: бойкот Еш Атид потерян")
     ballot = re.findall(r'<span class="ballot-laws">(.*?)</span></td>', src["index.html"])
     for cell in ballot:
