@@ -264,8 +264,8 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
                 if arrows[t].get(fid, {}).get("arrow") is None else
                 sym[arrows[t][fid]["arrow"]] for fid in fids] for t in themes]
             cells = f'<td>{links}</td>' + "".join(
-                f'<td data-l="{esc(label)}">{" / ".join(dict.fromkeys(value))}</td>'
-                for label, value in zip(["Суд, парламент, свободы"] + [THEMES[t] for t in themes], values))
+                f'<td class="ballot-axis" data-l="{esc(label)}">{" / ".join(dict.fromkeys(value))}</td>'
+                for label, value in zip(["Суд", "Религия", "Экономика", "Безопасность"], values))
         body.append(f'<tr data-ballot-list="{esc(row["he"])}">{who}{law_cell}{cells}</tr>')
     heads = "".join(f'<th scope=col>{label}</th>' for label in ("Религия", "Экономика", "Безопасность"))
     small_lists = "".join(f"<li>{esc(name)}</li>" for name in SMALL_BALLOT_LISTS)
@@ -358,8 +358,8 @@ def grounds_block(matrix: dict, cards: dict) -> str:
     return ('<h2 id="grounds">Фракции и четыре закона владельца</h2>'
             '<p>Четыре акта, помеченные владельцем «недопустимо». Позиция на последней стадии; '
             '<a href="grounds.html">все стадии и основания</a>.</p>'
-            '<table class="owner-laws"><thead><tr><th scope=col>Фракция</th>' + heads +
-            '</tr></thead><tbody>' + ''.join(rows) + '</tbody></table>')
+            '<div class="table-scroll" tabindex="0" role="region" aria-label="Фракции и четыре закона"><table class="owner-laws"><thead><tr><th scope=col>Фракция</th>' + heads +
+            '</tr></thead><tbody>' + ''.join(rows) + '</tbody></table></div>')
 
 
 def build(m: dict, cards: dict | None = None,
@@ -373,16 +373,24 @@ def build(m: dict, cards: dict | None = None,
 <meta name="robots" content="noindex, nofollow">
 <title>Что фракции делали — 25-й Кнессет</title>
 <style>{css_from_mockup()}
-.owner-laws{{width:100%;table-layout:fixed}} .owner-laws th,.owner-laws td{{padding:9px 6px;overflow-wrap:anywhere}} .owner-laws th{{font-size:13px}} .owner-laws td{{font-size:14px}}
+.owner-laws{{width:100%;min-width:36rem;table-layout:fixed}} .owner-laws th,.owner-laws td{{padding:9px 6px;overflow-wrap:anywhere}} .owner-laws th{{font-size:13px}} .owner-laws td{{font-size:14px}}
 .ballot{{width:100%;table-layout:fixed;border-collapse:collapse;font:13px/1.4 system-ui,sans-serif}}
 .ballot th,.ballot td{{padding:8px 4px;text-align:left;vertical-align:top;border-bottom:1px dotted var(--rule);overflow-wrap:anywhere}}
-.ballot thead th{{overflow-wrap:normal;word-break:normal;hyphens:auto}}
+.ballot thead th{{overflow-wrap:anywhere;word-break:normal;hyphens:auto}}
 .ballot-legend{{margin:1rem 0}}
 .ballot th:first-child{{width:22%}} .ballot th:nth-child(2){{width:28%}}
 .ballot-laws{{display:flex;gap:4px;align-items:flex-start}}
 .ballot-laws>span{{flex:1;min-width:0;border:1px solid var(--rule);padding:2px;text-align:center;font-weight:400}}
 .ballot .norec{{display:block;font-size:12px;color:var(--dim)}}
-@media(max-width:600px){{.ballot thead{{display:none}} .ballot tr{{display:block;margin:1rem 0}} .ballot th:first-child,.ballot td{{display:block;width:100%}} .ballot td[data-l]::before{{content:attr(data-l) " · ";font-weight:600}}}}
+@media(max-width:600px){{
+ .ballot,.ballot tbody,.ballot tr{{display:block;width:100%}}
+ .ballot thead{{display:none}} .ballot tr{{margin:1rem 0}}
+ .ballot th:first-child,.ballot td{{display:block;width:100%}}
+ .ballot td[data-l]::before{{content:attr(data-l) " · ";font-weight:600}}
+ .ballot td.ballot-axis{{display:inline;width:auto;padding:0;border:0}}
+ .ballot td.ballot-axis::before{{content:attr(data-l) " ";font-weight:400}}
+ .ballot td.ballot-axis + td.ballot-axis::before{{content:" · " attr(data-l) " "}}
+}}
 </style></head><body>
 <h1>Что фракции делали на самом деле</h1>
 <p class=lead>27 октября голосуют за списки бюллетеня. Этот
@@ -490,6 +498,13 @@ def selftest() -> int:
     assert live_doc.index('data-frame=full') < live_doc.index('id="ballot"') < live_doc.index('id="grounds"')
     ballot_html = ballot_table(live_matrix, live_cards)
     assert ballot_html.count('data-ballot-list=') == 14 and 'Беннет' in ballot_html
+    # Проверка разметки, не геометрии: четыре подписи и значения в прежнем порядке.
+    for row_html in re.findall(r'<tr data-ballot-list=.*?</tr>', ballot_html):
+        axes = re.findall(r'<td class="ballot-axis" data-l="([^"]+)">([^<]+)</td>', row_html)
+        if 'href=' in row_html:
+            assert [label for label, value in axes] == ['Суд', 'Религия', 'Экономика', 'Безопасность']
+        else:
+            assert not axes
     for name in ('Резервисты',):
         row_html = next(r for r in re.findall(r'<tr data-ballot-list=.*?</tr>', ballot_html) if name in r)
         assert '<td data-l="4 закона владельца">—</td>' in row_html

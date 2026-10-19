@@ -183,9 +183,9 @@ def build(f: dict) -> str:
 Кандидат ≠ обязательство ≠ принятое сопоставление; отказ — не решение.
 Это свойство канала, а не партии (§7); в карточку партии базовая ставка
 не входит.</p>
-<table><thead><tr><th scope=col>фракция</th><th scope=col>кандидатов</th>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Сопоставление обязательств"><table><thead><tr><th scope=col>фракция</th><th scope=col>кандидатов</th>
 <th scope=col>обязательств</th><th scope=col>ждут решения</th></tr></thead>
-<tbody>{money_rows}</tbody></table>
+<tbody>{money_rows}</tbody></table></div>
 
 <h2>Чего документ не делает</h2>
 <p>Не ставит балл и не ранжирует (§13). Не переносит статистику одних
