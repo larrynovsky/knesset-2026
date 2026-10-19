@@ -443,7 +443,7 @@ def owner_law_positions(fids: list[str], personal: dict | None = None) -> list[d
                       f'не голосовали {raw_counts["absent"]}; ' +
                       "; ".join(f"{name}: {words[value]}" for name, value in final["personal_positions"].items()))
             result.append(dict(bill=bill, name=names[str(bill)]["ru"], date=final["date"],
-                               positions={"yashar": pos}, labels={"yashar": pos}, counts={"yashar": detail}))
+                               positions={"yashar": pos}, labels={"yashar": "—" if pos in ("не голосовали", "нет позиции") else pos}, counts={"yashar": detail}))
             continue
         candidates, caches = {}, {}
         for r in votes["rows"]:
