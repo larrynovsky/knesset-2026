@@ -1052,14 +1052,14 @@ def selftest() -> int:
         assert page.count('data-theme=') == 4 * len(entry.get("factions", []))
         if 1096 in entry.get("factions", []):
             for topic in ("rule_of_law", "economy", "religion_state", "security"):
-                assert robustness_note(1096, topic) in page
+                assert "(устойчива)" not in page
         assert page.count('Деньги:</b>') == len(entry.get("factions", []))
         assert page.count('в сторону укрепления:') == len(entry.get("factions", []))
-        assert page.count('в сторону ↑:') == 3 * len(entry.get("factions", []))
+        assert 'в сторону ↑' not in page and 'в сторону плюса' not in page
         assert page.count('<ul>') == 9 * len(entry.get("factions", []))
         assert not re.search(r'<p[^>]*>[^<]*<ul>', page)
         assert page.count('в сторону ослабления:') == len(entry.get("factions", []))
-        assert page.count('в сторону ↓:') == 3 * len(entry.get("factions", []))
+        assert 'в сторону ↓' not in page and 'в сторону минуса' not in page
         for law in laws:
             assert page.count(f'grounds.html#a{law["bill"]}') == len(entry.get("factions", []))
         if entry.get("personal"):
@@ -1067,9 +1067,9 @@ def selftest() -> int:
             result = personal_result()
             for key, value in [("institutions", result["axis"])] + list(result["themes"].items()):
                 fragment = re.search(rf'<p data-personal-theme="{key}">(.*?)</p>', page).group(1)
-                assert ({"up": "↑", "down": "↓", "both": "↕"}[value["arrow"]] if value.get("arrow")
+                assert (dict(zip(("up", "down", "both"), (*THEME_WORDS[key], "и так, и так")))[value["arrow"]] if value.get("arrow")
                         else value.get("text", "мало законов (0)")) in fragment
-                assert f'законопроектов в сторону плюса: {value.get("up", 0)}, в сторону минуса: {value.get("down", 0)}' in fragment
+                assert str(value.get("up", 0)) in fragment and str(value.get("down", 0)) in fragment
             assert 'Для сравнения:' in page and 'f-1098.html' in page
             for law in personal_result()["laws"]:
                 assert esc(law["positions"]["yashar"]) in page
@@ -1097,7 +1097,8 @@ def selftest() -> int:
         assert badge in row_html and row_html.index(badge) < row_html.index(f'href="l-{n}.html"')
         page = list_pages[f"l-{n}.html"]
         assert badge in re.search(r'<h1>(.*?)</h1>', page).group(1)
-        assert f'</h1>\n<p class="letters-source">{esc(ballot_input["letters_source"])}</p>' in page
+        assert f'<p class="letters-source">{esc(ballot_input["letters_source"])}</p>' in page
+        assert page.index('class="list-short"') < page.index('<h2>Подробности</h2>')
     assert 'class="ballot-letters"' not in details
     with TemporaryDirectory() as tmp:
         path = Path(tmp) / "ballot.json"
@@ -1985,9 +1986,16 @@ def check_index_links(site: Path) -> int:
 
 
 _THEME_CACHE: dict = {}
+# Читательские названия направлений; арифметика и знаки тем не меняются.
+THEME_WORDS = {
+    "institutions": ("укреплял", "ослаблял"),
+    "religion_state": ("больше места религии", "меньше места религии"),
+    "economy": ("на стороне производителя", "против производителя"),
+    "security": ("больше полномочий силовых", "больше гражданского контроля"),
+}
 
 
-def _theme_lines(row: dict) -> str:
+def _theme_lines(row: dict, plain: bool = False) -> str:
     """Строки по описательным темам (покрытие вместо точности, 19.10)."""
     from theme_arrows import THEMES, theme_arrows
     if not _THEME_CACHE:
@@ -2001,16 +2009,21 @@ def _theme_lines(row: dict) -> str:
         a = _THEME_CACHE[t].get(fid, {"up": 0, "down": 0, "examples": {}})
         n = a["up"] + a["down"]
         direction = a.get("text", f"мало законов ({n})") if n < 3 else word[a["arrow"]] + robustness_note(fid, t)
+        up, down = THEME_WORDS[t]
+        if plain and n >= 3:
+            direction = dict(zip(("up", "down", "both"), (up, down, "и так, и так")))[a["arrow"]]
+            direction += " (не уверены)" if "не уверены" in robustness_note(fid, t, word[a["arrow"]]) else ""
         examples = "".join(
             "<p>" + label + ":</p><ul>" + ("".join("<li><bdi>" + esc(name) + "</bdi></li>" for name in a["examples"].get(side, [])) or "<li>нет</li>") + "</ul>"
-            for side, label in (("up", "в сторону ↑"), ("down", "в сторону ↓")))
+            for side, label in (("up", up if plain else "в сторону ↑"), ("down", down if plain else "в сторону ↓")))
+        counts = (f'{a["up"]} законопроектов — {up}, {a["down"]} — {down}' if plain else
+                  f'{a["up"]} {plural_ru(a["up"], "закон", "закона", "законов")} в сторону плюса / {a["down"]} в сторону минуса{note[t]}')
         out.append(f'<p data-theme="{t}"><b>{esc(title)}:</b> {direction} — '
-                   f'{a["up"]} {plural_ru(a["up"], "закон", "закона", "законов")} в сторону плюса / {a["down"]} в сторону минуса'
-                   f'{esc(note[t])}.</p>{examples}')
+                   f'{esc(counts)}.</p>{examples}')
     return "".join(out) + '<p class="dim">Со всеми (N) — по N законопроектам были почти единогласные голосования; эти случаи не определяют направление стрелки.</p>'
 
 
-def faction_summary(row: dict, card: dict, money_text: str, laws: list[dict]) -> str:
+def faction_summary(row: dict, card: dict, money_text: str, laws: list[dict], plain: bool = False) -> str:
     """Четыре строки из уже рассчитанных данных, без наследования фракций."""
     from slice_party_theme import load_periods
     fid = row["anchor_id"]
@@ -2020,6 +2033,10 @@ def faction_summary(row: dict, card: dict, money_text: str, laws: list[dict]) ->
         direction = (f'{CELL[ax["arrow"]][0]}{robustness_note(fid, "rule_of_law")}' + esc(f' из {ax["acts"]} {plural_ru(ax["acts"], "закона", "законов", "законов")} темы, по которым '
                      f'фракция голосовала, {ax["down"]} — в сторону ослабления, '
                      f'{ax["up"]} — в сторону укрепления'))
+    if plain and direction != "направление не установлено":
+        direction = {"up": "укреплял", "down": "ослаблял", "both": "и так, и так"}[ax["arrow"]]
+        direction += " (не уверены)" if "не уверены" in robustness_note(fid, "rule_of_law", CELL[ax["arrow"]][0]) else ""
+        direction += f': {ax["down"]} раз за ослабление, {ax["up"]} за укрепление (всего голосовал по {ax["acts"]} законам темы)'
     positions = ''.join(
         f'<li><a href="grounds.html#a{law["bill"]}">{esc(law["name"])}</a>: '
         f'<b>{esc(law["labels"][str(fid)])}</b> ({esc(law["counts"][str(fid)])}) ({esc(law["date"])})</li>' for law in laws)
@@ -2036,7 +2053,7 @@ def faction_summary(row: dict, card: dict, money_text: str, laws: list[dict]) ->
             f'<p><b>Четыре закона владельца — последняя стадия:</b></p><ul>{positions}</ul>'
             f'<p><b>Деньги:</b> {esc(money_text)}.</p>'
             f'<p><b>В правительстве в 25-м Кнессете:</b> {esc(government)}.</p>'
-            f'{_theme_lines(row)}</section>')
+            f'{_theme_lines(row, plain=plain)}</section>')
 
 
 def ballot_pages(matrix: dict, cards: dict, summaries: dict,
@@ -2046,7 +2063,6 @@ def ballot_pages(matrix: dict, cards: dict, summaries: dict,
     from build_line_cards import arrows
     from render_method import ARROW, VOTES
     from theme_arrows import names_ru_path
-    from arrow_robustness import LEGEND
     ballot = load_ballot(source)
     rows = {r["anchor_id"]: r for r in matrix["lines"]}
     names = party_names(matrix, cards)
@@ -2070,10 +2086,13 @@ def ballot_pages(matrix: dict, cards: dict, summaries: dict,
             for key, label, result in [("institutions", "Суд, парламент, свободы", personal["axis"])] + [
                     (t, label, personal["themes"][t]) for t, label in
                     (("religion_state", "Государство и религия"), ("economy", "Экономика"), ("security", "Безопасность"))]:
-                direction = sym[result["arrow"]] if result.get("arrow") else result.get("text", "мало законов (0)")
+                up, down = THEME_WORDS[key]
+                direction = dict(zip(("up", "down", "both"), (up, down, "и так, и так"))).get(result.get("arrow"), result.get("text", "мало законов (0)"))
                 if result.get("arrow"):
-                    direction += robustness_note("yashar", "rule_of_law" if key == "institutions" else key)
-                body += f'<p data-personal-theme="{key}"><b>{label}:</b> {direction} · законопроектов в сторону плюса: {result.get("up", 0)}, в сторону минуса: {result.get("down", 0)}.</p>'
+                    direction += " (не уверены)" if "не уверены" in robustness_note("yashar", "rule_of_law" if key == "institutions" else key, sym[result["arrow"]]) else ""
+                counts = (f'{result.get("down", 0)} раз за ослабление, {result.get("up", 0)} за укрепление' if key == "institutions" else
+                          f'{result.get("up", 0)} законопроектов — {up}, {result.get("down", 0)} — {down}')
+                body += f'<p data-personal-theme="{key}"><b>{label}:</b> {direction}: {counts}.</p>'
             body += '<h2>4 закона владельца</h2>' + ''.join(
                 f'<p>{esc(law["name"])}: {esc(law["positions"]["yashar"])} ({law["date"][:10]}); {esc(law["counts"]["yashar"])}</p>' for law in personal["laws"])
             body += '<p>Расхождение или отсутствие одного из двоих исключает общую позицию. Если оба не голосовали, это показано отдельно и не влияет на стрелки. Последние стадии четырёх законов — те же, что для фракций.</p>'
@@ -2086,7 +2105,7 @@ def ballot_pages(matrix: dict, cards: dict, summaries: dict,
             if fid not in rows or fid not in names:
                 raise Refuse(f"бюллетень: неизвестная фракция {fid}")
             row, card = rows[fid], cards.get(fid, {})
-            brief = faction_summary(row, card, summaries.get(fid, ""), laws)
+            brief = faction_summary(row, card, summaries.get(fid, ""), laws, plain=True)
             if fid in (leaders or {}):
                 brief += leaders[fid]["detail"]
             ax = card.get("axis_institutions") or {}
@@ -2103,14 +2122,41 @@ def ballot_pages(matrix: dict, cards: dict, summaries: dict,
             brief = brief.replace('Четыре закона владельца', '4 закона владельца', 1)
             body += (f'<h2><a href="f-{fid}.html">{esc(names[fid])}</a></h2>'
                      f'{brief}<p><a href="f-{fid}.html">Подробности о фракции</a></p>')
+        # Четыре абзаца, с явным владельцем каждого голоса и без новой агрегации.
+        from render_cheatsheet import _pos, LAW_HEADS
+        short_laws, short_axes, short_money = [], [], []
+        for fid in entry.get("factions", []) or (["yashar"] if entry.get("personal") else []):
+            who = names[fid] if fid != "yashar" else "Личные голоса Айзенкота и Тропера"
+            own_laws = laws if fid != "yashar" else personal["laws"]
+            positions = "; ".join(re.sub(r'<br>.*', '', head) + ': ' + _pos(law["labels"][str(fid)])
+                                  for head, law in zip(LAW_HEADS, own_laws))
+            short_laws.append(f'<span data-short-laws="{fid}">{esc(who)}: {positions}</span>')
+            section = body.split(f'<h2><a href="f-{fid}.html">')[-1] if fid != "yashar" else body
+            axis = re.search(r'<p data-(?:personal-)?theme="institutions"><b>[^<]+</b> (.*?)</p>', section)[1]
+            short_axes.append(f'<span data-short-axis="{fid}">{esc(who)}: {axis}</span>')
+            if fid != "yashar":
+                money = re.search(r'<p><b>Деньги:</b> (.*?)</p>', section)[1]
+                coverage, _ = ballot_money(money)
+                pair = re.search(r"(\d+)/(\d+)", coverage)
+                if pair:
+                    role = "как вторая сторона: " if coverage.startswith("вторая сторона") else ""
+                    money = f'{role}в бюджете нашлась статья под {pair[1]} из {pair[2]} денежных обещаний.'
+                short_money.append(f'<span data-short-money="{fid}">{esc(who)}: {money}</span>')
+        short = ('<section class="list-short"><h2>Коротко</h2>'
+                 f'<p>Буквы: <span lang="he" dir="rtl"><bdi>{esc(entry["letters"])}</bdi></span>.</p>'
+                 '<p>4 закона: ' + ' / '.join(short_laws or ["нет данных — список в этом Кнессете не голосовал"]) + '</p>'
+                 '<p>Суд и права: ' + ' / '.join(short_axes or ["нет данных"]) + '</p>'
+                 '<p>Деньги: ' + ' / '.join(short_money or ["денежных обещаний пока не разбирали."]) +
+                 ' Найденная статья бюджета не означает, что деньги выделены полностью.</p></section>')
         pages[f"l-{number}.html"] = f'''<!doctype html><html lang=ru><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex, nofollow"><title>{esc(entry["ru"])}</title>
 <style>{css_from_mockup()}</style></head><body>
 <nav class=crumbs><a href="index.html#ballot">Все списки</a></nav>
 <h1><span class="ballot-letters" lang="he" dir="rtl" title="буквы на бюллетене">{esc(entry["letters"])}</span> {esc(entry["ru"])} <span lang=he dir=rtl><bdi>{esc(entry["he"])}</bdi></span></h1>
+<p class=lead>{esc(entry["leaders"])}</p>{short}
 <p class="letters-source">{esc(ballot["letters_source"])}</p>
-<p class=lead>{esc(entry["leaders"])}</p><p>{LEGEND}</p>{body}<footer>{SHORT_FRAME}</footer>
+<h2>Подробности</h2><p>«Не уверены» — вывод может смениться, если смысл каждого десятого закона прочитан с ошибкой.</p>{body}<footer>{SHORT_FRAME}</footer>
 </body></html>'''
     return pages
 
