@@ -326,6 +326,13 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None, *, compact: b
         if any(fid not in names for fid in fids):
             raise Refuse(f"бюллетень: неизвестная фракция у {row['ru']}")
         absent = "".join(f'<span class=norec>{esc(note)}</span>' for note in row["absent"])
+        # shining 19.10: читатель не знал, чья позиция слева и справа от «/» в клетках списка из двух фракций
+        import render_cheatsheet
+        short = [render_cheatsheet._short(names[fid]).split(" (")[0] for fid in fids if fid in names]
+        if len(short) > 1:
+            absent += f'<span class=norec>в клетках через «/»: {esc(" / ".join(short))}</span>'
+        elif short and any("Беннет" in note for note in row["absent"]):
+            absent += f'<span class=norec>судим по голосам фракции {esc(short[0])}</span>'
         who = (f'<th scope=row><span class="ballot-letters" lang="he" dir="rtl" title="буквы на бюллетене">{esc(row["letters"])}</span> '
                f'<a href="l-{number}.html">{esc(row["ru"])} '
                f'<span lang=he dir=rtl><bdi>{esc(row["he"])}</bdi></span></a>'
