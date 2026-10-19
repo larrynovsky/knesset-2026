@@ -184,6 +184,51 @@ def theme_table(m: dict | None, cards: dict | None) -> str:
             f'<tbody>{"".join(rows)}</tbody></table>')
 
 
+def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
+    """Списки владельца 19.10; стрелки принадлежат указанным фракциям."""
+    from theme_arrows import THEMES, theme_arrows
+    ballot = json.loads((source or ROOT / "criteria/ballot_2026.json").read_text(encoding="utf-8"))
+    lists = ballot["lists"]
+    # §23: ожидаемые 14 заданы заданием владельца, а не длиной входного JSON.
+    if len(lists) != 14 or len({r["he"] for r in lists}) != 14:
+        raise Refuse("бюллетень: ожидаются 14 разных списков (решение 19.10)")
+    names = party_names(m, cards)
+    observed = {r["anchor_id"] for r in m["lines"] if r["a"]["status"] == "observed"}
+    themes = ("religion_state", "economy", "security")
+    arrows = {t: theme_arrows(t) for t in themes}
+    sym = {"up": "↑", "down": "↓", "both": "↕", None: "—", "miss": "—", "none": "—"}
+    body = []
+    for row in lists:
+        fids = row["factions"]
+        if any(fid not in names for fid in fids):
+            raise Refuse(f"бюллетень: неизвестная фракция у {row['ru']}")
+        absent = "".join(f'<span class=norec>{esc(note)}</span>' for note in row["absent"])
+        who = (f'<th scope=row>{esc(row["ru"])} '
+               f'<span lang=he dir=rtl><bdi>{esc(row["he"])}</bdi></span>'
+               f'<span class=norec>{esc(row["leaders"])}</span>{absent}</th>')
+        if not fids:
+            cells = '<td colspan="5">голосов в этом Кнессете нет</td>'
+        else:
+            links = "<br>".join(f'<a href="f-{fid}.html">{esc(names[fid])}</a>' for fid in fids)
+            axes = []
+            for fid in fids:
+                ax = cards.get(fid, {}).get("axis_institutions") or {}
+                axes.append(sym[ax.get("arrow")] if fid in observed and alpha_ok(ax) else "—")
+            values = [axes] + [[sym[arrows[t].get(fid, {}).get("arrow")] for fid in fids] for t in themes]
+            cells = f'<td>{links}</td>' + "".join(
+                f'<td data-l="{esc(label)}">{" / ".join(dict.fromkeys(value))}</td>'
+                for label, value in zip(["Суд, парламент, свободы"] + [THEMES[t] for t in themes], values))
+        body.append(f'<tr data-ballot-list="{esc(row["he"])}">{who}{cells}</tr>')
+    heads = "".join(f'<th scope=col>{esc(THEMES[t])}</th>' for t in themes)
+    unmapped = "<br>".join(esc(note) for note in ballot["unmapped_factions"].values())
+    return ('<h2 id="ballot">Списки бюллетеня 27.10</h2>'
+            '<table class="ballot"><thead><tr><th scope=col>Список и лидеры</th>'
+            '<th scope=col>Читается по голосам фракций</th>'
+            f'<th scope=col>Суд, парламент, свободы</th>{heads}</tr></thead>'
+            f'<tbody>{"".join(body)}<tr><td colspan="6">{esc(ballot["small_lists_note"])}</td></tr>'
+            f'</tbody></table><p class=dim>{unmapped}</p>')
+
+
 def other_themes() -> str:
     """Блок «ещё три темы» со ссылкой на страницу осей.
 
@@ -291,15 +336,21 @@ def build(m: dict, cards: dict | None = None,
 <title>Что фракции делали — 25-й Кнессет</title>
 <style>{css_from_mockup()}
 .owner-laws{{width:100%;table-layout:fixed}} .owner-laws th,.owner-laws td{{padding:9px 6px;overflow-wrap:anywhere}} .owner-laws th{{font-size:13px}} .owner-laws td{{font-size:14px}}
+.ballot{{width:100%;table-layout:fixed;border-collapse:collapse;font:13px/1.4 system-ui,sans-serif}}
+.ballot th,.ballot td{{padding:8px 4px;text-align:left;vertical-align:top;border-bottom:1px dotted var(--rule);overflow-wrap:anywhere}}
+.ballot th:first-child{{width:28%}} .ballot th:nth-child(2){{width:24%}}
+.ballot .norec{{display:block;font-size:12px;color:var(--dim)}}
+@media(max-width:600px){{.ballot thead{{display:none}} .ballot tr{{display:block;margin:1rem 0}} .ballot th:first-child,.ballot td{{display:block;width:100%}} .ballot td[data-l]::before{{content:attr(data-l) " · ";font-weight:600}}}}
 </style></head><body>
 <h1>Что фракции делали на самом деле</h1>
-<p class=lead>27 октября в бюллетене будет около двенадцати списков. Этот
+<p class=lead>27 октября голосуют за списки бюллетеня. Этот
 документ нужен для одного: вычеркнуть два-три из них и уметь объяснить себе
 почему — не «они мне не нравятся», а «вот закон, вот дата, вот как они
 проголосовали».</p>
 <p>Мы смотрим на поступки, а не на заявления. Слова перед выборами стоят ноль;
 голос в Кнессете записан поимённо и никуда не денется.</p>
 {FRAME}
+{ballot_table(m, cards or {})}
 {grounds_block(m, cards or {})}
 <h2>Сначала о том, чего мы не знаем</h2>
 <p>Клеток в таблице ниже — <b class=big>{total}</b>С итоговым выводом — {filled};
@@ -315,7 +366,7 @@ def build(m: dict, cards: dict | None = None,
 строка бюджета. Разбор каждого обещания — на странице фракции.
 Ни одно из этих состояний не значит «к этой партии вопросов нет». Пустая клетка
 рассказывает про нас, а не про партию.</p>
-<h2>Шестнадцать строк бюллетеня</h2>
+<h2>Фракции 25-го Кнессета</h2>
 <p>Стрелка показывает, в какую сторону фракция двигала то, что написано в
 заголовке колонки, — а не «хорошо это или плохо». <b>↑</b> укрепляла,
 <b>↓</b> ослабляла, <b>↕</b> ходила и туда и обратно.</p>
@@ -393,6 +444,40 @@ def selftest() -> int:
     assert 'Религиозный сионизм' in owner and 'Ликуд' in owner
     live_doc, _, _ = build(live_matrix, live_cards)
     assert live_doc.index('data-frame=full') < live_doc.index('class="owner-laws"') < live_doc.index('Сначала о том')
+    assert live_doc.index('data-frame=full') < live_doc.index('id="ballot"') < live_doc.index('id="grounds"')
+    ballot_html = ballot_table(live_matrix, live_cards)
+    assert ballot_html.count('data-ballot-list=') == 14 and 'Беннет' in ballot_html
+    for name in ('Яшар!', 'Резервисты'):
+        row_html = next(r for r in re.findall(r'<tr data-ballot-list=.*?</tr>', ballot_html) if name in r)
+        assert '<td colspan="5">голосов в этом Кнессете нет</td>' in row_html
+        assert not any(a in row_html for a in ('↑', '↓', '↕', 'href='))
+    from tempfile import TemporaryDirectory
+    from unittest.mock import patch
+    ballot_input = json.loads((ROOT / "criteria/ballot_2026.json").read_text(encoding="utf-8"))
+    for entry in ballot_input["lists"]:
+        assert esc(entry["ru"]) in ballot_html and esc(entry["leaders"]) in ballot_html
+        assert all(esc(note) in ballot_html for note in entry["absent"])
+        assert all(f'href="f-{fid}.html"' in ballot_html for fid in entry["factions"])
+    assert esc(ballot_input["small_lists_note"]) in ballot_html
+    assert all(esc(note) in ballot_html for note in ballot_input["unmapped_factions"].values())
+    with TemporaryDirectory() as tmp:
+        path = Path(tmp) / "ballot.json"
+        for missing in range(14):
+            path.write_text(json.dumps(dict(ballot_input, lists=ballot_input["lists"][:missing] + ballot_input["lists"][missing + 1:])), encoding="utf-8")
+            try:
+                ballot_table(live_matrix, live_cards, path)
+            except Refuse as e:
+                assert '14 разных списков' in str(e)
+            else:
+                raise AssertionError(f"удаление списка {missing} не обнаружено")
+    with patch('theme_arrows.theme_arrows', return_value={1096: {"arrow": "up"}, 1108: {"arrow": "down"}}):
+        test_cards = dict(live_cards)
+        test_cards.update({fid: {"axis_institutions": {"arrow": arrow, "alpha": 1}} for fid, arrow in ((1096, "up"), (1108, "down"))})
+        split_html = ballot_table(live_matrix, test_cards)
+        likud = next(r for r in re.findall(r'<tr data-ballot-list=.*?</tr>', split_html) if 'Ликуд' in r)
+        assert likud.count('↑ / ↓') == 4
+        assert 'f-1096.html' in likud and 'f-1108.html' in likud
+    print("ЗЕЛЁНЫЙ: бюллетень — 14 строк; 14 удалений из JSON отклонены; расхождения стрелок сохранены")
     # Оракул сводки: все 16 строк, 64 позиции и непосредственное место под h1.
     laws = owner_law_positions([str(r["anchor_id"]) for r in live_matrix["lines"]])
     assert len(live_matrix["lines"]) == 16 and len(laws) == 4
@@ -451,7 +536,8 @@ def selftest() -> int:
     with _m.patch(__name__ + ".fingerprint", lambda *_a: None):
         _html = budget_block([_dup_card], {}, [])
     assert "Самостоятельных денежных обязательств 2" in _html, "снятие not_budgetary не сдвинуло счётчик"
-    doc, total, filled = build(m)
+    with _m.patch(__name__ + ".ballot_table", return_value=""):
+        doc, total, filled = build(m)
     # R27-F11: никакого заранее вынесенного «промаха» у всех списков
     assert "промах" not in doc, "рамка снова выносит приговор всем спискам"
     assert total == 6, f"клеток {total}, а строк три по две колонки"
@@ -462,7 +548,8 @@ def selftest() -> int:
                                           "alpha": 0.81,
                                           "alpha": 0.81,
         "text": "вероятно ослабляла; у нас 23 актов из 40"}}}
-    doc2, total2, filled2 = build(m, cards_ok)
+    with _m.patch(__name__ + ".ballot_table", return_value=""):
+        doc2, total2, filled2 = build(m, cards_ok)
     assert (total2, filled2) == (6, 1), f"решение не доехало до клетки: {filled2}"
     assert "вероятно ослабляла" in doc2, "формулировка карточки не дошла до обзора"
     # ── РАМКА ОБЪЯВЛЯЕТ ЧЕТЫРЕ ТЕМЫ, ТАБЛИЦА ПОКАЗЫВАЕТ ОДНУ ─────────────
@@ -479,7 +566,8 @@ def selftest() -> int:
     # строка без связи с фракцией стрелки не получает НИ ПРИ КАКОМ решении
     cards_lin = {3: {"axis_institutions": {"arrow": "up", "level": "high",
                                            "text": "укрепляла"}}}
-    doc3, _, filled3 = build(m, cards_lin)
+    with _m.patch(__name__ + ".ballot_table", return_value=""):
+        doc3, _, filled3 = build(m, cards_lin)
     assert filled3 == 0, \
         "строка со статусом lineage_unresolved получила стрелку — §7 обойдён"
     # значение вне закрытого списка макета — отказ, а не тихая отрисовка
@@ -637,7 +725,8 @@ def selftest() -> int:
             pass
         else:
             raise AssertionError("обзор с потерянной проводкой разборов прошёл")
-    dr, tr, fr = build(mk_m("observed"), {1110: fcard_ax}, {1110: "в бюджете нашлась строка под 1 из 2 обещаний"})
+    with _m.patch(__name__ + ".ballot_table", return_value=""):
+        dr, tr, fr = build(mk_m("observed"), {1110: fcard_ax}, {1110: "в бюджете нашлась строка под 1 из 2 обещаний"})
     assert f"в 1 показано покрытие обещаний бюджетными строками; в остальных {tr - fr - 1}" in dr, \
         "счёт пустых клеток включил разобранную"
     # ── ГРАНИЦА ПУБЛИКАЦИИ, А НЕ ТОЛЬКО ВЫЧИСЛЕНИЯ ──────────────────────
