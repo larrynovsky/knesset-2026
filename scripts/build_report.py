@@ -135,6 +135,7 @@ def cells(card: dict, idx: dict, titles: list[str]) -> list[tuple[str, object]]:
     Одна ячейка — слишком мелко: метаданных больше, чем данных. Множество
     ячеек одной карточки — то, от чего зависит именно её проза.
     """
+    idx, titles = vc.budget_scope(card, idx, titles)
     out: list[tuple[str, object]] = []
     for c in card.get("commitments") or []:
         concl = c.get("conclusion") or ""
@@ -446,6 +447,7 @@ def render_votes_card(card: dict) -> str:
 
 
 def render_card(card: dict, idx, titles, nulls) -> str:
+    idx, titles = vc.budget_scope(card, idx, titles)
     if card.get("votes"):
         return render_votes_card(card)
     p = [f'<h2 id=c-{esc(card.get("period_id"))}>{esc(card.get("party_ru"))} '

@@ -185,7 +185,8 @@ def c_frame(src):
 # v28: exact wording requested by owner, no free-form numeric verdicts.
 LEADING_MONEY_PATTERN = (r"подписала как вторая сторона [0-9]+ денежных обещаний партнёрам в соглашениях правительства "
                          r"(?:37; самостоятельных обещаний после разбора: [0-9]+; в бюджете нашлась строка под [0-9]+"
-                         r"|36 \(2021 год\); подтверждённых сопоставлений с бюджетом 2021 года: 0; сопоставление требует проверки)")
+                         r"|36 \(2021 год\)(?:; подтверждённых сопоставлений с бюджетом 2021 года: 0; сопоставление требует проверки"
+                         r"|; разобрано вручную: [^<—]+ — строка бюджета нашлась под [0-9]+ из [0-9]+; у остальных сопоставление требует проверки))")
 MONEY_PATTERN = (LEADING_MONEY_PATTERN + r"|в бюджете нашлась строка под [0-9]+ из [0-9]+ обещаний"
                  r"|в соглашении 2021 года найдено (?:[0-9]+ денежн(?:ое обещание|ых обещания|ых обещаний)|0 — правило извлечения ничего не нашло; это не значит, что обещаний нет); "
                  r"(?:бюджет этих лет не выгружен|сопоставление требует проверки)")
@@ -514,7 +515,7 @@ def reproduce(root):
             shutil.copytree(root / name, snapshot / name,
                             ignore=shutil.ignore_patterns("__pycache__"))
         (snapshot / "data").mkdir()
-        for name in ("coverage_matrix.json", "votes_25.json", "budget_takanot.json"):
+        for name in ("coverage_matrix.json", "votes_25.json", "budget_takanot.json", "budget_takanot_2021_2022.json"):
             shutil.copyfile(root / "data" / name, snapshot / "data" / name)
         shutil.copytree(root / "data/agreements_ocr", snapshot / "data/agreements_ocr")
         shutil.copyfile(root / "data/agreements_ocr_report_ca36.json",
@@ -582,7 +583,7 @@ def selftest_reproduce():
         for name in ("scripts", "cards", "criteria", "docs/reference", "data"):
             (fixture / name).mkdir(parents=True)
         shutil.copytree(ROOT / "design/mockup_v5", fixture / "design/mockup_v5")
-        for name in ("coverage_matrix.json", "votes_25.json", "budget_takanot.json"):
+        for name in ("coverage_matrix.json", "votes_25.json", "budget_takanot.json", "budget_takanot_2021_2022.json"):
             (fixture / "data" / name).write_text("{}")
         # Общий build_site вызывает все генераторы; здесь проверяется обёртка.
         for module in ("render_axes", "render_card_page"):

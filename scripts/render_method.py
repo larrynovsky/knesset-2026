@@ -217,7 +217,7 @@ def selftest() -> int:
     # разбора и числу их записей, а не через load_cards.
     from validate_cards import load_yaml_ish as _ly
     _rev = set()
-    for _p in (ROOT / "cards").glob("*-gov37.yaml"):
+    for _p in (ROOT / "cards").glob("*-gov*.yaml"):
         _c = _ly(_p)
         if _c.get("commitments"):
             _rev.add(int(str(_c["period_id"]).split("-")[0]))

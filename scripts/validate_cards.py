@@ -179,8 +179,12 @@ def load_yaml_ish(path: Path, *, text: str | None = None) -> dict:
 def known_periods() -> set[str]:
     if not PERIODS.exists():
         return set()
-    return set(re.findall(r"^\s*-\s*id:\s*(\S+)", PERIODS.read_text(encoding="utf-8"),
-                          flags=re.M))
+    periods = set(re.findall(r"^\s*-\s*id:\s*(\S+)", PERIODS.read_text(encoding="utf-8"),
+                             flags=re.M))
+    declaration = ROOT / "criteria/agreements_ca36.json"
+    if declaration.exists():
+        periods.update(a["period_id"] for a in json.loads(declaration.read_text())["agreements"])
+    return periods
 
 
 def budget_index() -> tuple[dict, list[str]]:
@@ -188,9 +192,22 @@ def budget_index() -> tuple[dict, list[str]]:
     if not TAKANOT.exists():
         return {}, []
     rows = json.loads(TAKANOT.read_text(encoding="utf-8"))["rows"]
+    historical = TAKANOT.with_name("budget_takanot_2021_2022.json")
+    if historical.exists():
+        rows += json.loads(historical.read_text(encoding="utf-8"))["rows"]
     idx = {(r["code"], r["year"]): r for r in rows}
     titles = [r["title"] or "" for r in rows if len(r["code"]) == 10]
     return idx, titles
+
+
+def budget_scope(card: dict, idx: dict, titles: list[str]) -> tuple[dict, list[str]]:
+    """§11: отсутствие строки и число проверяются в годах своего правительства."""
+    years = {"gov36": {2021, 2022}, "gov37": {2023, 2024, 2025}}.get(
+        str(card.get("period_id", "")).split("-")[-1])
+    if years is None or all(year in years for _, year in idx):
+        return idx, titles
+    scoped = {key: row for key, row in idx.items() if key[1] in years}
+    return scoped, [r.get("title") or "" for (code, _), r in scoped.items() if len(code) == 10]
 
 
 # --------------------------------------------------------------- 14 проверок
@@ -220,11 +237,19 @@ def ocr_by_period() -> dict:
         if f.exists():
             # у одного периода может быть несколько файлов (ЯТ + приложение)
             out.setdefault(m.group(2), []).append(f.read_text(encoding="utf-8").split("\n"))
+    declaration = ROOT / "criteria/agreements_ca36.json"
+    if declaration.exists():
+        for a in json.loads(declaration.read_text())["agreements"]:
+            f = ROOT / "data/agreements_ocr" / a["file"]
+            if f.exists():
+                out.setdefault(a["period_id"], []).append(f.read_text(encoding="utf-8").split("\n"))
     return out
 
 
 def check_card(card: dict, name: str, periods: set[str], idx: dict,
                titles: list[str], ocr: dict | None = None) -> None:
+    idx, titles = budget_scope(card, idx, titles)
+
     def bad(rule: str, msg: str) -> None:
         fail(f"{name}: {rule} — {msg}")
 

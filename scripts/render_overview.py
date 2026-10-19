@@ -22,7 +22,7 @@ from html.parser import HTMLParser
 from urllib.parse import unquote, urlsplit
 
 from build_report import esc, fingerprint, render_commitment, money, Refuse, OUTCOME_RU
-from validate_cards import budget_index
+from validate_cards import budget_index, budget_scope
 
 ROOT = Path(__file__).resolve().parent.parent
 MOCK = ROOT / "design" / "mockup_v5" / "index.html"
@@ -505,9 +505,11 @@ def selftest() -> int:
         expected = sum(i.get("category") == "commitment" for d in source_maps
                        if d["period_id"].endswith(f"-gov{gov}") for i in d["items"])
         assert leaders[fid]["commitments"] == expected
-    assert leaders[1096]["found"] == sum(budget_counts(cs)[0] for cs in money_cards.values())
-    assert leaders[1096]["independent"] == sum(budget_counts(cs)[1] for cs in money_cards.values())
-    assert leaders[1102]["found"] == 0  # кандидаты CA36 не принятые сопоставления
+    by_gov = lambda g: [[c for c in cs if c["period_id"].endswith(f"-gov{g}")] for cs in money_cards.values()]
+    assert leaders[1096]["found"] == sum(budget_counts(cs)[0] for cs in by_gov(37))
+    assert leaders[1096]["independent"] == sum(budget_counts(cs)[1] for cs in by_gov(37))
+    # CA36: принятые сопоставления только из ручных карточек (v34: РААМ), не из кандидатов карт
+    assert leaders[1102]["found"] == sum(budget_counts(cs)[0] for cs in by_gov(36))
     import tempfile
     with tempfile.TemporaryDirectory() as tmp:
         data = Path(tmp)
@@ -1161,6 +1163,31 @@ def selftest() -> int:
 
     sys.path.insert(0, str(ROOT / "scripts"))
     from classify_direction import n_asserts
+    # v34: РААМ проходит тот же путь; подмена суммы обязана остановить рендер.
+    raam = load_cards("party_period")[1099]
+    assert budget_summary(raam) == "в бюджете нашлась строка под 3 из 5 обещаний"
+    assert 1099 in reviewed_from_files()
+    live_idx, live_titles = budget_index()
+    assert "raam-p2-58" in budget_block(raam, live_idx, live_titles)
+    changed = dict(live_idx)
+    key = ("0052500122", 2022)
+    changed[key] = dict(live_idx[key], net_executed=live_idx[key]["net_executed"] + 1)
+    try:
+        budget_block(raam, changed, live_titles)
+    except Refuse:
+        pass
+    else:
+        raise AssertionError("РААМ: подмена исполнения не остановила рендер")
+    from validate_cards import ocr_by_period, quote_in_ocr
+    assert "1099-gov36" in ocr_by_period()
+    for c in raam[0]["commitments"]:
+        assert any(quote_in_ocr(c["quote_he"], text, c["line"])
+                   for text in ocr_by_period()["1099-gov36"])
+    # Строка прежнего периода не опровергает отсутствие в 2023–2025.
+    scoped, _ = budget_scope({"period_id": "1095-gov37"}, live_idx, live_titles)
+    assert not any(code == "0022010203" for code, year in scoped)
+    assert any(code == "0022010203" for code, year in live_idx)
+
     print(f"самопроверка render_overview: {n_asserts(selftest)} утверждений "
           "(включая мутант стража внутреннего языка)")
     return 0
@@ -1312,7 +1339,7 @@ def leading_money(budgets: dict, data: Path | None = None) -> dict:
     }
     out = {}
     for fid, (gov, entries) in groups.items():
-        total, periods, links = 0, set(), []
+        total, periods, links, carded36 = 0, set(), [], []
         for key, partner, label, href in entries:
             path = data / f"commitment_map_{key}.json"
             if not path.is_file():
@@ -1323,12 +1350,13 @@ def leading_money(budgets: dict, data: Path | None = None) -> dict:
                 raise Refuse(f"CA{gov}: неверный период или годы {path.name}")
             n = commitment_counts(d["items"])["commitments"]
             if gov == 36 and (d.get("budget_status") != "сопоставление требует проверки"
-                              or any(i.get("granularity") for i in d["items"] if i.get("category") == "commitment")
-                              or any(c["period_id"] == period for cs in budgets.values() for c in cs)):
+                              or any(i.get("granularity") for i in d["items"] if i.get("category") == "commitment")):
                 raise Refuse("CA36: появились решения о сопоставлении; пересмотреть сводку за 2021 год")
             total += n
             if n:
                 periods.add(period)
+            if gov == 36 and any(c["period_id"] == period for cs in budgets.values() for c in cs):
+                carded36.append((period, label))
             links.append(f'<li><a href="{href}">{esc(label)}</a>: {n}</li>')
         # Приложение Яхадут ха-Тора не удваивает разбор того же периода.
         reviewed = [c for cs in budgets.values() for c in cs if c["period_id"] in periods]
@@ -1344,8 +1372,17 @@ def leading_money(budgets: dict, data: Path | None = None) -> dict:
                     "и записи, признанные неденежными при разборе. Числа после разбора — "
                     "сумма результатов партнёров. Это не число уникальных бюджетных строк.")
         else:
-            text += (" (2021 год); подтверждённых сопоставлений с бюджетом 2021 года: 0; "
-                     "сопоставление требует проверки")
+            text += " (2021 год)"
+            if carded36:
+                done = {p for p, _ in carded36}
+                f36, i36 = budget_counts([c for cs in budgets.values() for c in cs
+                                          if c["period_id"] in done])
+                text += (f"; разобрано вручную: {', '.join(l for _, l in carded36)} — "
+                         f"строка бюджета нашлась под {f36} из {i36}; "
+                         "у остальных сопоставление требует проверки")
+            else:
+                text += ("; подтверждённых сопоставлений с бюджетом 2021 года: 0; "
+                         "сопоставление требует проверки")
             note = ("Автоматическое извлечение из сканов; полнота и отсутствие повторов "
                     "не подтверждены ручным чтением. Возможные строки бюджета не считаются "
                     "подтверждёнными. Ноль не означает, что обещания не финансировались.")
@@ -1360,7 +1397,9 @@ def leading_money(budgets: dict, data: Path | None = None) -> dict:
 def budget_block(cards: list, idx: dict, titles: list) -> str:
     """§11: проверка и подстановка читают один индекс; старый CLI не вызывается."""
     out = []
+    full_idx, full_titles = idx, titles
     for card in cards:
+        idx, titles = budget_scope(card, full_idx, full_titles)
         if card.get("data_fingerprint") != fingerprint(card, idx, titles):
             raise Refuse(f"§11: data_fingerprint не совпал: {card['period_id']}")
         cov = card.get("coverage") or {}
@@ -1404,11 +1443,11 @@ def budget_block(cards: list, idx: dict, titles: list) -> str:
 
 
 def reviewed_from_files() -> set:
-    """Фракции с непустой карточкой разбора — по файлам *-gov37.yaml, мимо
+    """Фракции с непустой карточкой разбора — по файлам *-gov*.yaml, мимо
     load_cards (независимый путь для сверки, R22-F01)."""
     from validate_cards import load_yaml_ish
     out = set()
-    for p in (ROOT / "cards").glob("*-gov37.yaml"):
+    for p in (ROOT / "cards").glob("*-gov*.yaml"):
         c = load_yaml_ish(p)
         if c.get("commitments"):
             out.add(int(str(c["period_id"]).split("-")[0]))
@@ -1488,7 +1527,9 @@ def check_budget_page(page: str, cards: list, idx: dict, titles: list,
         # именно в заголовке денежной клетки (R19-F02, M11), не где угодно
         if [_cell_word(h, "страница") for h in _money_summaries(page)] != [summary if summary is not None else budget_summary(cards)]:
             raise Refuse("денежное покрытие в заголовке не совпало с карточками")
+    full_idx, full_titles = idx, titles
     for card in cards:
+        idx, titles = budget_scope(card, full_idx, full_titles)
         for date in card["snapshots"].values():
             if esc(date) not in page:
                 raise Refuse("дата снимка бюджетного разбора потеряна")
@@ -1705,12 +1746,17 @@ def main() -> int:
     from map_commitments import ca36_summaries
     ca36 = ca36_summaries()
     summaries = {fid: budget_summary(bc) for fid, bc in budgets.items() if bc}
+    ca36 = {fid: value for fid, value in ca36.items()
+            if not any(c.get("period_id", "").endswith("-gov36")
+                       for c in budgets.get(fid, []))}
     summaries.update({fid: value for fid, value in ca36.items() if isinstance(fid, int)})
     summaries.update({fid: value["text"] for fid, value in leaders.items()})
     for row in m["lines"]:
         if row["anchor_id"] in leaders:
             row["b"]["status"] = "observed"
     doc, total, filled = build(m, cards, summaries)
+    if budgets.get(1099):
+        check_overview_money(doc, {1099: budget_summary(budgets[1099])})
     check_overview_money(doc, summaries,
                          {r["anchor_id"] for r in m["lines"]})
     bad = jargon(doc)
