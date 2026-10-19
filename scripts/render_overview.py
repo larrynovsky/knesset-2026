@@ -62,7 +62,7 @@ FRAME = """<div class=note id=frame data-frame=full>
 Партии стоят в порядке черновика преемственности. Мы рассказываем, что
 произошло; вывод — ваш.</p>
 <p class=dim><b>Это первая, грубая итерация.</b> Направление посчитано по
-голосам фракций и знаку каждого закона по большинству трёх моделей; точность
+голосам фракций и знаку каждого закона; точность
 будем повышать следующим шагом. Что известно про каждую фракцию — на её
 странице.</p>
 <p class=dim style="margin-bottom:0"><b>Автор — частное лицо,</b> проект никто
@@ -124,6 +124,8 @@ def rows(m: dict, cards: dict | None = None,
             raise SystemExit(f"ОТКАЗ: стрелка {k1!r} вне закрытого списка "
                              f"{tuple(CELL)} — макет других значений не несёт")
         lab1 = ax.get("text") or "голосования по теме правового государства"
+        if lab1 == "по голосам фракции и знаку закона по большинству трёх моделей":
+            lab1 = "голосования по теме правового государства"
         c1 = cell(k1, lab1)
         total += 1
         if k1 not in ("miss", "none"):
@@ -144,7 +146,10 @@ def rows(m: dict, cards: dict | None = None,
                "денежных обещаний в соглашении не найдено"
                if b == "observed" and k2 == "none" else
                "обязательства против бюджета")
-        c2 = cell(k2, lab, budgets.get(r["anchor_id"]) if k2 == "reviewed" else None)
+        value = budgets.get(r["anchor_id"]) if k2 == "reviewed" else None
+        if k2 == "miss" and r["anchor_id"] in (1096, 1110, 1100, 1102, 1104):
+            value = "денежных обещаний пока не разбирали"
+        c2 = cell(k2, lab, value)
         total += 1
         if k2 not in ("miss", "none", "reviewed"):
             filled += 1
@@ -172,14 +177,15 @@ def theme_table(m: dict | None, cards: dict | None) -> str:
         cells = []
         for t in THEMES:
             a = arr[t].get(fid)
-            cells.append(f"<td>{sym[a['arrow']]} {a['up']}/{a['down']}</td>" if a
-                         else "<td>—</td>")
+            n = a["up"] + a["down"] if a else 0
+            cells.append(f"<td>мало законов ({n})</td>" if n < 3 else
+                         f"<td>{sym[a['arrow']]} {a['up']}/{a['down']}</td>")
         rows.append(f'<tr><th scope=row><a href="f-{r["anchor_id"]}.html">{esc(names[r["anchor_id"]])}</a>'
                     f' <span class=he lang=he dir=rtl><bdi>{esc(r["line"])}</bdi></span></th>{"".join(cells)}</tr>')
     return ('<h2>Другие темы — первая грубая итерация</h2>'
             '<p>Стрелка по голосам фракции и знаку закона по теме; рядом — сколько '
             'законов в сторону плюса / минуса. Экономика: плюс — на стороне '
-            'производителя; государство и религия: ↑ — больше места религии в государстве, ↓ — меньше. «—» — знаков по теме ещё нет.</p>'
+            'производителя; государство и религия: ↑ — больше места религии в государстве, ↓ — меньше; безопасность: ↑ — норма расширяет полномочия армии и силовых структур, ↓ — сужает. При числе законов со знаком меньше трёх — «мало законов (N)».</p>'
             f'<table class=acts><thead><tr><th scope=col>Фракция</th>{heads}</tr></thead>'
             f'<tbody>{"".join(rows)}</tbody></table>')
 
@@ -214,7 +220,10 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
             for fid in fids:
                 ax = cards.get(fid, {}).get("axis_institutions") or {}
                 axes.append(sym[ax.get("arrow")] if fid in observed and alpha_ok(ax) else "—")
-            values = [axes] + [[sym[arrows[t].get(fid, {}).get("arrow")] for fid in fids] for t in themes]
+            values = [axes] + [[
+                f"мало законов ({arrows[t].get(fid, {}).get('up', 0) + arrows[t].get(fid, {}).get('down', 0)})"
+                if arrows[t].get(fid, {}).get("arrow") is None else
+                sym[arrows[t][fid]["arrow"]] for fid in fids] for t in themes]
             cells = f'<td>{links}</td>' + "".join(
                 f'<td data-l="{esc(label)}">{" / ".join(dict.fromkeys(value))}</td>'
                 for label, value in zip(["Суд, парламент, свободы"] + [THEMES[t] for t in themes], values))
@@ -230,30 +239,10 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
 
 
 def other_themes() -> str:
-    """Блок «ещё три темы» со ссылкой на страницу осей.
-
-    Рамка объявляет четыре темы, а таблица показывает одну — читателю это
-    надо сказать на том же экране, а не оставить догадываться. Состояние
-    каждой темы берётся там же, где живёт само объявление: второго дома
-    рамке не положено, поэтому и состояние считает render_axes.
-    """
-    sys.path.insert(0, str(ROOT / "scripts"))
-    from render_axes import axis_state, counts_from_repo, load_themes
-    themes = load_themes()
-    counts = counts_from_repo()
-    rest = [t for t in sorted(themes["themes"], key=lambda t: t["rank"])
-            if t.get("role") != "РЕШАЮЩАЯ"]
-    li = "".join(f'<li><b>{esc(t["title_ru"])}</b> — '
-                 f'{esc(axis_state(t, counts)[1])}</li>' for t in rest)
-    return (f'<h2>Ещё {len(rest)} темы</h2>'
-            f'<p>Они не менее важные — просто по ним мы не вычёркиваем. '
-            f'Разница ровно в этом.</p>'
-            f'<ul class=dim>{li}</ul>'
-            f'<p><a href="axes.html">Что мы меряем и почему именно это</a> — '
-            f'там про каждую тему отдельно. '
-            f'<a href="time.html">Как менялась доля расхождений с залом</a> — '
-            f'по полугодиям, без объяснений. '
-            f'<a href="method.html">Как мы считаем</a>.</p>')
+    """Навигация к методологии без устаревшего статуса отбора тем."""
+    return ('<p><a href="axes.html">Что мы меряем и почему именно это</a>. '
+            '<a href="time.html">Как менялась доля расхождений с залом</a>. '
+            '<a href="method.html">Как мы считаем</a>.</p>')
 
 
 # Лидеры фракций в 25-м Кнессете (владелец 19.10: название + лидер или лидеры).
@@ -366,10 +355,11 @@ def build(m: dict, cards: dict | None = None,
 строка бюджета. Разбор каждого обещания — на странице фракции.
 Ни одно из этих состояний не значит «к этой партии вопросов нет». Пустая клетка
 рассказывает про нас, а не про партию.</p>
-<h2>Фракции 25-го Кнессета</h2>
+<h2>Шестнадцать фракций нынешнего Кнессета</h2>
 <p>Стрелка показывает, в какую сторону фракция двигала то, что написано в
 заголовке колонки, — а не «хорошо это или плохо». <b>↑</b> укрепляла,
-<b>↓</b> ослабляла, <b>↕</b> ходила и туда и обратно.</p>
+<b>↓</b> ослабляла, <b>↕</b> ходила и туда и обратно. Направление —
+по голосам фракции и знаку закона по большинству трёх моделей.</p>
 <table class=ov><thead><tr>
 <th scope=col class=who>фракция</th>
 <th scope=col class=c-inst>суд, парламент, свободы</th>
@@ -478,6 +468,18 @@ def selftest() -> int:
         assert likud.count('↑ / ↓') == 4
         assert 'f-1096.html' in likud and 'f-1108.html' in likud
     print("ЗЕЛЁНЫЙ: бюллетень — 14 строк; 14 удалений из JSON отклонены; расхождения стрелок сохранены")
+    # Граница малого покрытия: все темы остаются видимыми, даже при нуле.
+    from theme_arrows import THEMES
+    for n in range(4):
+        sample = {t: {1096: {"up": n, "down": 0, "arrow": "up",
+                            "examples": {"up": ["Закон <пример>"] if n else [], "down": []}}}
+                  for t in THEMES}
+        with patch.dict(_THEME_CACHE, sample, clear=True):
+            fragment = _theme_lines({"anchor_id": 1096})
+        assert fragment.count('data-theme=') == 3
+        assert (f"мало законов ({n})" in fragment) == (n < 3)
+        assert (":</b> ↑ —" in fragment) == (n >= 3)
+        assert "<пример>" not in fragment
     # Оракул сводки: все 16 строк, 64 позиции и непосредственное место под h1.
     laws = owner_law_positions([str(r["anchor_id"]) for r in live_matrix["lines"]])
     assert len(live_matrix["lines"]) == 16 and len(laws) == 4
@@ -486,6 +488,7 @@ def selftest() -> int:
         card = live_cards.get(fid, {})
         brief = faction_summary(row, card, "покрытие для проверки", laws)
         assert brief.count('<p>') >= 4
+        assert re.findall(r'data-theme="([^"]+)"', brief) == ["economy", "religion_state", "security"]
         expected = re.findall(r'<td>(.*?)</td>', re.search(
             rf'<tr data-owner-fid="{fid}">(.*?)</tr>', owner).group(1))
         assert re.findall(r': <b>(.*?)</b>', brief) == expected
@@ -557,11 +560,9 @@ def selftest() -> int:
     # найдёт — и решит, что тема в документе одна. Проверяется НАЛИЧИЕ пути,
     # не понятность текста: понятность мерит только слепое чтение (§26).
     assert 'href="axes.html"' in doc2, "из обзора нет пути к странице тем"
-    from render_axes import load_themes
-    for t in load_themes()["themes"]:
-        if t.get("role") != "РЕШАЮЩАЯ":
-            assert t["title_ru"] in doc2, \
-                f"тема {t['id']} объявлена, но в обзоре не названа"
+    from theme_arrows import THEMES
+    for title in THEMES.values():
+        assert title in doc2, f"тема {title} не названа"
     assert "↓" in doc2, "знак стрелки не дошёл до клетки"
     # строка без связи с фракцией стрелки не получает НИ ПРИ КАКОМ решении
     cards_lin = {3: {"axis_institutions": {"arrow": "up", "level": "high",
@@ -694,7 +695,7 @@ def selftest() -> int:
         "R19-F01: пустая карта извлечения показана не как «искали, не нашли»"
     mz_m["lines"][0]["b"]["commitments"] = 3
     mn, _, _ = rows(mz_m, {1110: fcard_ax})
-    assert "мы сюда не дошли" in mn and "искали" not in mn, \
+    assert "денежных обещаний пока не разбирали" in mn and "искали" not in mn, \
         "извлечённые, но не разобранные обещания показаны как «искали, не нашли»"
     # R19-F01: обзор и страница отвечают одним значением
     _pg = lambda w: f"<summary>Деньги — <b class=tx-none>{w}</b></summary>"
@@ -1138,7 +1139,7 @@ def _money_td(doc: str, fid: int) -> str:
 
 
 def _cell_word(html: str, where: str) -> str:
-    words = [w for _, w, _ in CELL.values() if f"{w}<span class=lb>" in html
+    words = [w for w in [v[1] for v in CELL.values()] + ["денежных обещаний пока не разбирали"] if f"{w}<span class=lb>" in html
              or f">{w}</b>" in html]
     words += re.findall(r"в бюджете нашлась строка под [0-9]+ из [0-9]+ обещаний(?=<span class=lb>|</b>)", html)
     if len(words) != 1:
@@ -1250,10 +1251,15 @@ def _theme_lines(row: dict) -> str:
             "religion_state": " (↑ — больше религии в государстве)", "security": ""}
     out = []
     for t, title in THEMES.items():
-        a = _THEME_CACHE.get(t, {}).get(fid)
-        if a and a.get("arrow"):
-            out.append(f"<p><b>{esc(title)}:</b> {word[a['arrow']]} — законов в сторону "
-                       f"плюса {a['up']}, минуса {a['down']}{esc(note[t])}.</p>")
+        a = _THEME_CACHE[t].get(fid, {"up": 0, "down": 0, "examples": {}})
+        n = a["up"] + a["down"]
+        direction = f"мало законов ({n})" if n < 3 else word[a["arrow"]]
+        examples = "; ".join(
+            label + ": " + ("; ".join("<bdi>" + esc(name) + "</bdi>" for name in a["examples"].get(side, [])) or "нет")
+            for side, label in (("up", "Примеры в плюс"), ("down", "Примеры в минус")))
+        out.append(f'<p data-theme="{t}"><b>{esc(title)}:</b> {direction} — '
+                   f'{a["up"]} законов в сторону плюса / {a["down"]} в сторону минуса'
+                   f'{esc(note[t])}. {examples}.</p>')
     return "".join(out)
 
 
@@ -1500,7 +1506,9 @@ def faction_page(card: dict, row: dict, votes: list, budget: str = "", summary: 
                   'коалиционного соглашения не подписывала. Это не результат '
                   'проверки, не выявившей проблем, и не обвинение.</p>')
     else:
-        s2, c2 = ('Деньги — <b class=tx-miss>мы сюда не дошли</b>',
+        word = ("денежных обещаний пока не разбирали" if row["anchor_id"] in
+                (1096, 1110, 1100, 1102, 1104) else "мы сюда не дошли")
+        s2, c2 = (f'Деньги — <b class=tx-miss>{word}</b>',
                   "сопоставление обязательств не построено")
     cells.append(det(s2, c2, budget or f'<p>{esc(row["b"]["note"])}</p>'))
     body = [f'<p class=lead>{esc(card.get("conclusion"))}</p>']

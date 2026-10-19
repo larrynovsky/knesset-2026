@@ -41,6 +41,7 @@ validate:
 # Без браузера, ~1 с. Самопроверка канона идёт внутри --build на свежей
 # сборке, до замены site/.
 selftest-code:
+	$(PY) scripts/theme_arrows.py --selftest
 	$(PY) scripts/validate_cards.py --selftest
 	$(PY) scripts/build_report.py --selftest
 	$(PY) scripts/render_overview.py --selftest

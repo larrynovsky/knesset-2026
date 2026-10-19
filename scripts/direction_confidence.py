@@ -800,7 +800,9 @@ def compose(rows: list[dict], directions: dict, table: dict,
         up = sum(1 for m in by_act.values() if m == {1})
         mixed = sum(1 for m in by_act.values() if len(m) > 1)
         out[fac] = {"down": down, "up": up, "mixed_acts": mixed,
-                    "acts": down + up}
+                    "acts": down + up,
+                    "up_bills": sorted(b for b, moves in by_act.items() if moves == {1}),
+                    "down_bills": sorted(b for b, moves in by_act.items() if moves == {-1})}
         stat["акты в обе стороны внутри акта"] += mixed
     return out, acts_theme, dict(stat)
 
