@@ -154,6 +154,36 @@ def rows(m: dict, cards: dict | None = None,
     return "\n".join(out), total, filled
 
 
+def theme_table(m: dict | None, cards: dict | None) -> str:
+    """Покрытие вместо точности (владелец 19.10): стрелки по описательным
+    темам — по знакам законов в criteria/theme_signs_<тема>.json."""
+    if not m:
+        return ""
+    from theme_arrows import THEMES, theme_arrows
+    arr = {t: theme_arrows(t) for t in THEMES}
+    if not any(arr.values()):
+        return ""
+    names = party_names(m, cards or {})
+    sym = {"up": "↑", "down": "↓", "both": "↕", None: "—"}
+    heads = "".join(f"<th scope=col>{esc(THEMES[t])}</th>" for t in THEMES)
+    rows = []
+    for r in m["lines"]:
+        fid = ALIAS.get(r["anchor_id"], r["anchor_id"])
+        cells = []
+        for t in THEMES:
+            a = arr[t].get(fid)
+            cells.append(f"<td>{sym[a['arrow']]} {a['up']}/{a['down']}</td>" if a
+                         else "<td>—</td>")
+        rows.append(f'<tr><th scope=row><a href="f-{r["anchor_id"]}.html">{esc(names[r["anchor_id"]])}</a>'
+                    f' <span class=he lang=he dir=rtl><bdi>{esc(r["line"])}</bdi></span></th>{"".join(cells)}</tr>')
+    return ('<h2>Другие темы — первая грубая итерация</h2>'
+            '<p>Стрелка по голосам фракции и знаку закона по теме; рядом — сколько '
+            'законов в сторону плюса / минуса. Экономика: плюс — на стороне '
+            'производителя; государство и религия: ↑ — больше места религии в государстве, ↓ — меньше. «—» — знаков по теме ещё нет.</p>'
+            f'<table class=acts><thead><tr><th scope=col>Фракция</th>{heads}</tr></thead>'
+            f'<tbody>{"".join(rows)}</tbody></table>')
+
+
 def other_themes() -> str:
     """Блок «ещё три темы» со ссылкой на страницу осей.
 
@@ -295,6 +325,7 @@ def build(m: dict, cards: dict | None = None,
 <th scope=col class=c-eq>деньги</th></tr></thead><tbody>
 {body}
 </tbody></table>
+{theme_table(m, cards)}
 {other_themes()}
 <div class=foot><p>Первая грубая итерация, 19.10.2026.
 Форма принята 01.08.2026 (design/mockup_v5). Снимок голосований:
@@ -1008,7 +1039,7 @@ def _money_td(doc: str, fid: int) -> str:
     """Ровно одна строка обзора этой фракции и ровно одна её клетка «деньги»
     (R22-F02, W04b: регулярка через </tr> брала клетку соседней строки)."""
     trs = [tr for tr in re.findall(r"<tr>(.*?)</tr>", doc, flags=re.S)
-           if f'href="f-{fid}.html"' in tr]
+           if f'href="f-{fid}.html"' in tr and "class=c-eq" in tr]
     if len(trs) != 1:
         raise Refuse(f"строк обзора у {fid}: {len(trs)}, а не одна")
     eq = re.findall(r"<td class=c-eq[^>]*>(.*?)</td>", trs[0], flags=re.S)
