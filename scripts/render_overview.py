@@ -310,7 +310,27 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
     heads = "".join(f'<th scope=col>{label}</th>' for label in ("Религия", "Экономика", "Безопасность"))
     small_lists = "".join(f"<li>{esc(name)}</li>" for name in SMALL_BALLOT_LISTS)
     unmapped = "<br>".join(esc(note) for note in ballot["unmapped_factions"].values())
+    # Пример относится к фракции, не ко всему списку с присоединившимися людьми.
+    example_axis = cards.get(1096, {}).get("axis_institutions") or {}
+    example = 'Пример: открой строку «Ликуд» — под названием указано, чьи голоса мы показываем.'
+    if (1096 in observed and alpha_ok(example_axis)
+            and example_axis.get("arrow") in ("up", "down", "both")
+            and all(k in example_axis for k in ("acts", "down", "up"))):
+        yes = sum(law["positions"][_al(1096)] == "за" for law in laws)
+        example = (f'Пример: фракция «Ликуд» — «за» по {yes} из {len(laws)} твоих законов; '
+                   f'«суд, парламент, свободы» {sym[example_axis["arrow"]]}: '
+                   f'из {example_axis["acts"]} законов с определённым направлением '
+                   f'по {example_axis["down"]} её голоса шли в сторону ослабления, '
+                   f'по {example_axis["up"]} — укрепления.')
     return ('<h2 id="ballot">Списки бюллетеня 27.10</h2>'
+            '<section class="ballot-reading" aria-label="Как читать эту таблицу">'
+            '<h3>Как читать эту таблицу</h3>'
+            '<div>Каждая строка — список на 27.10; рядом — как голосовали связанные с ним фракции нынешнего Кнессета.</div>'
+            '<div>Хочешь вычеркнуть 2–3 списка? Начни с четырёх законов, которые ты пометил «недопустимо», затем посмотри стрелки по темам.</div>'
+            f'<div>{esc(example)}</div>'
+            '<div>? и ?? — стрелке можно доверять меньше: она может смениться, если часть знаков законов ошибочна.</div>'
+            '<div>У «Резервистов» голосов списка нет — эта таблица не даёт по ним вывода; это не оценка прошлого каждого участника.</div>'
+            '<div>Где это не работает: список — не фракция; после выборов люди и союзы меняются.</div></section>'
             '<div class="ballot-legend">'
             '<div>Суд, парламент, свободы — ↑ укрепляла, ↓ ослабляла.</div>'
             '<div>Государство и религия — ↑ больше места религии.</div>'
@@ -473,7 +493,8 @@ def build(m: dict, cards: dict | None = None,
 .ballot th,.ballot td{{padding:8px 4px;text-align:left;vertical-align:top;border-bottom:1px dotted var(--rule)}}
 .ballot,.ballot *{{overflow-wrap:normal;word-break:normal;hyphens:manual}}
 .ballot thead th{{white-space:nowrap}}
-.ballot-legend{{margin:1rem 0}}
+.ballot-reading{{margin:1rem 0}}
+.ballot-legend{{margin:1rem 0;font-size:var(--f0)}}
 .faction-details>summary{{cursor:pointer;font:14px/1.5 system-ui,sans-serif;overflow-wrap:normal}}
 .robustness{{font-size:.75em;white-space:nowrap}}
 .ballot th:first-child{{width:28%}}
@@ -651,6 +672,25 @@ def selftest() -> int:
         assert not any(a in row_html for a in ('↑', '↓', '↕', 'href="f-'))
     from tempfile import TemporaryDirectory
     from unittest.mock import patch
+    # v49: изменённые данные должны изменить пример, а отсутствие права
+    # на стрелку — убрать численный вывод. Ловит захардкоженный пример.
+    altered_cards = dict(live_cards)
+    altered_cards[1096] = dict(live_cards[1096], axis_institutions={
+        "arrow": "up", "alpha": 1, "acts": 19, "down": 2, "up": 17})
+    altered_laws = owner_law_positions(list(dict.fromkeys(
+        _al(fid) for row in load_ballot()["lists"] for fid in row["factions"])))
+    with patch(__name__ + '.owner_law_positions', return_value=[
+            dict(law, positions=dict.fromkeys(law["positions"], "против"),
+                 labels=dict.fromkeys(law["positions"], "против")) for law in altered_laws]):
+        changed = ballot_table(live_matrix, altered_cards)
+    reading = changed.split('<section class="ballot-reading"')[1].split('</section>')[0]
+    assert reading.count('<div>') == 6
+    assert '«за» по 0 из 4' in reading and 'свободы» ↑' in reading
+    assert 'из 19 законов' in reading and 'по 2 её голоса' in reading and 'по 17 — укрепления' in reading
+    assert changed.index('Как читать эту таблицу') < changed.index('class="ballot-legend"') < changed.index('<table class="ballot">')
+    altered_cards[1096]["axis_institutions"]["alpha"] = 0
+    no_example = ballot_table(live_matrix, altered_cards).split('</section>')[0]
+    assert 'из 19 законов' not in no_example and 'чьи голоса мы показываем' in no_example
     likud = next(r for r in re.findall(r'<tr data-ballot-list=.*?</tr>', ballot_html) if 'Ликуд' in r)
     law_cell = re.search(r'<td data-l="4 закона владельца">(.*?)</td>', likud).group(1)
     assert '<b>за</b>' in law_cell and law_cell.count('title=') == 4
