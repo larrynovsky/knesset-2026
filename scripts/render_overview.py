@@ -37,6 +37,32 @@ CELL = {"up": ("↑", "укрепляла", ""), "down": ("↓", "ослабля
         "reviewed": ("", "в бюджете нашлась строка под {n} из {m} обещаний", "tx-rev")}
 
 
+def data_periods(data: Path) -> tuple[str, str]:
+    """§11: даты только из снимков, которые читает отчёт; без даты сборки."""
+    from datetime import date
+    votes = json.loads((data / "votes_25.json").read_text(encoding="utf-8"))
+    start, end = (date.fromisoformat(v[:10]) for v in votes["window"])
+    taken = date.fromisoformat(votes["at"][:10])
+    if start > end or taken < end:
+        raise Refuse("ОТКАЗ: противоречивые даты снимка голосований")
+    vote_line = (f'Голосования {votes["knesset"]}-го Кнессета с {start:%d.%m.%Y} '
+                 f'по {end:%d.%m.%Y} (снимок {taken:%d.%m.%Y}); после этого сайт '
+                 'Кнессета закрыт для заходов не из Израиля, новых голосований нет')
+    budgets = []
+    # Те же два источника, что validate_cards.budget_index; не архив *_2022.
+    for name in ("budget_takanot_2021_2022.json", "budget_takanot.json"):
+        snapshot = json.loads((data / name).read_text(encoding="utf-8"))
+        years = snapshot["years"]
+        if not years or any(type(y) is not int for y in years):
+            raise Refuse(f"ОТКАЗ: нет бюджетных лет в {name}")
+        taken = date.fromisoformat(snapshot["fetched_at"][:10])
+        budgets.append(f'{", ".join(map(str, sorted(set(years))))} '
+                       f'(снимок {taken:%d.%m.%Y})')
+    return (f'<p class="data-period" data-source="votes_25.json">{vote_line}</p>',
+            '<p class="data-period" data-source="budget_takanot">Бюджет: '
+            + '; '.join(budgets) + '.</p>')
+
+
 def css_from_mockup() -> str:
     """CSS берётся из макета, а не копируется в код: один дом у формы."""
     m = re.search(r"<style>(.*?)</style>", MOCK.read_text(encoding="utf-8"), re.S)

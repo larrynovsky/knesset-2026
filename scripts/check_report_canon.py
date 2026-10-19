@@ -27,7 +27,8 @@
     python3 scripts/check_report_canon.py <каталог> --selftest
 """
 import re, sys, pathlib, html as _h
-import hashlib, shutil, subprocess, tempfile
+import hashlib, shutil, subprocess, tempfile, json
+from datetime import date
 
 # ─────────────────────────────────────────────────────────────── канон отчёта
 # Решение владельца 19.10: в денежной клетке разрешено покрытие N из M.
@@ -633,6 +634,55 @@ def c_cheatsheet(src):
 
 
 # ───────────────────────────────────────────────────────────────── прогон
+@check("период данных на каждой странице из исходных снимков (v54)",
+       [("удалена строка голосований", lambda s: dict(s, **{"index.html": re.sub(
+           r'<p class="data-period" data-source="votes_25.json">.*?</p>', '', s["index.html"])})),
+        ("дата голосований из бюджета", lambda s: dict(s, **{"cheatsheet.html": re.sub(
+           r'(data-source="votes_25.json">.*?снимок )[^)]+',
+           lambda m: m[1] + date.fromisoformat(json.loads((ROOT / "data/budget_takanot.json").read_text())["fetched_at"][:10]).strftime('%d.%m.%Y'),
+           s["cheatsheet.html"])})),
+        ("удалена строка бюджета", lambda s: dict(s, **{"l-1.html": re.sub(
+           r'<p class="data-period" data-source="budget_takanot">.*?</p>', '', s["l-1.html"])})),
+        ("бюджет со снимком голосований", lambda s: dict(s, **{"index.html": re.sub(
+           r'(data-source="budget_takanot">.*?снимок )[^)]+',
+           lambda m: m[1] + date.fromisoformat(json.loads((ROOT / "data/votes_25.json").read_text())["at"][:10]).strftime('%d.%m.%Y'),
+           s["index.html"])}))])
+def c_data_periods(src):
+    # Независимо от форматтера: сверяем видимый текст с сырыми JSON.
+    votes = json.loads((ROOT / "data/votes_25.json").read_text())
+    dates = [date.fromisoformat(v[:10]).strftime('%d.%m.%Y')
+             for v in [*votes["window"], votes["at"]]]
+    expected_votes = (f'Голосования {votes["knesset"]}-го Кнессета с {dates[0]} по {dates[1]} '
+                      f'(снимок {dates[2]}); после этого сайт Кнессета закрыт для заходов '
+                      'не из Израиля, новых голосований нет')
+    budgets = []
+    for name in ("budget_takanot_2021_2022.json", "budget_takanot.json"):
+        snapshot = json.loads((ROOT / "data" / name).read_text())
+        taken = date.fromisoformat(snapshot["fetched_at"][:10]).strftime('%d.%m.%Y')
+        budgets.append(', '.join(str(y) for y in sorted(set(snapshot["years"])))
+                       + f' (снимок {taken})')
+    expected_budget = 'Бюджет: ' + '; '.join(budgets) + '.'
+    bad = []
+    for name, page in src.items():
+        page = strip_comments(page)
+        required = [("votes_25.json", expected_votes)]
+        if name in ("index.html", "method.html") or name.startswith(("l-", "f-")) or '₪' in page:
+            required.append(("budget_takanot", expected_budget))
+        for source, expected in required:
+            matches = list(re.finditer(r'<p class="data-period" data-source="'
+                                       + re.escape(source) + r'">([^<]*)</p>', page))
+            if len(matches) != 1 or _h.unescape(matches[0][1]) != expected:
+                bad.append(f'{name}: отсутствует или неверен период {source}')
+        # Обе строки должны идти непосредственно после заголовка, вне details.
+        if not re.search(r'</h1>\s*<p class="data-period" data-source="votes_25.json">', page):
+            bad.append(f'{name}: период голосований не под заголовком')
+        if len(required) == 2 and not re.search(
+                r'data-source="votes_25.json">[^<]*</p>\s*'
+                r'<p class="data-period" data-source="budget_takanot">', page):
+            bad.append(f'{name}: период бюджета не в шапке')
+    return len(src), bad, ''
+
+
 def run(src):
     rows = []
     for c in CHECKS:
@@ -662,6 +712,31 @@ def report(rows, exemptions=True):
 def selftest(src):
     """Поднести бумажку к каждому датчику. Проверка, не покрасневшая на
     собственном мутанте, мертва — и это единственный способ это узнать."""
+    # Каждый адрес проверяется отдельно: потеря строки на f-/l-/служебной
+    # странице не должна маскироваться исправной строкой в обзоре.
+    period_mutants = 0
+    for name, page in src.items():
+        for match in re.finditer(r'<p class="data-period"[^>]*>[^<]*</p>', page):
+            mutated = dict(src, **{name: page[:match.start()] + page[match.end():]})
+            assert c_data_periods(mutated)[1], f"пропущена потеря периода: {name}"
+            period_mutants += 1
+    print(f"v54: удаление каждой строки периода — {period_mutants} мутантов красные")
+    # Смена метаданных входа меняет вывод: даты не зашиты в форматтере.
+    from render_overview import data_periods
+    with tempfile.TemporaryDirectory() as tmp:
+        data = pathlib.Path(tmp)
+        for name in ("votes_25.json", "budget_takanot.json", "budget_takanot_2021_2022.json"):
+            if name == "votes_25.json":
+                snapshot = dict(knesset=25, window=["2020-01-02", "2021-03-04"], at="2022-05-06")
+            else:
+                snapshot = dict(years=[2018, 2020], fetched_at="2022-07-08")
+            (data / name).write_text(json.dumps(snapshot))
+        vote_line, budget_line = data_periods(data)
+        assert 'с 02.01.2020 по 04.03.2021 (снимок 06.05.2022)' in vote_line
+        assert budget_line.count('2018, 2020 (снимок 08.07.2022)') == 2
+        changed = re.sub(r'<p class="data-period" data-source="votes_25.json">.*?</p>',
+                         lambda m: vote_line, src["index.html"])
+        assert c_data_periods(dict(src, **{"index.html": changed}))[1]
     for good in ("11 законов", "12 актов", "13 актов", "14 законов", "111 актов",
                  "из 4 законов", "из 131 закона", "из 5 обещаний", "из 21 обещания"):
         assert not c_plural_ru({"test.html": good})[1], good
@@ -803,6 +878,17 @@ def build_site(root, destination):
                  "sys.argv=sys.argv[:1]; sys.exit(t.main())")
     subprocess.run([sys.executable, "-c", time_page, str(destination)],
                    cwd=root / "scripts", check=True)
+    # Общая шапка всех публикуемых страниц, включая новые страницы сборки.
+    from render_overview import data_periods
+    votes_period, budget_period = data_periods(root / "data")
+    for path in destination.rglob("*.html"):
+        page = path.read_text(encoding="utf-8")
+        periods = votes_period
+        if path.name in ("index.html", "method.html") or path.name.startswith(("l-", "f-")) or '₪' in page:
+            periods += '\n' + budget_period
+        if '</h1>' not in page:
+            raise ValueError(f"ОТКАЗ: нет заголовка для периода данных: {path.name}")
+        path.write_text(page.replace('</h1>', '</h1>\n' + periods, 1), encoding="utf-8")
     (destination / "robots.txt").write_text("User-agent: *\nAllow: /\n", encoding="utf-8")
     from render_overview import check_index_links, Refuse
     try:
