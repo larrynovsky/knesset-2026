@@ -49,7 +49,13 @@ def main() -> int:
     ap.add_argument("--expect-parties", type=int, default=None,
                     help="§23: сколько партий ожидаем увидеть в правительстве")
     ap.add_argument("--dry-run", action="store_true", help="не писать criteria/periods.yaml")
+    ap.add_argument("--knesset", type=int, default=25,
+                    help="срезы 20–24: пишет data/periods_N.yaml (генерированный справочник, не критерий)")
     a = ap.parse_args()
+    global OUT, K25_NUM
+    if a.knesset != 25:
+        K25_NUM = a.knesset
+        OUT = ROOT / "data" / f"periods_{a.knesset}.yaml"
 
     rows = fetch_all("KNS_PersonToPosition", flt=f"KnessetNum eq {K25_NUM}")
     facs: dict[int, set] = collections.defaultdict(set)      # PersonID → {(id, name)}

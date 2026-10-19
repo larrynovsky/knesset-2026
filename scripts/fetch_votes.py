@@ -94,7 +94,7 @@ WINDOWS = {
 
 def use_knesset(n: int) -> None:
     """Переключить модуль на Кнессет n. 25 — прежнее поведение байт в байт."""
-    global SCAN, OUT, K25_START, K25_END, K25_NUM
+    global SCAN, OUT, K25_START, K25_END, K25_NUM, NAMED_CACHE
     if n not in WINDOWS:
         raise SystemExit(f"Кнессет {n} вне WINDOWS {sorted(WINDOWS)}")
     K25_START, K25_END = WINDOWS[n]
@@ -102,6 +102,9 @@ def use_knesset(n: int) -> None:
     if n != 25:
         SCAN = ROOT / "data" / f"bills_scan_{n}.json"
         OUT = ROOT / "data" / f"votes_{n}.json"
+        # Отдельный кэш: arrow_robustness хеширует data/named_votes_cache/* как вход
+        # 25-го, и выгрузка срезов, пишущая туда, роняла бы его кэш и make report.
+        NAMED_CACHE = ROOT / "data" / "named_votes_cache_slices"
 
 
 def load_bills() -> dict[str, dict]:

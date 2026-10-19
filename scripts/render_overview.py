@@ -2201,6 +2201,72 @@ def faction_summary(row: dict, card: dict, money_text: str, laws: list[dict], pl
             f'{_theme_lines(row, plain=plain)}</section>')
 
 
+
+SLICE_YEARS = {20: "2015–2019", 21: "2019", 22: "2019–2020", 23: "2020–2021", 24: "2021–2022"}
+SLICE_THEMES = (("rule_of_law", "institutions", "Суд и права"), ("religion_state", "religion_state", "Религия"),
+                ("economy", "economy", "Экономика"), ("security", "security", "Безопасность"))
+SLICE_ROLE = {"правительство": "в правительстве", "оппозиция": "в оппозиции",
+              "коалиция без министров": "в коалиции, без министров",
+              "часть срока в правительстве": "часть срока в правительстве"}
+
+
+def slice_word(t: dict | None, key: str) -> str:
+    """Слово среза — тем же словарём, что 25-й; мало законов — так и сказано."""
+    if not t or not t.get("arrow"):
+        n = (t or {}).get("up", 0) or 0
+        n += (t or {}).get("down", 0) or 0
+        return f"мало законов ({n})" if n else "нет законов"
+    word = dict(zip(("up", "down", "both"), THEME_WORDS[key]))[t["arrow"]]
+    up, down = t.get("up", 0) or 0, t.get("down", 0) or 0
+    count = f"{up} и {down}" if t["arrow"] == "both" else f'{up if t["arrow"] == "up" else down} из {up + down}'
+    return f'{word} <small>законов: {count}</small>'
+
+
+def slice_block(letters: str, data: Path | None = None) -> str:
+    """Срезы 20–24 (владелец 19.10). Нет data/slices.json — блока нет, без заглушки."""
+    p = data or ROOT / "data" / "slices.json"
+    if not p.exists():
+        return ""
+    d = json.loads(p.read_text(encoding="utf-8"))
+    by_k = d["lines"].get(letters, {})
+    names = {r["Id"]: r["Name"] for r in json.loads((ROOT / "data" / "kns_faction_20_24.json").read_text(encoding="utf-8"))}
+    rows = []
+    for k in sorted(SLICE_YEARS):
+        cell, kn = by_k.get(str(k), {}), d["knessets"].get(str(k), {})
+        head = f'<th scope="row">{k}-й<small>{SLICE_YEARS[k]}</small></th>'
+        if kn.get("status") != "ok":
+            rows.append(f'<tr data-slice-k="{k}">{head}<td colspan=4>ещё не посчитано</td></tr>')
+            continue
+        units = []
+        for link in cell.get("links", []):
+            label = esc(link["note"] or names.get(link["fid"], str(link["fid"])))
+            if link["type"] == "joint":
+                label += " <small>(общий список — голоса одни на всех участников)</small>"
+            units.append((f'<bdi>{label}</bdi>, {SLICE_ROLE[link["role"]]}', link["themes"]))
+        if cell.get("personal", {}).get("themes"):
+            who = ", ".join(cell["personal"]["stats"])
+            units.append((f'личные голоса: {esc(who)}', cell["personal"]["themes"]))
+        elif "personal" in cell:
+            rows.append(f'<tr data-slice-k="{k}">{head}<td colspan=4>личных голосов по законам этих тем нет</td></tr>')
+            continue
+        if not units:
+            rows.append(f'<tr data-slice-k="{k}">{head}<td colspan=4>в этом Кнессете списка и его людей не было</td></tr>')
+            continue
+        for i, (label, themes) in enumerate(units):
+            tds = "".join(f'<td data-slice-theme="{th}">{slice_word(themes.get(th), key)}</td>'
+                          for th, key, _ in SLICE_THEMES)
+            rows.append(f'<tr data-slice-k="{k}">' + (head if i == 0 else '<td></td>') +
+                        f'<td colspan=4 class=slice-who>{label}</td></tr>'
+                        f'<tr data-slice-k="{k}"><td></td>{tds}</tr>')
+    return ('<section class="list-slices"><h2>Как голосовали раньше</h2>'
+            '<p>Те же темы в прошлых Кнессетах. Знаки законов прочитаны по названиям, грубее, чем в 25-м. '
+            'Число — сколько законов темы легли в эту сторону из всех, где позиция была. В правительстве и в оппозиции голосуют по-разному: '
+            'перемена слова вместе с переменой роли — не обязательно перемена взглядов.</p>'
+            '<table class="list-short-table"><thead><tr><th scope="col">Кнессет</th>' +
+            "".join(f'<th scope="col">{t}</th>' for _, _, t in SLICE_THEMES) + '</tr></thead><tbody>' +
+            "".join(rows) + '</tbody></table><p class=dim>25-й Кнессет (2022–2026) — в таблице «Коротко» выше.</p></section>')
+
+
 def ballot_pages(matrix: dict, cards: dict, summaries: dict,
                  laws: list[dict], source: Path | None = None,
                  leaders: dict | None = None) -> dict[str, str]:
@@ -2330,10 +2396,11 @@ def ballot_pages(matrix: dict, cards: dict, summaries: dict,
 .list-short-table th{{font-weight:500}}
 .list-short-table small{{display:block;font-size:.78rem;color:var(--dim);font-weight:400}}
 .short-who{{font-size:.78rem}}
+.slice-who{{font-size:.78rem;color:var(--dim);border-bottom:none}}
 </style></head><body>
 <nav class=crumbs><a href="index.html#ballot">Все списки</a></nav>
 <h1><span class="ballot-letters" lang="he" dir="rtl" title="буквы на бюллетене">{esc(entry["letters"])}</span> {esc(entry["ru"])} <span lang=he dir=rtl><bdi>{esc(entry["he"])}</bdi></span></h1>
-<p class=lead>{esc(entry["leaders"])}</p>{short}
+<p class=lead>{esc(entry["leaders"])}</p>{short}{slice_block(entry["letters"])}
 <p class="letters-source">{esc(ballot["letters_source"])}</p>
 <h2>Подробности</h2><p>«Не уверены» — вывод может смениться, если смысл каждого десятого закона прочитан с ошибкой.</p>{body}<footer>{SHORT_FRAME}</footer>
 </body></html>'''

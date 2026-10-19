@@ -34,9 +34,11 @@ def names_ru_path() -> Path:
     return sorted((ROOT / "docs" / "reference").glob("vote_names_ru_*.json"))[-1]
 
 
-def theme_arrows(theme: str, votes: dict | None = None) -> dict:
-    """fid -> направление, счётчики законов и до двух примеров с каждой стороны."""
-    signs = load_signs(theme)
+def theme_arrows(theme: str, votes: dict | None = None, signs: dict | None = None) -> dict:
+    """fid -> направление, счётчики законов и до двух примеров с каждой стороны.
+
+    signs — знаки другого Кнессета (срезы 20–24); по умолчанию criteria 25-го."""
+    signs = load_signs(theme) if signs is None else signs
     if not signs:
         return {}
     sys.path.insert(0, str(ROOT / "scripts"))

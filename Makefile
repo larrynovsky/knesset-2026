@@ -41,6 +41,7 @@ validate:
 # Без браузера, ~1 с. Самопроверка канона идёт внутри --build на свежей
 # сборке, до замены site/.
 selftest-code:
+	$(PY) scripts/crosscheck_owner_laws.py --selftest
 	$(PY) scripts/arrow_robustness.py --selftest
 	$(PY) scripts/theme_arrows.py --selftest
 	$(PY) scripts/validate_cards.py --selftest
@@ -49,6 +50,8 @@ selftest-code:
 	$(PY) scripts/render_method.py --selftest
 	$(PY) scripts/build_line_cards.py --selftest
 	$(PY) scripts/render_card_page.py --selftest
+	$(PY) scripts/slice_arrows.py --selftest
+	$(PY) scripts/crosscheck_slices.py --selftest
 
 robustness:
 	$(PY) scripts/arrow_robustness.py
@@ -56,7 +59,11 @@ robustness:
 report: robustness selftest-code
 	# §24 локально, как на Studio: иначе MANIFEST отстаёт молча и Studio встаёт (19.10, 14:04–15:40)
 	$(PY) scripts/check_artifacts.py
+	# срезы 20–24 (владелец 19.10): пересчёт до сборки, независимая сверка после
+	$(PY) scripts/slice_arrows.py
 	$(PY) scripts/check_report_canon.py --build
+	$(PY) scripts/crosscheck_owner_laws.py
+	$(PY) scripts/crosscheck_slices.py
 
 stamp:
 	$(PY) scripts/build_report.py --stamp
@@ -76,6 +83,7 @@ layout:
 # браузер. С 19.10 всё, кроме check_layout, входит в `make report`
 # (selftest-code + самопроверка канона внутри --build).
 selftest:
+	$(PY) scripts/crosscheck_owner_laws.py --selftest
 	$(PY) scripts/validate_cards.py --selftest
 	$(PY) scripts/render_overview.py --selftest
 	$(PY) scripts/check_report_canon.py --selftest-reproduce
