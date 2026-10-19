@@ -344,10 +344,16 @@ def list_page_mutant(src, pattern, replacement, filename="l-1.html"):
         ("потеря устойчивости l-14", lambda s: list_page_mutant(s,
            r'(<p data-theme="[a-z_]+"><b>[^<]+</b> [^<]*?) \(не уверены\)', r'\1', "l-14.html")),
         ("потеря Коротко", lambda s: list_page_mutant(s, r'<section class="list-short">.*?</section>', '')),
-        ("подмена счёта Коротко", lambda s: list_page_mutant(s, r'(data-short-axis="1096">[^<]*?: )\d+ раз', r'\g<1>999 раз')),
-        ("подмена закона Коротко", lambda s: list_page_mutant(s, r'(data-list-law="1">.*?)<b>за</b>', r'\1против')),
+        ("подмена счёта Коротко", lambda s: list_page_mutant(s, r'(data-short-theme="institutions" data-fid="1096">.*?: <small>)\d+ раз', r'\g<1>999 раз')),
+        ("подмена закона Коротко", lambda s: list_page_mutant(s, r'(data-short-law="1" data-fid="1096">.*?)<b>за</b>', r'\1против')),
         ("v65: подмена имени фракции l-1", lambda s: list_page_mutant(s,
-           r'(data-list-law="1">.*?)<small>\(Ликуд\)</small>', r'\1<small>(ШАС)</small>')),
+           r'(<table class="list-short-table">.*?<th scope="col">)Ликуд', r'\1ШАС')),
+        ("v70: подмена слова в новой таблице l-1", lambda s: list_page_mutant(s,
+           r'(data-short-theme="religion_state" data-fid="1096"><b title="[^"]*">)за больше религии', r'\1за меньше религии')),
+        ("v70: удаление клетки", lambda s: list_page_mutant(s,
+           r'<td data-short-theme="economy" data-fid="1096">.*?</td>', '')),
+        ("v70: потеря мелкой оговорки", lambda s: list_page_mutant(s,
+           r'(<td data-short-theme="[^"]+" data-fid="[^"]+">.*?)<small> \(не уверены\)</small>', r'\1')),
         ("v65: снято выделение религии", lambda s: list_page_mutant(s,
            r'(data-l="Религия"><span title="[^"]*">)<b>за больше религии</b>', r'\1за больше религии', "index.html")),
         ("v65: выделена экономика", lambda s: list_page_mutant(s,
@@ -416,7 +422,15 @@ def c_list_table(src):
                     expected.append(" · ".join(v[i] + " (" + who + ")" for v, who in zip(page_laws, faction_names))
                                     if len(positions) > 1 and not personal else " · ".join(positions))
             same("4 закона", [clean(v) for v in table_laws], expected)
-            list_laws = re.findall(r'<span data-list-law="[1-4]">(.*?)</span>', page, re.S)
+            # Отдельные клетки фракций восстанавливают значения строки обзора.
+            list_laws = []
+            for i in range(1, 5):
+                cells = re.findall(r'<td data-short-law="' + str(i) + r'" data-fid="([^"]+)">(.*?)</td>', page, re.S)
+                same(f"колонки закона {i}", fids or ["yashar"], [fid for fid, _ in cells])
+                marks = [v for _, v in cells]
+                unique = list(dict.fromkeys(marks))
+                list_laws.append(" · ".join(v + " <small>(" + who + ")</small>" for v, who in zip(marks, faction_names))
+                                 if len(unique) > 1 and not personal else " · ".join(unique))
             same("4 закона с именами и выделением", table_laws, list_laws)
         else:
             same("4 закона без голосов", clean(law_cell[1]) if law_cell else "", "нет данных" if 'голосов в этом Кнессете нет' in page else "")
@@ -471,19 +485,48 @@ def c_list_table(src):
             bad.append(f"{name} ({filename}): деньги без связанной фракции")
         short_match = re.search(r'<section class="list-short"><h2>Коротко</h2>(.*?)</section>', page, re.S)
         short = short_match[1] if short_match else ""
-        if len(re.findall(r'<p>', short)) != 4 or page.find('class="list-short"') > page.find('<h2>Подробности</h2>'):
-            bad.append(f"{filename}: нет четырёх строк Коротко перед подробностями")
-        same("буквы Коротко", re.findall(r'<span class="ballot-letters"[^>]*>([^<]+)</span>', row),
-             re.findall(r'<bdi>([^<]+)</bdi>', short))
+        short_rows = re.findall(r'<tr><th scope="row">(.*?)</th>(.*?)</tr>', short, re.S)
+        from render_cheatsheet import LAW_HEADS, _short
+        labels = [re.sub(r"<br>.*", "", head) for head in LAW_HEADS] + [
+            "Суд и права в целом", "Религия в государстве", "Экономика", "Безопасность", "Деньги"]
+        same("строки Коротко", labels, [label for label, _ in short_rows])
+        if any(len(re.findall(r'<td(?: [^>]*)?>', cells)) != max(1, len(fids)) for _, cells in short_rows):
+            bad.append(f"{filename}: число клеток Коротко")
+        if fids or personal:
+            topics = ("institutions", "religion_state", "economy", "security")
+            for i, (_, cells) in enumerate(short_rows):
+                attrs = ([f'data-short-law="{i + 1}" data-fid="{fid}"' for fid in fids or ["yashar"]] if i < 4 else
+                         [f'data-short-theme="{topics[i - 4]}" data-fid="{fid}"' for fid in fids or ["yashar"]] if i < 8 else
+                         [f'data-short-money="{fid}"' for fid in fids or ["yashar"]])
+                same(f"места клеток строки {i + 1}", attrs, re.findall(r'<td ([^>]+)>', cells))
+        if page.find('class="list-short"') > page.find('<h2>Подробности</h2>'):
+            bad.append(f"{filename}: Коротко после подробностей")
+        heads = ([_short(clean(v)) for v in re.findall(r'<h2><a href="f-\d+.html">(.*?)</a>', page)]
+                 if fids else ["Личные голоса Айзенкота и Тропера"] if personal else ["Этот список"])
+        same("колонки Коротко", ["Закон / тема"] + heads, re.findall(r'<th scope="col">(.*?)</th>', short))
+        # лидеры уже в шапке страницы, «в клетках через» — подпись таблицы обзора; остальное — дословно
+        provenance = [p for p in re.findall(r'<span class=norec>(.*?)</span>', row)[1:] if not p.startswith('в клетках через')]
+        same("чьи голоса", [clean('Чьи голоса: ' + ' · '.join(heads) + '.' + (' ' + '. '.join(p[:1].upper() + p[1:] for p in provenance) + '.' if provenance else ''))],
+             [clean(v) for v in re.findall(r'<p class="short-who">(.*?)</p>', short)])
         for fid, section in (sections if not personal else [("yashar", page)]):
-            who = (clean(re.search(r'<h2><a href="f-' + fid + r'.html">(.*?)</a>', page)[1])
-                   if not personal else "Личные голоса Айзенкота и Тропера")
-            for field, pattern in (("axis", r'<p data-(?:personal-)?theme="institutions"><b>[^<]+</b> (.*?)</p>'),
-                                   ("money", r'<p><b>Деньги:</b> (.*?)</p>')):
+            for field, pattern in [(topic, r'<p data-(?:personal-)?theme="' + topic + r'"><b>[^<]+</b> (.*?)</p>')
+                                   for topic in ("institutions", "religion_state", "economy", "security")] + [
+                                   ("money", r'<p><b>Деньги:</b> (.*?)</p>')]:
                 if personal and field == "money":
+                    same("личные голоса без денежных обещаний", ["денежных обещаний пока не разбирали."],
+                         re.findall(r'<td data-short-money="yashar">(.*?)</td>', short))
                     continue
                 detail = re.findall(pattern, section, re.S)
-                brief = re.findall(r'<span data-short-' + field + '="' + fid + r'">(.*?)</span>', short, re.S)
+                attr = 'data-short-money="' + fid + '"' if field == "money" else 'data-short-theme="' + field + '" data-fid="' + fid + '"'
+                brief = re.findall(r'<td ' + attr + r'>(.*?)</td>', short, re.S)
+                if field != "money" and brief:
+                    same(f"выделение {fid} {field}",
+                         [re.findall(r'<b(?: [^>]*)?>(.*?)</b>', v) for v in detail],
+                         [re.findall(r'<b(?: [^>]*)?>(.*?)</b>', v.replace('<small> (не уверены)</small>', ' (не уверены)')) for v in brief])
+                    if '(не уверены)' in clean(brief[0]) and '<small> (не уверены)</small>' not in brief[0]:
+                        bad.append(f"{filename}: оговорка не мелким шрифтом")
+                    if field == "institutions" and 'раз за ослабление' in clean(brief[0]) and not re.search(r': <small>\d+ раз за ослабление', brief[0]):
+                        bad.append(f"{filename}: счёт не мелким шрифтом")
                 expected_detail = [clean(v) for v in detail]
                 if field == "money" and len(expected_detail) == 1:
                     value = expected_detail[0]
@@ -493,9 +536,9 @@ def c_list_table(src):
                         found, total = (leading[2], leading[1]) if leading else (pair[1], pair[2])
                         role = "как вторая сторона: " if value.startswith("подписала как вторая сторона") else ""
                         expected_detail = [f"{role}в бюджете нашлась статья под {found} из {total} денежных обещаний."]
-                same(f"Коротко {fid} {field}", [who + ": " + v for v in expected_detail], [clean(v) for v in brief])
+                same(f"Коротко {fid} {field}", expected_detail, [clean(re.sub(r"</?small>", "", v)) for v in brief])
         if not fids and not personal:
-            if "нет данных — список в этом Кнессете не голосовал" not in short or "Суд и права: нет данных" not in short:
+            if [clean(cells) for _, cells in short_rows] != ["нет данных — список в этом Кнессете не голосовал"] * 8 + ["денежных обещаний пока не разбирали."]:
                 bad.append(f"{filename}: Коротко приписывает голоса новому списку")
         if re.search(r'в сторону [↑↓]|в сторону плюса|в сторону минуса|\((?:устойчива|шаткая|ненадёжна)\)', clean(page)):
             bad.append(f"{filename}: старый язык направлений")

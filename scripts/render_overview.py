@@ -2267,18 +2267,31 @@ def ballot_pages(matrix: dict, cards: dict, summaries: dict,
             brief = brief.replace('Четыре закона владельца', '4 закона владельца', 1)
             body += (f'<h2><a href="f-{fid}.html">{esc(names[fid])}</a></h2>'
                      f'{brief}<p><a href="f-{fid}.html">Подробности о фракции</a></p>')
-        # Четыре абзаца, с явным владельцем каждого голоса и без новой агрегации.
-        from render_cheatsheet import LAW_HEADS
-        law_cell = re.search(r'<td data-l="4 закона владельца">(.*?)</td>', ballot_rows[number - 1])[1]
-        law_marks = re.findall(r'<span title="[^"]*">(.*?)</span>', law_cell)
-        short_laws = [re.sub(r"<br>.*", "", head) + f': <span data-list-law="{i}">{mark}</span>'
-                      for i, (head, mark) in enumerate(zip(LAW_HEADS, law_marks), 1)]
-        short_axes, short_money = [], []
-        for fid in entry.get("factions", []) or (["yashar"] if entry.get("personal") else []):
-            who = names[fid] if fid != "yashar" else "Личные голоса Айзенкота и Тропера"
+        # v70: те же данные подробностей, разложенные по фракциям, без агрегации.
+        from render_cheatsheet import LAW_HEADS, _short
+        overview_row = ballot_rows[number - 1]
+        fids = entry.get("factions", []) or (["yashar"] if entry.get("personal") else [])
+        heads = [_short(names[fid]) if fid != "yashar" else "Личные голоса Айзенкота и Тропера" for fid in fids]
+        labels = [re.sub(r"<br>.*", "", head) for head in LAW_HEADS] + [
+            "Суд и права в целом", "Религия в государстве", "Экономика", "Безопасность", "Деньги"]
+        columns = []
+        for fid in fids:
             section = body.split(f'<h2><a href="f-{fid}.html">')[-1] if fid != "yashar" else body
-            axis = re.search(r'<p data-(?:personal-)?theme="institutions"><b>[^<]+</b> (.*?)</p>', section)[1]
-            short_axes.append(f'<span data-short-axis="{fid}">{esc(who)}: {axis}</span>')
+            column = []
+            for i, law in enumerate(personal["laws"] if fid == "yashar" else laws, 1):
+                value = law.get("labels", law["positions"])[str(fid)]
+                value = value.replace("нет позиции", "не голос.").replace("—", "не голос.").replace("не голосовали", "не голос.")
+                mark = "<b>за</b>" if value == "за" else esc(value)
+                column.append(f'<td data-short-law="{i}" data-fid="{fid}">{mark}</td>')
+            for topic in THEME_WORDS:
+                value = re.search(r'<p data-(?:personal-)?theme="' + topic + r'"><b>[^<]+</b> (.*?)</p>', section)[1]
+                # Сохраняем слова и счёт; только отделяем типографически пояснения.
+                value = re.sub(r'(: | — )(?=\d)', r'\1<small>', value, count=1)
+                if '<small>' in value:
+                    value += '</small>'
+                value = value.replace(' (не уверены)', '<small> (не уверены)</small>')
+                column.append(f'<td data-short-theme="{topic}" data-fid="{fid}">{value}</td>')
+            money = "денежных обещаний пока не разбирали."
             if fid != "yashar":
                 money = re.search(r'<p><b>Деньги:</b> (.*?)</p>', section)[1]
                 coverage, _ = ballot_money(money)
@@ -2286,17 +2299,33 @@ def ballot_pages(matrix: dict, cards: dict, summaries: dict,
                 if pair:
                     role = "как вторая сторона: " if coverage.startswith("вторая сторона") else ""
                     money = f'{role}в бюджете нашлась статья под {pair[1]} из {pair[2]} денежных обещаний.'
-                short_money.append(f'<span data-short-money="{fid}">{esc(who)}: {money}</span>')
+            column.append(f'<td data-short-money="{fid}">{money}</td>')
+            columns.append(column)
+        if not columns:
+            heads = ["Этот список"]
+            columns = [['<td>нет данных — список в этом Кнессете не голосовал</td>'] * 8 +
+                       ['<td>денежных обещаний пока не разбирали.</td>']]
+        # первая — лидеры (уже в шапке), «в клетках через» — подпись таблицы обзора, здесь у каждой колонки своё имя
+        provenance = [p for p in re.findall(r'<span class=norec>(.*?)</span>', overview_row)[1:]
+                      if not p.startswith('в клетках через')]
         short = ('<section class="list-short"><h2>Коротко</h2>'
-                 f'<p>Буквы: <span lang="he" dir="rtl"><bdi>{esc(entry["letters"])}</bdi></span>.</p>'
-                 '<p>4 закона: ' + '; '.join(short_laws or ["нет данных — список в этом Кнессете не голосовал"]) + '</p>'
-                 '<p>Суд и права: ' + ' · '.join(short_axes or ["нет данных"]) + '</p>'
-                 '<p>Деньги: ' + ' · '.join(short_money or ["денежных обещаний пока не разбирали."]) +
-                 ' Найденная статья бюджета не означает, что деньги выделены полностью.</p></section>')
+                 '<table class="list-short-table"><thead><tr><th scope="col">Закон / тема</th>' +
+                 ''.join(f'<th scope="col">{esc(head)}</th>' for head in heads) + '</tr></thead><tbody>' +
+                 ''.join(f'<tr><th scope="row">{label}</th>' + ''.join(col[i] for col in columns) + '</tr>'
+                         for i, label in enumerate(labels)) + '</tbody></table>' +
+                 '<p class="short-who">Чьи голоса: ' + ' · '.join(esc(head) for head in heads) +
+                 '.' + (' ' + '. '.join(p[:1].upper() + p[1:] for p in provenance) + '.' if provenance else '') + '</p>' +
+                 '<p class="dim">Найденная статья бюджета не означает, что деньги выделены полностью.</p></section>')
         pages[f"l-{number}.html"] = f'''<!doctype html><html lang=ru><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex, nofollow"><title>{esc(entry["ru"])}</title>
-<style>{css_from_mockup()}</style></head><body>
+<style>{css_from_mockup()}
+.list-short-table{{width:100%;table-layout:fixed;border-collapse:collapse;font-size:.9rem}}
+.list-short-table th,.list-short-table td{{padding:.45rem .35rem;text-align:left;vertical-align:top;border-bottom:1px solid var(--rule);overflow-wrap:break-word;hyphens:auto}}
+.list-short-table th{{font-weight:500}}
+.list-short-table small{{display:block;font-size:.78rem;color:var(--dim);font-weight:400}}
+.short-who{{font-size:.78rem}}
+</style></head><body>
 <nav class=crumbs><a href="index.html#ballot">Все списки</a></nav>
 <h1><span class="ballot-letters" lang="he" dir="rtl" title="буквы на бюллетене">{esc(entry["letters"])}</span> {esc(entry["ru"])} <span lang=he dir=rtl><bdi>{esc(entry["he"])}</bdi></span></h1>
 <p class=lead>{esc(entry["leaders"])}</p>{short}
