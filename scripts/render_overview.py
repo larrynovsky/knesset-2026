@@ -989,7 +989,8 @@ def selftest() -> int:
             result = personal_result()
             for key, value in [("institutions", result["axis"])] + list(result["themes"].items()):
                 fragment = re.search(rf'<p data-personal-theme="{key}">(.*?)</p>', page).group(1)
-                assert {"up": "↑", "down": "↓", "both": "↕", None: "—"}[value.get("arrow")] in fragment
+                assert ({"up": "↑", "down": "↓", "both": "↕"}[value["arrow"]] if value.get("arrow")
+                        else value.get("text", "мало законов (0)")) in fragment
                 assert f'{value.get("up", 0)} вверх, {value.get("down", 0)} вниз' in fragment
             assert 'Для сравнения:' in page and 'f-1098.html' in page
             for law in personal_result()["laws"]:
@@ -1959,7 +1960,8 @@ def ballot_pages(matrix: dict, cards: dict, summaries: dict,
             for key, label, result in [("institutions", "Суд, парламент, свободы", personal["axis"])] + [
                     (t, label, personal["themes"][t]) for t, label in
                     (("religion_state", "Государство и религия"), ("economy", "Экономика"), ("security", "Безопасность"))]:
-                body += f'<p data-personal-theme="{key}"><b>{label}:</b> {sym[result.get("arrow")]} · {result.get("up", 0)} вверх, {result.get("down", 0)} вниз.</p>'
+                direction = sym[result["arrow"]] if result.get("arrow") else result.get("text", "мало законов (0)")
+                body += f'<p data-personal-theme="{key}"><b>{label}:</b> {direction} · {result.get("up", 0)} вверх, {result.get("down", 0)} вниз.</p>'
             body += '<p>Устойчивость личных стрелок отдельно не оценивалась.</p><h2>4 закона владельца</h2>' + ''.join(
                 f'<p>{esc(law["name"])}: {esc(law["positions"]["yashar"])} ({law["date"]}); {esc(law["counts"]["yashar"])}</p>' for law in personal["laws"])
             body += '<p>Расхождение или отсутствие одного из двоих исключает общую позицию. Если оба не голосовали, это показано отдельно и не влияет на стрелки. Последние стадии четырёх законов — те же, что для фракций.</p>'

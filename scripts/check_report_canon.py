@@ -191,6 +191,127 @@ def c_compact_ballot(src):
     return len(cells), bad, f"{len(cells)} клеток; значки и title"
 
 
+def list_page_mutant(src, pattern, replacement, filename="l-1.html"):
+    changed, n = re.subn(pattern, replacement, src[filename], count=1)
+    if n != 1:
+        raise LookupError(f"{filename}: якорь {pattern!r} не найден")
+    return dict(src, **{filename: changed})
+
+
+@check("страница списка = строка таблицы (v52)",
+       [("подмена стрелки l-1", lambda s: list_page_mutant(s,
+           r'(<p data-theme="institutions"><b>[^<]+</b> )[↑↓↕]', r'\1↑')),
+        ("подмена позиции закона в таблице", lambda s: list_page_mutant(s,
+           r'(<span class="ballot-laws"><span title="[^"]*">)<b>за</b>',
+           r'\1против', "index.html")),
+        ("убраны буквы l-3", lambda s: list_page_mutant(s,
+           r'<span class="ballot-letters"[^>]*>[^<]+</span>', '', "l-3.html")),
+        ("подмена денег l-1", lambda s: edit(s, "l-1.html", '<b>Деньги:</b>', '<b>Деньги:</b> подмена')),
+        ("потеря страницы l-14", lambda s: {k: v for k, v in s.items() if k != "l-14.html"}),
+        ("потеря разделителя направлений", lambda s: edit(s, "index.html",
+           '</small></span> / <span', '</small></span> <span')),
+        ("потеря устойчивости l-14", lambda s: list_page_mutant(s,
+           r'(<small class="robustness"[^>]*>) \(шаткая\)', r'\1 (устойчива)', "l-14.html"))])
+def c_list_table(src):
+    # §20–24: читаем выход двух рендеров, не вызываем их расчётные функции.
+    # Ожидание 14 объявлено владельцем; пустые/дублированные поля — отказ.
+    clean = lambda s: re.sub(r"\s+", " ", text_of(s)).strip()
+    bad, seen = [], 0
+    rows = re.findall(r'<tr data-ballot-list="[^"]*">(.*?)</tr>', src.get("index.html", ""), re.S)
+    pages = {f"l-{i}.html" for i in range(1, 15)}
+    if len(rows) != 14:
+        bad.append(f"бюллетень: строк {len(rows)}, ожидалось 14")
+    if {n for n in src if re.fullmatch(r'l-\d+\.html', n)} != pages:
+        bad.append("бюллетень: состав страниц не l-1…l-14")
+    used = []
+    for row in rows:
+        links = re.findall(r'href="(l-\d+\.html)"', row)
+        if len(links) != 1:
+            bad.append("бюллетень: нет единственной ссылки списка"); continue
+        filename = links[0]
+        used.append(filename)
+        page = src.get(filename, "")
+        name = clean(re.search(r'<a href="l-\d+\.html">(.*?)</a>', row, re.S)[1])
+
+        def same(field, left, right):
+            if not left or not right or left != right:
+                bad.append(f"{name} ({filename}): {field}: таблица={left!r}, страница={right!r}")
+
+        same("буквы", re.findall(r'<span class="ballot-letters"[^>]*>([^<]+)</span>', row),
+             re.findall(r'<h1><span class="ballot-letters"[^>]*>([^<]+)</span>', page))
+        # Только источники голосов в заголовке строки; сравнение Ганца у Яшар
+        # не является источником личной позиции.
+        sources = re.search(r'по голосам: (.*?)</span>', row)
+        fids = re.findall(r'href="f-(\d+).html"', sources[1]) if sources else []
+        sections = re.findall(r'<h2><a href="f-(\d+).html">.*?</h2>(.*?)(?=<h2>|</body>)', page, re.S)
+        if fids != [fid for fid, _ in sections]:
+            bad.append(f"{name} ({filename}): состав фракций расходится")
+        personal = 'data-personal=1' in row
+        law_cell = re.search(r'<td data-l="4 закона владельца">(.*?)</td>', row, re.S)
+        table_laws = re.findall(r'<span title="[^"]*">(.*?)</span>', law_cell[1], re.S) if law_cell else []
+        page_laws = []
+        for fid, section in sections:
+            positions = re.findall(r'<li><a href="grounds.html#a\d+">.*?</a>: <b>(.*?)</b>', section)
+            if len(positions) != 4:
+                bad.append(f"{name} ({filename}): 4 закона фракции {fid}: найдено {len(positions)}")
+            page_laws.append([clean(v).replace("нет позиции", "—") for v in positions])
+        if personal:
+            positions = re.findall(r'<p>[^<]+: (за|против|воздержались|не голосовали|нет позиции) \(\d{4}-', page)
+            page_laws = [["—" if v in ("не голосовали", "нет позиции") else v for v in positions]]
+        if fids or personal:
+            expected = ["/".join(dict.fromkeys(v[i] for v in page_laws)) for i in range(4)] if page_laws and all(len(v) == 4 for v in page_laws) else []
+            same("4 закона", [re.sub(r"\s*/\s*", "/", clean(v)) for v in table_laws], expected)
+        else:
+            same("4 закона без голосов", clean(law_cell[1]) if law_cell else "", "—" if 'голосов в этом Кнессете нет' in page else "")
+        table_axes = re.findall(r'<td class="ballot-axis"[^>]*>(.*?)</td>', row, re.S)
+        for i, topic in enumerate(("institutions", "religion_state", "economy", "security")):
+            values = []
+            for section in ([page] if personal else [v for _, v in sections]):
+                match = re.search(r'<p data-(?:personal-)?theme="' + topic + r'"><b>[^<]+</b> (.*?)</p>', section, re.S)
+                value = clean(match[1]) if match else ""
+                arrow = re.match(r'[↑↓↕]', value)
+                if arrow:
+                    mark = "??" if "(ненадёжна)" in value else "?" if "(шаткая)" in value else ""
+                    values.append(arrow[0] + mark)
+                else:
+                    token = re.match(r'(?:со всеми|мало законов) \(\d+\)', value)
+                    values.append(token[0] if token else "—" if value.startswith("направление не установлено") else "")
+            if fids or personal:
+                if values and all(re.fullmatch(r'со всеми \(\d+\)', v) for v in values):
+                    expected = "со всеми (" + "/".join(re.search(r'\d+', v)[0] for v in values) + ")"
+                else:
+                    # Одинаковое направление сворачивается с худшей устойчивостью:
+                    # ↑? и ↑ → ↑?; разные направления сохраняют «/».
+                    grouped = {}
+                    for v in values:
+                        key = v.rstrip("?")
+                        grouped[key] = max(grouped.get(key, v), v, key=len)
+                    expected = " / ".join(grouped.values()) if all(values) else ""
+                actual = clean(table_axes[i]) if len(table_axes) == 4 else ""
+                # HTML-теги между стрелкой и ? не создают смыслового пробела.
+                actual = re.sub(r'([↑↓↕])\s+(\?+)', r'\1\2', actual)
+                same(topic, actual, expected)
+            else:
+                same(topic, "нет голосов" if 'голосов в этом Кнессете нет' in row else "", "нет голосов" if 'голосов в этом Кнессете нет' in page else "")
+        for fid, section in sections:
+            money_rows = [r for r in re.findall(r'<tr>(.*?)</tr>', src["index.html"], re.S)
+                          if f'href="f-{fid}.html"' in r and 'class=c-eq' in r]
+            cells = re.findall(r'<td class=c-eq[^>]*>(.*?)</td>', money_rows[0], re.S) if len(money_rows) == 1 else []
+            words = cells_of(cells[0]) if len(cells) == 1 else []
+            value = words[0][1] if len(words) == 1 else ""
+            if value == "искали, не нашли" and cells:
+                value = ("коалиционного соглашения не подписывала" if "коалиционного соглашения не подписывала" in cells[0]
+                         else "денежных обещаний не найдено")
+            money = re.findall(r'<p><b>Деньги:</b> (.*?)\.</p>', section, re.S)
+            same(f"деньги фракции {fid}", [value] if value else [], [clean(v) for v in money])
+        if not fids and '<b>Деньги:</b>' in page:
+            bad.append(f"{name} ({filename}): деньги без связанной фракции")
+        seen += 1
+    if set(used) != pages or len(set(used)) != len(used):
+        bad.append("бюллетень: ссылки списков неполны или повторяются")
+    return seen, bad, f"{seen}/14 списков: буквы, 4 закона, 4 темы, деньги"
+
+
 @check("ноль JavaScript",
        [("вставлен <script>", lambda s: edit(s, anyfile(s), "</body>", "<script>1</script></body>")),
         ("inline-обработчик onclick", lambda s: edit(s, anyfile(s), "<body>", '<body onclick="1">'))])
@@ -476,7 +597,7 @@ def run(src):
     for c in CHECKS:
         n, problems, note = c["fn"](src)
         if problems:
-            rows.append(("КРАСНЫЙ", c["name"], "; ".join(map(str, problems))[:170]))
+            rows.append(("КРАСНЫЙ", c["name"], "; ".join(map(str, problems))))
         elif n == 0 and not c["expect_zero"]:
             rows.append(("КРАСНЫЙ", c["name"],
                          "ОСМОТРЕНО 0 ОБЪЕКТОВ — проверка ничего не проверила"))
