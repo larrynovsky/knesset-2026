@@ -219,14 +219,23 @@ SMALL_BALLOT_LISTS = (
 )
 
 
-def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
-    """Списки владельца 19.10; стрелки принадлежат указанным фракциям."""
-    from theme_arrows import THEMES, theme_arrows
+def load_ballot(source: Path | None = None) -> dict:
     ballot = json.loads((source or ROOT / "criteria/ballot_2026.json").read_text(encoding="utf-8"))
     lists = ballot["lists"]
     # §23: ожидаемые 14 заданы заданием владельца, а не длиной входного JSON.
     if len(lists) != 14 or len({r["he"] for r in lists}) != 14:
         raise Refuse("бюллетень: ожидаются 14 разных списков (решение 19.10)")
+    for row in lists:
+        if not isinstance(row.get("leaders"), str) or not row["leaders"].strip():
+            raise Refuse(f"бюллетень: пустой leaders у {row['ru']}")
+    return ballot
+
+
+def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
+    """Списки владельца 19.10; стрелки принадлежат указанным фракциям."""
+    from theme_arrows import THEMES, theme_arrows
+    ballot = load_ballot(source)
+    lists = ballot["lists"]
     names = party_names(m, cards)
     observed = {r["anchor_id"] for r in m["lines"] if r["a"]["status"] == "observed"}
     themes = ("religion_state", "economy", "security")
@@ -236,15 +245,15 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
     if len(laws) != 4:
         raise Refuse("бюллетень: ожидаются 4 закона владельца")
     body = []
-    for row in lists:
+    for number, row in enumerate(lists, 1):
         fids = row["factions"]
         if any(fid not in names for fid in fids):
             raise Refuse(f"бюллетень: неизвестная фракция у {row['ru']}")
         absent = "".join(f'<span class=norec>{esc(note)}</span>' for note in row["absent"])
         links = ", ".join(f'<a href="f-{fid}.html">{esc(names[fid])}</a>' for fid in fids)
         sources = f'<span class=norec>по голосам: {links}</span>' if fids else ""
-        who = (f'<th scope=row>{esc(row["ru"])} '
-               f'<span lang=he dir=rtl><bdi>{esc(row["he"])}</bdi></span>'
+        who = (f'<th scope=row><a href="l-{number}.html">{esc(row["ru"])} '
+               f'<span lang=he dir=rtl><bdi>{esc(row["he"])}</bdi></span></a>'
                f'<span class=norec>{esc(row["leaders"])}</span>{sources}{absent}</th>')
         law_marks = []
         for law in laws:
@@ -507,7 +516,7 @@ def selftest() -> int:
     # Проверка разметки, не геометрии: четыре подписи и значения в прежнем порядке.
     for row_html in re.findall(r'<tr data-ballot-list=.*?</tr>', ballot_html):
         axes = re.findall(r'<td class="ballot-axis" data-l="([^"]+)">([^<]+)</td>', row_html)
-        if 'href=' in row_html:
+        if 'href="f-' in row_html:
             assert [label for label, value in axes] == ['Суд', 'Религия', 'Экономика', 'Безопасность']
         else:
             assert not axes
@@ -515,7 +524,7 @@ def selftest() -> int:
         row_html = next(r for r in re.findall(r'<tr data-ballot-list=.*?</tr>', ballot_html) if name in r)
         assert '<td data-l="4 закона владельца">—</td>' in row_html
         assert '<td colspan="4">голосов в этом Кнессете нет</td>' in row_html
-        assert not any(a in row_html for a in ('↑', '↓', '↕', 'href='))
+        assert not any(a in row_html for a in ('↑', '↓', '↕', 'href="f-'))
     from tempfile import TemporaryDirectory
     from unittest.mock import patch
     likud = next(r for r in re.findall(r'<tr data-ballot-list=.*?</tr>', ballot_html) if 'Ликуд' in r)
@@ -544,7 +553,7 @@ def selftest() -> int:
     assert table.count('scope=col') == 6 and 'нет позиции' not in table
     assert 'Читается по голосам фракций' not in table
     for row in re.findall(r'<tr data-ballot-list=.*?</tr>', table):
-        if 'href=' in row:
+        if 'href="f-' in row:
             first = row.split('</th>')[0]
             assert 'по голосам: ' in first and row.count('href=') == first.count('href=')
     print("ЗЕЛЁНЫЙ: 4 закона в бюллетене — Ликуд за; Резервисты —; расхождения сохранены; пустой источник отклонён")
@@ -622,6 +631,40 @@ def selftest() -> int:
             assert 'направление не установлено' in brief and 'да: 2022-12-29' in brief
     assert 'денежных обещаний не найдено' in faction_summary(
         dict(row, b={"status": "observed", "commitments": 0}), card, "", laws)
+    # §20/§24: все списки, их содержание и отказ на пустом leaders.
+    list_pages = ballot_pages(live_matrix, live_cards, {}, laws)
+    assert set(list_pages) == {f"l-{n}.html" for n in range(1, 15)}
+    assert 'Беннет' in list_pages['l-2.html'] and 'href="f-1102.html"' in list_pages['l-2.html']
+    for n, entry in enumerate(ballot_input["lists"], 1):
+        page = list_pages[f"l-{n}.html"]
+        assert f'href="l-{n}.html"' in ballot_html
+        assert esc(entry["he"]) in page and esc(entry["ru"]) in page
+        assert esc(entry["leaders"]) in page
+        assert all(esc(note) in page for note in entry["absent"])
+        assert 'noindex' in page and 'data-frame=short' in page and '<script' not in page
+        for fid in entry["factions"]:
+            assert f'href="f-{fid}.html"' in page
+        assert page.count('data-theme=') == 4 * len(entry["factions"])
+        assert page.count('Деньги:</b>') == len(entry["factions"])
+        assert page.count('Примеры в плюс:') == 4 * len(entry["factions"])
+        assert page.count('Примеры в минус:') == 4 * len(entry["factions"])
+        for law in laws:
+            assert page.count(f'grounds.html#a{law["bill"]}') == len(entry["factions"])
+        if not entry["factions"]:
+            assert 'голосов в этом Кнессете нет' in page
+    with TemporaryDirectory() as tmp:
+        path = Path(tmp) / "ballot.json"
+        for n in range(14):
+            mutated = json.loads(json.dumps(ballot_input))
+            mutated["lists"][n]["leaders"] = ""
+            path.write_text(json.dumps(mutated), encoding="utf-8")
+            try:
+                ballot_pages(live_matrix, live_cards, {}, laws, path)
+            except Refuse as exc:
+                assert 'leaders' in str(exc)
+            else:
+                raise AssertionError(f"пустой leaders списка {n + 1} не обнаружен")
+    print("v25: 14 страниц списков; 14/14 мутаций пустого leaders отклонены")
     # ── ЧИСЛИТЕЛЬНОЕ СОГЛАСУЕТСЯ С ЧИСЛОМ ────────────────────────────────
     # «2 обязательств» и «остальные не разобраны» при полном разборе — язык
     # сборщика, а не документа; страница Оцма (2 из 2) показала оба 10.10.
@@ -1406,6 +1449,51 @@ def faction_summary(row: dict, card: dict, money_text: str, laws: list[dict]) ->
             f'{_theme_lines(row)}</section>')
 
 
+def ballot_pages(matrix: dict, cards: dict, summaries: dict,
+                 laws: list[dict], source: Path | None = None) -> dict[str, str]:
+    """Досье списка: данные каждой фракции отдельно, без общей стрелки."""
+    from build_line_cards import arrows
+    from render_method import ARROW, VOTES
+    from theme_arrows import names_ru_path
+    ballot = load_ballot(source)
+    rows = {r["anchor_id"]: r for r in matrix["lines"]}
+    names = party_names(matrix, cards)
+    institutions = arrows(json.loads(VOTES.read_text(encoding="utf-8")), ARROW)
+    translations = json.loads(names_ru_path().read_text(encoding="utf-8"))["names"]
+    pages = {}
+    for number, entry in enumerate(ballot["lists"], 1):
+        body = "".join(f'<p>{esc(note)}</p>' for note in entry["absent"])
+        if not entry["factions"]:
+            body += '<p>голосов в этом Кнессете нет</p>'
+        for fid in entry["factions"]:
+            if fid not in rows or fid not in names:
+                raise Refuse(f"бюллетень: неизвестная фракция {fid}")
+            row, card = rows[fid], cards.get(fid, {})
+            brief = faction_summary(row, card, summaries.get(fid, ""), laws)
+            ax = card.get("axis_institutions") or {}
+            current = institutions.get(fid, {})
+            if row["a"]["status"] == "observed" and ax.get("arrow"):
+                if any(ax.get(k) != current.get(k) for k in ("up", "down", "arrow")):
+                    raise Refuse(f"суд: примеры и карточка фракции {fid} расходятся")
+                examples = "; ".join(label + ": " + ("; ".join(
+                    '<bdi>' + esc(translations[str(b)]["ru"]) + '</bdi>'
+                    for b in current[side + "_bills"][:2]) or "нет")
+                    for side, label in (("up", "Примеры в плюс"), ("down", "Примеры в минус")))
+                brief = brief.replace('.</p>', f'. {examples}.</p>', 1)
+            brief = brief.replace('<p><b>Суд,', '<p data-theme="institutions"><b>Суд,', 1)
+            brief = brief.replace('Четыре закона владельца', '4 закона владельца', 1)
+            body += (f'<h2><a href="f-{fid}.html">{esc(names[fid])}</a></h2>'
+                     f'{brief}<p><a href="f-{fid}.html">Подробности о фракции</a></p>')
+        pages[f"l-{number}.html"] = f'''<!doctype html><html lang=ru><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex, nofollow"><title>{esc(entry["ru"])}</title>
+<style>{css_from_mockup()}</style></head><body>
+<nav class=crumbs><a href="index.html#ballot">Все списки</a></nav>{SHORT_FRAME}
+<h1>{esc(entry["ru"])} <span lang=he dir=rtl><bdi>{esc(entry["he"])}</bdi></span></h1>
+<p class=lead>{esc(entry["leaders"])}</p>{body}</body></html>'''
+    return pages
+
+
 def state_page(row: dict, brief: str = "") -> str:
     """§7: отсутствие связи — отдельная страница, без наследования карточек."""
     names = json.loads((ROOT / "criteria/wikidata_crosscheck.json").read_text(encoding="utf-8"))
@@ -1498,7 +1586,10 @@ def main() -> int:
             return 1
         (OUT.parent / f"f-{r['anchor_id']}.html").write_text(page, encoding="utf-8")
         pages += 1
-    print(f"обзор + {pages} страниц фракций -> {OUT.parent}")
+    lists = ballot_pages(m, cards, summaries, laws)
+    for name, page in lists.items():
+        (OUT.parent / name).write_text(page, encoding="utf-8")
+    print(f"обзор + {pages} страниц фракций + {len(lists)} страниц списков -> {OUT.parent}")
     rev = doc.count('tx-rev">')   # клетки, не легенда (R22-F05)
     print(f"ЗАМЕР: клеток {total}, заполнено {filled}, разобрано без вывода {rev}, "
           f"пусто {total - filled - rev}")

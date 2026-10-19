@@ -304,7 +304,7 @@ def arrows(votes: dict, directions_path: Path | None) -> dict:
                               "up" if share <= 1 / 3 else "both")
                 c["text"] = ("по голосам фракции и знаку закона по большинству "
                              "трёх моделей")
-        out[fid] = c
+        out[fid] = dict(c, up_bills=entry["up_bills"], down_bills=entry["down_bills"])
     return out
 
 
