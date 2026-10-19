@@ -158,6 +158,47 @@ def c_plural_ru(src):
     return len(src), bad, f"{len(src)} страниц"
 
 
+@check("деньги бюллетеня = обзор = фракция (v53)",
+       [("подменено N", lambda s: edit(s, "index.html", '>вторая сторона: 46/71</span>', '>вторая сторона: 45/71</span>')),
+        ("подменён title", lambda s: dict(s, **{"index.html": re.sub(
+            r'(<td data-l="Деньги"><span title=")[^"]+', r'\1подмена', s["index.html"], count=1)})),
+        ("удалена денежная клетка", lambda s: dict(s, **{"index.html": re.sub(
+            r'<td data-l="Деньги">.*?</td>', '', s["index.html"], count=1)}))])
+def c_ballot_money(src):
+    from render_overview import load_ballot, _money_td, check_money_same
+    doc = src["index.html"]
+    rows = re.findall(r'<tr data-ballot-list="([^"]+)">(.*?)</tr>', doc, re.S)
+    expected = load_ballot()["lists"]
+    bad = []
+    if len(rows) != len(expected):
+        bad.append("число строк бюллетеня")
+    for (name, row), entry in zip(rows, expected):
+        groups = {}
+        for fid in entry.get("factions", []):
+            full = text_of(_money_td(doc, fid)).strip()
+            check_money_same(doc, src[f"f-{fid}.html"], fid)
+            # Независимое чтение чисел из обзорной клетки, не вызов форматтера.
+            pair = re.search(r"под (\d+) из (\d+)", full)
+            leader = re.search(r"после разбора: (\d+);.*под (\d+)", full)
+            value = (f"{leader[2]}/{leader[1]}" if leader else
+                     f"{pair[1]}/{pair[2]}" if pair else
+                     "—" if "не подписывала" in full else "?")
+            if value not in ("—", "?") and "подписала как вторая сторона" in full:
+                value = "вторая сторона: " + value
+            groups.setdefault(value, []).append(full)
+        cells = re.findall(r'<td data-l="Деньги">(.*?)</td>', row)
+        wanted = ' / '.join(f'<span title="{_h.escape(" / ".join(dict.fromkeys(full)), quote=True)}">{value}</span>'
+                            for value, full in groups.items()) or '?'
+        if cells != [wanted]:
+            bad.append(f"{_h.unescape(name)}: деньги или title расходятся с обзором")
+    if '<th scope=col>Безопасность</th><th scope=col>Деньги</th>' not in doc:
+        bad.append("порядок денежных колонок")
+    legend = "Деньги: N/M — для скольких денежных обещаний из коалиционного соглашения в бюджете нашлась статья; это не значит, что деньги выделены полностью"
+    if legend not in doc:
+        bad.append("нет денежной легенды")
+    return len(rows), bad, f"{len(rows)} строк; значения и полные title"
+
+
 @check("компактные клетки бюллетеня (v42)",
        [("убран значок ненадёжной стрелки", lambda s: dict(s, **{"index.html": re.sub(
            r'(title="ненадёжна: [0-9.]+%">[↑↓↕]<small class="robustness">)\?\?(</small>)', r'\1\2', s["index.html"], count=1)})),

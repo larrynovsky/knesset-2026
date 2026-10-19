@@ -271,7 +271,7 @@ def personal_result():
             "laws": owner_law_positions(["yashar"], votes)}
 
 
-def ballot_table(m: dict, cards: dict, source: Path | None = None, *, compact: bool = False) -> str:
+def ballot_table(m: dict, cards: dict, source: Path | None = None, *, compact: bool = False, money_rows: str = "") -> str:
     """Списки владельца 19.10; стрелки принадлежат указанным фракциям."""
     from theme_arrows import THEMES, theme_arrows
     from arrow_robustness import LEGEND
@@ -342,6 +342,14 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None, *, compact: b
             cells = "".join(
                 f'<td class="ballot-axis"{personal_attr} data-l="{esc(label)}">{" / ".join(dict.fromkeys(value))}</td>'
                 for label, value in zip(["Суд", "Религия", "Экономика", "Безопасность"], values))
+        if not compact:
+            money_marks = {}
+            for fid in (fids if money_rows else []):
+                short, full = ballot_money(_money_td(money_rows, fid))
+                money_marks.setdefault(short, []).append(full)
+            cells += '<td data-l="Деньги">' + ' / '.join(
+                f'<span title="{esc(" / ".join(dict.fromkeys(full)))}">{short}</span>'
+                for short, full in money_marks.items()) + ('?' if not money_marks else '') + '</td>'
         if compact:
             if not fids and not personal:
                 law_cell = '<td><span class="ballot-laws">' + '<span>—</span>' * 4 + '</span></td>'
@@ -357,7 +365,7 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None, *, compact: b
         return (template.replace("{{FRAME}}", SHORT_FRAME)
                 .replace("{{ROWS}}", "".join(body)).replace("{{LAWS}}", law_key)
                 .replace("{{DATE}}", date.today().isoformat()))
-    heads = "".join(f'<th scope=col>{label}</th>' for label in ("Религия", "Экономика", "Безопасность"))
+    heads = "".join(f'<th scope=col>{label}</th>' for label in ("Религия", "Экономика", "Безопасность", "Деньги"))
     small_lists = "".join(f"<li>{esc(name)}</li>" for name in SMALL_BALLOT_LISTS)
     unmapped = "<br>".join(esc(note) for note in ballot["unmapped_factions"].values())
     # Пример относится к фракции, не ко всему списку с присоединившимися людьми.
@@ -386,6 +394,7 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None, *, compact: b
             '<div>Государство и религия — ↑ больше места религии.</div>'
             '<div>Экономика — ↑ на стороне производителя.</div>'
             '<div>Безопасность — ↑ расширяет полномочия армии и силовых.</div>'
+            '<div>Деньги: N/M — для скольких денежных обещаний из коалиционного соглашения в бюджете нашлась статья; это не значит, что деньги выделены полностью</div>'
             '<div>Со всеми (N) — N законов темы приняты почти единогласно, фракции не различаются.</div>'
             '<div>↕ — и туда и обратно; «—» — знаков нет.</div></div>'
             f'<p>Колонка «4 закона» — как фракции списка голосовали по четырём законам, которые ты пометил „недопустимо“; „за“ выделено; {OWNER_LEGEND}; «/» — расхождение фракций списка.</p>'
@@ -583,7 +592,7 @@ def build(m: dict, cards: dict | None = None,
 <p>Мы смотрим на поступки, а не на заявления. Слова перед выборами стоят ноль;
 голос в Кнессете записан поимённо и никуда не денется.</p>
 {FRAME}
-{ballot_table(m, cards or {})}
+{ballot_table(m, cards or {}, money_rows=body)}
 <details class="faction-details"><summary>Подробно по 16 фракциям нынешнего Кнессета (для проверки)</summary>
 {grounds_block(m, cards or {})}
 <h2>Сначала о том, чего мы не знаем</h2>
@@ -780,7 +789,7 @@ def selftest() -> int:
             compact = ballot_table(live_matrix, live_cards)
     assert compact.count('<b>за</b>/—') == 4
     table = ballot_html.split('<table class="ballot">')[1].split('</table>')[0]
-    assert table.count('scope=col') == 6 and 'нет позиции' not in table
+    assert table.count('scope=col') == 7 and 'нет позиции' not in table
     assert 'Читается по голосам фракций' not in table
     for row in re.findall(r'<tr data-ballot-list=.*?</tr>', table):
         if 'href="f-' in row:
@@ -834,7 +843,7 @@ def selftest() -> int:
     sample_ballot = {"lists": [{"ru": "Пример", "he": "X", "leaders": "A",
                                "factions": [1096, 1108], "absent": [], "letters": "אב"}],
                      "unmapped_factions": {}}
-    sample_matrix = {"lines": [{"anchor_id": fid, "a": {"status": "observed"}}
+    sample_matrix = {"lines": [{"anchor_id": fid, "line": str(fid), "a": {"status": "observed"}, "b": {"status": "not_exposed"}}
                                for fid in (1096, 1108)]}
     sample_rates = {"topics": {topic: {"factions": {
         str(fid): {"rates": {"0.10": rate}} for fid, rate in ((1096, .99), (1108, .75))}}
@@ -844,6 +853,7 @@ def selftest() -> int:
 
     def check_v44(render):
         for second, expected in (("down", "↓??"), ("up", "↓ / ↑??")):
+            sample_matrix["lines"][1]["b"]["status"] = "not_exposed" if second == "down" else "source_missing"
             sample_cards = {fid: {"axis_institutions": {"arrow": direction, "alpha": 1}}
                             for fid, direction in ((1096, "down"), (1108, second))}
             sample_themes = {fid: card["axis_institutions"] for fid, card in sample_cards.items()}
@@ -856,7 +866,9 @@ def selftest() -> int:
                  patch.object(Path, 'read_text', autospec=True, side_effect=lambda path, *a, **kw:
                               json.dumps(sample_rates) if path.name == 'arrow_robustness.json'
                               else read_text(path, *a, **kw)):
-                rendered = render(sample_matrix, sample_cards)
+                rendered = render(sample_matrix, sample_cards, money_rows=rows(sample_matrix, sample_cards)[0])
+            money_cell = re.search(r'<td data-l="Деньги">(.*?)</td>', rendered)[1]
+            assert re.sub(r'<[^>]+>', '', money_cell) == ("—" if second == "down" else "— / ?")
             axis_cells = re.findall(r'<td class="ballot-axis"[^>]*>(.*?)</td>', rendered)
             assert len(axis_cells) == 4
             assert [re.sub(r'<[^>]+>', '', c) for c in axis_cells] == [expected] * 4, "v44: стрелки/устойчивость"
@@ -1778,6 +1790,23 @@ def _cell_word(html: str, where: str) -> str:
     if len(words) != 1:
         raise Refuse(f"{where}: значений клетки {words}, а не одно")
     return words[0]
+
+
+def ballot_money(cell_html: str) -> tuple[str, str]:
+    """Короткое покрытие из той же клетки, которую читает check_money_same."""
+    from check_report_canon import text_of
+    full = text_of(cell_html).strip()
+    pair = re.search(r"(?:строка под|строка бюджета нашлась под) (\d+) из (\d+)", full)
+    leading = re.search(r"самостоятельных обещаний после разбора: (\d+); в бюджете нашлась строка под (\d+)", full)
+    if leading:
+        short = f"{leading[2]}/{leading[1]}"
+    elif pair:
+        short = f"{pair[1]}/{pair[2]}"
+    else:
+        short = "—" if "не подписывала" in full else "?"
+    if short not in ("—", "?") and full.startswith("подписала как вторая сторона"):
+        short = "вторая сторона: " + short
+    return short, full
 
 
 def _money_summaries(page: str) -> list:
