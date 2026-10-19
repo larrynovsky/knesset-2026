@@ -225,11 +225,15 @@ def load_ballot(source: Path | None = None) -> dict:
     # §23: ожидаемые 14 заданы заданием владельца, а не длиной входного JSON.
     if len(lists) != 14 or len({r["he"] for r in lists}) != 14:
         raise Refuse("бюллетень: ожидаются 14 разных списков (решение 19.10)")
+    if not isinstance(ballot.get("letters_source"), str) or not ballot["letters_source"].strip():
+        raise Refuse("бюллетень: пустой letters_source")
     for row in lists:
         if row.get("personal"):
             from theme_arrows import PERSONAL
             if row["personal"] != list(PERSONAL) or row.get("factions"):
                 raise Refuse("бюллетень: неизвестный личный состав или смешение с фракциями")
+        if not isinstance(row.get("letters"), str) or not row["letters"].strip():
+            raise Refuse(f"бюллетень: пустой letters у {row['ru']}")
         if not isinstance(row.get("leaders"), str) or not row["leaders"].strip():
             raise Refuse(f"бюллетень: пустой leaders у {row['ru']}")
     return ballot
@@ -292,7 +296,8 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
         sources = f'<span class=norec>по голосам: {links}</span>' if fids else ""
         if personal:
             sources += '<span class=norec>Для сравнения: <a href="f-1098.html">фракция Ганца</a>, суд ' + sym[cards.get(1098, {}).get("axis_institutions", {}).get("arrow")] + '</span>'
-        who = (f'<th scope=row><a href="l-{number}.html">{esc(row["ru"])} '
+        who = (f'<th scope=row><span class="ballot-letters" lang="he" dir="rtl" title="буквы на бюллетене">{esc(row["letters"])}</span> '
+               f'<a href="l-{number}.html">{esc(row["ru"])} '
                f'<span lang=he dir=rtl><bdi>{esc(row["he"])}</bdi></span></a>'
                f'<span class=norec>{esc(row["leaders"])}</span>{sources}{absent}</th>')
         law_marks = []
@@ -812,7 +817,7 @@ def selftest() -> int:
     # v44: синтетические входы; проверяем конечные клетки, включая худший значок.
     import inspect
     sample_ballot = {"lists": [{"ru": "Пример", "he": "X", "leaders": "A",
-                               "factions": [1096, 1108], "absent": []}],
+                               "factions": [1096, 1108], "absent": [], "letters": "אב"}],
                      "unmapped_factions": {}}
     sample_matrix = {"lines": [{"anchor_id": fid, "a": {"status": "observed"}}
                                for fid in (1096, 1108)]}
@@ -989,6 +994,32 @@ def selftest() -> int:
             else:
                 raise AssertionError(f"пустой leaders списка {n + 1} не обнаружен")
     print("v25: 14 страниц списков; 14/14 мутаций пустого leaders отклонены")
+    # v50: проверяем буквы в конкретной строке и заголовке, не где-то в HTML.
+    for n, entry in enumerate(ballot_input["lists"], 1):
+        row_html = next(r for r in re.findall(r'<tr data-ballot-list=.*?</tr>', ballot_html)
+                        if f'href="l-{n}.html"' in r)
+        badge = (f'<span class="ballot-letters" lang="he" dir="rtl" '
+                 f'title="буквы на бюллетене">{esc(entry["letters"])}</span>')
+        assert badge in row_html and row_html.index(badge) < row_html.index(f'href="l-{n}.html"')
+        page = list_pages[f"l-{n}.html"]
+        assert badge in re.search(r'<h1>(.*?)</h1>', page).group(1)
+        assert f'</h1>\n<p class="letters-source">{esc(ballot_input["letters_source"])}</p>' in page
+    assert 'class="ballot-letters"' not in details
+    with TemporaryDirectory() as tmp:
+        path = Path(tmp) / "ballot.json"
+        for n in range(14):
+            mutated = json.loads(json.dumps(ballot_input))
+            del mutated["lists"][n]["letters"]
+            path.write_text(json.dumps(mutated), encoding="utf-8")
+            for render in (lambda: ballot_table(live_matrix, live_cards, path),
+                           lambda: ballot_pages(live_matrix, live_cards, {}, laws, path)):
+                try:
+                    render()
+                except Refuse as exc:
+                    assert 'letters' in str(exc)
+                else:
+                    raise AssertionError(f"удаление letters списка {n + 1} не обнаружено")
+    print("v50: буквы у 14/14 списков в обзоре и заголовках; 28/28 удалений letters отклонены")
     # ── ЧИСЛИТЕЛЬНОЕ СОГЛАСУЕТСЯ С ЧИСЛОМ ────────────────────────────────
     # «2 обязательств» и «остальные не разобраны» при полном разборе — язык
     # сборщика, а не документа; страница Оцма (2 из 2) показала оба 10.10.
@@ -1948,7 +1979,8 @@ def ballot_pages(matrix: dict, cards: dict, summaries: dict,
 <meta name="robots" content="noindex, nofollow"><title>{esc(entry["ru"])}</title>
 <style>{css_from_mockup()}</style></head><body>
 <nav class=crumbs><a href="index.html#ballot">Все списки</a></nav>{SHORT_FRAME}
-<h1>{esc(entry["ru"])} <span lang=he dir=rtl><bdi>{esc(entry["he"])}</bdi></span></h1>
+<h1><span class="ballot-letters" lang="he" dir="rtl" title="буквы на бюллетене">{esc(entry["letters"])}</span> {esc(entry["ru"])} <span lang=he dir=rtl><bdi>{esc(entry["he"])}</bdi></span></h1>
+<p class="letters-source">{esc(ballot["letters_source"])}</p>
 <p class=lead>{esc(entry["leaders"])}</p><p>{LEGEND}</p>{body}</body></html>'''
     return pages
 
