@@ -8,7 +8,6 @@ criteria/theme_signs_<theme>.json (ставят Claude/Codex), голоса — 
 build_line_cards.arrows.
 """
 from __future__ import annotations
-from build_report import plural_ru
 import json, sys
 from pathlib import Path
 
@@ -74,7 +73,7 @@ def theme_arrows(theme: str, votes: dict | None = None) -> dict:
         consensus = len(consensus_bills.get(fac, set()) - retained)
         out[fid] = {"arrow": arrow_of(up, down), "up": up, "down": down,
                     "consensus": consensus,
-                    "text": (f"голосовали со всеми (почти единогласно: {consensus} {plural_ru(consensus, 'закон', 'закона', 'законов')})"
+                    "text": (f"со всеми ({consensus})"
                              if consensus >= 3 else f"мало законов ({up + down})"),
                     "examples": {side: [names[b] for b in entry.get(side + "_bills", [])[:2]]
                                  for side in ("up", "down")}}
@@ -126,7 +125,7 @@ def selftest() -> int:
             assert agreed[1]["consensus"] == agreed[2]["consensus"] == 3
             assert 3 not in agreed
             assert agreed[1]["arrow"] is None and agreed[1]["up"] == agreed[1]["down"] == 0
-            text = "голосовали со всеми (почти единогласно: 3 закона)"
+            text = "со всеми (3)"
             assert agreed[1]["text"] == text
             # Проходим настоящие рендеры, а не проверяем только поле данных.
             import render_overview as view
@@ -138,10 +137,18 @@ def selftest() -> int:
                  patch.object(view, "load_ballot", return_value={"unmapped_factions": {}, "lists": [{
                      "factions": [1096], "absent": [], "ru": "test", "he": "test", "leaders": "test"}]}), \
                  patch.object(view, "owner_law_positions", return_value=[{
-                     "name": "test", "positions": {view._al(1096): "нет позиции"}}] * 4):
+                     "name": "test", "positions": {view._al(1096): "нет позиции", view._al(1108): "нет позиции"}}] * 4):
                 assert text in view._theme_lines({"anchor_id": 1096})
                 assert f"<td>{text}</td>" in view.theme_table(matrix, {})
                 assert text in view.ballot_table(matrix, {})
+                for counts in ((9, 3), (9, 9)):
+                    entries = {fid: dict(agreed[1], consensus=n, text=f"со всеми ({n})")
+                               for fid, n in zip((1096, 1108), counts)}
+                    with patch("theme_arrows.theme_arrows", return_value=entries), \
+                         patch.object(view, "party_names", return_value={1096: "A", 1108: "B"}), \
+                         patch.object(view, "load_ballot", return_value={"unmapped_factions": {}, "lists": [{
+                             "factions": [1096, 1108], "absent": [], "ru": "test", "he": "test", "leaders": "test"}]}):
+                        assert f"со всеми ({counts[0]}/{counts[1]})" in view.ballot_table(matrix, {})
             for n in (0, 1, 2):
                 small = theme_arrows("security", {"rows": unanimous[:0] if n == 0 else
                                                     [r for r in unanimous if r["bill_id"] <= n]})

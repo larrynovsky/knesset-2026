@@ -158,6 +158,31 @@ def c_plural_ru(src):
     return len(src), bad, f"{len(src)} страниц"
 
 
+@check("компактные клетки бюллетеня (v42)",
+       [("убран значок ненадёжной стрелки", lambda s: dict(s, **{"index.html": re.sub(
+           r'(title="ненадёжна: [0-9.]+%">[↑↓↕]<small class="robustness">)\?\?(</small>)', r'\1\2', s["index.html"], count=1)})),
+        ("возвращено длинное единогласие", lambda s: edit(s, "index.html", "со всеми (9/3)",
+          "голосовали со всеми (почти единогласно: 9 законов)")),
+        ("снят title устойчивости", lambda s: dict(s, **{"index.html": re.sub(
+          r' title="устойчива: [0-9.]+%"', '', s["index.html"], count=1)}))])
+def c_compact_ballot(src):
+    cells = re.findall(r'<td class="ballot-axis"[^>]*>(.*?)</td>', src["index.html"], re.S)
+    bad = []
+    for cell in cells:
+        notes = re.findall(r'<span title="(устойчива|шаткая|ненадёжна): ([0-9.]+)%">[↑↓↕]<small class="robustness">(.*?)</small></span>', cell)
+        if len(notes) != len(re.findall(r'[↑↓↕]', cell)):
+            bad.append("стрелка без title со словом и процентом")
+        for word, percent, mark in notes:
+            expected = {"устойчива": "", "шаткая": "?", "ненадёжна": "??"}[word]
+            if mark != expected:
+                bad.append(f"{word}: неверный значок {mark!r}")
+        if 'голосовали со всеми' in cell or 'почти единогласно' in cell:
+            bad.append("длинная клетка единогласия")
+    if 'со всеми (9/3)' not in cells:
+        bad.append("Ликуд: не сохранены оба числа 9/3")
+    return len(cells), bad, f"{len(cells)} клеток; значки и title"
+
+
 @check("ноль JavaScript",
        [("вставлен <script>", lambda s: edit(s, anyfile(s), "</body>", "<script>1</script></body>")),
         ("inline-обработчик onclick", lambda s: edit(s, anyfile(s), "<body>", '<body onclick="1">'))])

@@ -185,7 +185,7 @@ def theme_table(m: dict | None, cards: dict | None) -> str:
     return ('<h2>Другие темы — первая грубая итерация</h2>'
             '<p>Стрелка по голосам фракции и знаку закона по теме; рядом — сколько '
             'законов в сторону плюса / минуса. Экономика: плюс — на стороне '
-            'производителя; государство и религия: ↑ — больше места религии в государстве, ↓ — меньше; безопасность: ↑ — норма расширяет полномочия армии и силовых структур, ↓ — сужает. Если нет стрелки и менее трёх законов с почти единогласными голосованиями — «мало законов (N)». «Голосовали со всеми» — фракция участвовала в голосованиях по N законам со знаком темы, все эти голосования отсечены как почти единогласные.</p>'
+            'производителя; государство и религия: ↑ — больше места религии в государстве, ↓ — меньше; безопасность: ↑ — норма расширяет полномочия армии и силовых структур, ↓ — сужает. Если нет стрелки и менее трёх законов с почти единогласными голосованиями — «мало законов (N)». Со всеми (N) — N законов темы приняты почти единогласно, фракции не различаются.</p>'
             f'<table class=acts><thead><tr><th scope=col>Фракция</th>{heads}</tr></thead>'
             f'<tbody>{"".join(rows)}</tbody></table>')
 
@@ -231,13 +231,18 @@ def load_ballot(source: Path | None = None) -> dict:
     return ballot
 
 
-def robustness_note(fid: int, topic: str) -> str:
+def robustness_note(fid: int, topic: str, arrow: str = "") -> str:
     from arrow_robustness import label
     data = json.loads((ROOT / "data" / "arrow_robustness.json").read_text(encoding="utf-8"))
     entry = data["topics"][topic]["factions"].get(str(ALIAS.get(fid, fid)))
     if entry is None or entry["rates"]["0.10"] is None:
-        return ""
-    return " (" + label(entry["rates"]["0.10"]) + ")"
+        return esc(arrow)
+    rate = entry["rates"]["0.10"]
+    word = label(rate)
+    mark = {"устойчива": "", "шаткая": "?", "ненадёжна": "??"}[word]
+    if arrow:
+        return f'<span title="{word}: {rate:.2%}">{esc(arrow)}<small class="robustness">{mark}</small></span>'
+    return f'<small class="robustness" title="{word}: {rate:.2%}"> ({word})</small>'
 
 
 def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
@@ -279,12 +284,15 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
             axes = []
             for fid in fids:
                 ax = cards.get(fid, {}).get("axis_institutions") or {}
-                axes.append(sym[ax.get("arrow")] + robustness_note(fid, "rule_of_law")
+                axes.append(robustness_note(fid, "rule_of_law", arrow=sym[ax.get("arrow")])
                             if fid in observed and alpha_ok(ax) and ax.get("arrow") in ("up", "down", "both") else "—")
             values = [axes] + [[
                 arrows[t].get(fid, {}).get("text", "мало законов (0)")
                 if arrows[t].get(fid, {}).get("arrow") is None else
-                sym[arrows[t][fid]["arrow"]] + robustness_note(fid, t) for fid in fids] for t in themes]
+                robustness_note(fid, t, arrow=sym[arrows[t][fid]["arrow"]]) for fid in fids] for t in themes]
+            for i, value in enumerate(values[1:], 1):
+                if all(re.fullmatch(r"со всеми \(\d+\)", v) for v in value):
+                    values[i] = ["со всеми (" + "/".join(re.search(r"\d+", v)[0] for v in value) + ")"]
             cells = "".join(
                 f'<td class="ballot-axis" data-l="{esc(label)}">{" / ".join(dict.fromkeys(value))}</td>'
                 for label, value in zip(["Суд", "Религия", "Экономика", "Безопасность"], values))
@@ -298,7 +306,7 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
             '<div>Государство и религия — ↑ больше места религии.</div>'
             '<div>Экономика — ↑ на стороне производителя.</div>'
             '<div>Безопасность — ↑ расширяет полномочия армии и силовых.</div>'
-            '<div>«Голосовали со всеми» — фракция участвовала в голосованиях по N законам со знаком темы, все эти голосования отсечены как почти единогласные.</div>'
+            '<div>Со всеми (N) — N законов темы приняты почти единогласно, фракции не различаются.</div>'
             '<div>↕ — и туда и обратно; «—» — знаков нет.</div></div>'
             '<p>Колонка «4 закона» — как фракции списка голосовали по четырём законам, которые ты пометил „недопустимо“; „за“ выделено; «—» — нет позиции или фракция не голосовала; «/» — расхождение фракций списка.</p>'
             f'<p>{LEGEND}</p>'
@@ -402,6 +410,7 @@ def build(m: dict, cards: dict | None = None,
 .ballot,.ballot *{{overflow-wrap:normal;word-break:normal;hyphens:manual}}
 .ballot thead th{{white-space:nowrap}}
 .ballot-legend{{margin:1rem 0}}
+.robustness{{font-size:.75em;white-space:nowrap}}
 .ballot th:first-child{{width:28%}}
 .ballot-laws{{display:flex;gap:4px;align-items:flex-start}}
 .ballot-laws>span{{flex:1;white-space:nowrap;hyphens:none;border:1px solid var(--rule);padding:2px;text-align:center;font-weight:400}}
@@ -556,14 +565,14 @@ def selftest() -> int:
     assert '.ballot thead th{white-space:nowrap}' in live_doc
     assert 'flex:1;white-space:nowrap;hyphens:none;' in live_doc
     ballot_html = ballot_table(live_matrix, live_cards)
-    assert "устойчивость — останется ли стрелка, если каждый десятый знак закона ошибочен (оценка по второму прочтению 19.10)" in ballot_html
+    assert "Устойчивость: ? — шаткая, ?? — ненадёжна (стрелка может смениться, если каждый десятый знак закона ошибочен)" in ballot_html
     for axis_cell in re.findall(r'<td class="ballot-axis".*?</td>', ballot_html):
         assert len(re.findall(r"[↑↓↕]", axis_cell)) == len(re.findall(
-            r"[↑↓↕] \((?:устойчива|шаткая|ненадёжна)\)", axis_cell))
+            r'<span title="(?:устойчива|шаткая|ненадёжна): [0-9.]+%">[↑↓↕]<small class="robustness">\?{0,2}</small></span>', axis_cell))
     assert ballot_html.count('data-ballot-list=') == 14 and 'Беннет' in ballot_html
     # Проверка разметки, не геометрии: четыре подписи и значения в прежнем порядке.
     for row_html in re.findall(r'<tr data-ballot-list=.*?</tr>', ballot_html):
-        axes = re.findall(r'<td class="ballot-axis" data-l="([^"]+)">([^<]+)</td>', row_html)
+        axes = re.findall(r'<td class="ballot-axis" data-l="([^"]+)">(.*?)</td>', row_html)
         if 'href="f-' in row_html:
             assert [label for label, value in axes] == ['Суд', 'Религия', 'Экономика', 'Безопасность']
         else:
@@ -612,7 +621,7 @@ def selftest() -> int:
         assert all(f'href="f-{fid}.html"' in ballot_html for fid in entry["factions"])
     yashar = next(r for r in re.findall(r'<tr data-ballot-list=.*?</tr>', ballot_html) if 'Яшар!' in r)
     assert 'href="f-1098.html"' in yashar and 'colspan=' not in yashar
-    assert re.search(r'<td[^>]*>[↑↓↕] \((?:устойчива|шаткая|ненадёжна)\)</td>', yashar)
+    assert re.search(r'<td[^>]*><span title="[^"]+">[↑↓↕]<small class="robustness">\?{0,2}</small></span></td>', yashar)
     assert next(r for r in ballot_input["lists"] if r["ru"] == "Яшар!")["factions"] == [1098]
     details = re.search(r'<details><summary>Ещё 24 списка без мест в Кнессете</summary>(.*?)</details>', ballot_html).group(1)
     expected_small = "Amcha Yisrael|Achi Movement|Ani VeAta – Israel's People Party|Betach|Biblical Bloc Party|Black Color|Brit Olam|Electoral System Reform|Gan Eden|HaKahal|Israel First|Kol HaNashim|Lights of Dawn|Mishpat Tzedek|Partnership to All|Personal Safety|Seder Chadash|Sharshar for Love & Unity|Shma|Tekuma|The Haredi Public|The Pirates|Together We'll Make It|Tsomet".split('|')
@@ -636,7 +645,7 @@ def selftest() -> int:
         test_cards.update({fid: {"axis_institutions": {"arrow": arrow, "alpha": 1}} for fid, arrow in ((1096, "up"), (1108, "down"))})
         split_html = ballot_table(live_matrix, test_cards)
         likud = next(r for r in re.findall(r'<tr data-ballot-list=.*?</tr>', split_html) if 'Ликуд' in r)
-        assert len(re.findall(r'↑(?: \([^)]+\))? / ↓(?: \([^)]+\))?', likud)) == 4
+        assert len(re.findall(r'↑ / ↓', re.sub(r'<[^>]+>|\?', '', likud))) == 4
         assert 'f-1096.html' in likud and 'f-1108.html' in likud
     print("ЗЕЛЁНЫЙ: бюллетень — 14 строк; 14 удалений из JSON отклонены; расхождения стрелок сохранены")
     # Граница малого покрытия: все темы остаются видимыми, даже при нуле.
@@ -1606,7 +1615,7 @@ def _theme_lines(row: dict) -> str:
         out.append(f'<p data-theme="{t}"><b>{esc(title)}:</b> {direction} — '
                    f'{a["up"]} {plural_ru(a["up"], "закон", "закона", "законов")} в сторону плюса / {a["down"]} в сторону минуса'
                    f'{esc(note[t])}.</p>{examples}')
-    return "".join(out)
+    return "".join(out) + '<p class="dim">Со всеми (N) — N законов темы приняты почти единогласно, фракции не различаются.</p>'
 
 
 def faction_summary(row: dict, card: dict, money_text: str, laws: list[dict]) -> str:
@@ -1616,9 +1625,9 @@ def faction_summary(row: dict, card: dict, money_text: str, laws: list[dict]) ->
     ax = card.get("axis_institutions") or {}
     direction = "направление не установлено"
     if row["a"]["status"] == "observed" and ax.get("arrow") in ("up", "down", "both") and alpha_ok(ax):
-        direction = (f'{CELL[ax["arrow"]][0]}{robustness_note(fid, "rule_of_law")} из {ax["acts"]} {plural_ru(ax["acts"], "закона", "законов", "законов")} темы, по которым '
+        direction = (f'{CELL[ax["arrow"]][0]}{robustness_note(fid, "rule_of_law")}' + esc(f' из {ax["acts"]} {plural_ru(ax["acts"], "закона", "законов", "законов")} темы, по которым '
                      f'фракция голосовала, {ax["down"]} — в сторону ослабления, '
-                     f'{ax["up"]} — в сторону укрепления')
+                     f'{ax["up"]} — в сторону укрепления'))
     positions = ''.join(
         f'<li><a href="grounds.html#a{law["bill"]}">{esc(law["name"])}</a>: '
         f'<b>{esc(law["positions"][str(fid)])}</b> ({esc(law["date"])})</li>' for law in laws)
@@ -1631,7 +1640,7 @@ def faction_summary(row: dict, card: dict, money_text: str, laws: list[dict]) ->
                       for p in periods)
     government = "да: " + dates if periods else "нет"
     return (f'<section class="faction-summary" aria-label="Коротко о фракции">'
-            f'<p><b>Суд, парламент, свободы:</b> {esc(direction)}.</p>'
+            f'<p><b>Суд, парламент, свободы:</b> {direction}.</p>'
             f'<p><b>Четыре закона владельца — последняя стадия:</b></p><ul>{positions}</ul>'
             f'<p><b>Деньги:</b> {esc(money_text)}.</p>'
             f'<p><b>В правительстве в 25-м Кнессете:</b> {esc(government)}.</p>'
