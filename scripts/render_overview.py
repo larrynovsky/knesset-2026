@@ -190,6 +190,35 @@ def theme_table(m: dict | None, cards: dict | None) -> str:
             f'<tbody>{"".join(rows)}</tbody></table>')
 
 
+# Названия из задания владельца v21, 19.10.2026.
+SMALL_BALLOT_LISTS = (
+    'Amcha Yisrael',
+    'Achi Movement',
+    "Ani VeAta – Israel's People Party",
+    'Betach',
+    'Biblical Bloc Party',
+    'Black Color',
+    'Brit Olam',
+    'Electoral System Reform',
+    'Gan Eden',
+    'HaKahal',
+    'Israel First',
+    'Kol HaNashim',
+    'Lights of Dawn',
+    'Mishpat Tzedek',
+    'Partnership to All',
+    'Personal Safety',
+    'Seder Chadash',
+    'Sharshar for Love & Unity',
+    'Shma',
+    'Tekuma',
+    'The Haredi Public',
+    'The Pirates',
+    "Together We'll Make It",
+    'Tsomet',
+)
+
+
 def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
     """Списки владельца 19.10; стрелки принадлежат указанным фракциям."""
     from theme_arrows import THEMES, theme_arrows
@@ -228,14 +257,22 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
                 f'<td data-l="{esc(label)}">{" / ".join(dict.fromkeys(value))}</td>'
                 for label, value in zip(["Суд, парламент, свободы"] + [THEMES[t] for t in themes], values))
         body.append(f'<tr data-ballot-list="{esc(row["he"])}">{who}{cells}</tr>')
-    heads = "".join(f'<th scope=col>{esc(THEMES[t])}</th>' for t in themes)
+    heads = "".join(f'<th scope=col>{label}</th>' for label in ("Религия", "Экономика", "Безопасность"))
+    small_lists = "".join(f"<li>{esc(name)}</li>" for name in SMALL_BALLOT_LISTS)
     unmapped = "<br>".join(esc(note) for note in ballot["unmapped_factions"].values())
     return ('<h2 id="ballot">Списки бюллетеня 27.10</h2>'
+            '<div class="ballot-legend">'
+            '<div>Суд, парламент, свободы — ↑ укрепляла, ↓ ослабляла.</div>'
+            '<div>Государство и религия — ↑ больше места религии.</div>'
+            '<div>Экономика — ↑ на стороне производителя.</div>'
+            '<div>Безопасность — ↑ расширяет полномочия армии и силовых.</div>'
+            '<div>↕ — и туда и обратно; «—» — знаков нет.</div></div>'
             '<table class="ballot"><thead><tr><th scope=col>Список и лидеры</th>'
             '<th scope=col>Читается по голосам фракций</th>'
-            f'<th scope=col>Суд, парламент, свободы</th>{heads}</tr></thead>'
-            f'<tbody>{"".join(body)}<tr><td colspan="6">{esc(ballot["small_lists_note"])}</td></tr>'
-            f'</tbody></table><p class=dim>{unmapped}</p>')
+            f'<th scope=col>Суд и парламент</th>{heads}</tr></thead>'
+            f'<tbody>{"".join(body)}</tbody></table>'
+            '<details><summary>Ещё 24 списка без мест в Кнессете</summary>'
+            f'<ul>{small_lists}</ul></details><p class=dim>{unmapped}</p>')
 
 
 def other_themes() -> str:
@@ -327,6 +364,8 @@ def build(m: dict, cards: dict | None = None,
 .owner-laws{{width:100%;table-layout:fixed}} .owner-laws th,.owner-laws td{{padding:9px 6px;overflow-wrap:anywhere}} .owner-laws th{{font-size:13px}} .owner-laws td{{font-size:14px}}
 .ballot{{width:100%;table-layout:fixed;border-collapse:collapse;font:13px/1.4 system-ui,sans-serif}}
 .ballot th,.ballot td{{padding:8px 4px;text-align:left;vertical-align:top;border-bottom:1px dotted var(--rule);overflow-wrap:anywhere}}
+.ballot thead th{{overflow-wrap:normal;word-break:normal;hyphens:auto}}
+.ballot-legend{{margin:1rem 0}}
 .ballot th:first-child{{width:28%}} .ballot th:nth-child(2){{width:24%}}
 .ballot .norec{{display:block;font-size:12px;color:var(--dim)}}
 @media(max-width:600px){{.ballot thead{{display:none}} .ballot tr{{display:block;margin:1rem 0}} .ballot th:first-child,.ballot td{{display:block;width:100%}} .ballot td[data-l]::before{{content:attr(data-l) " · ";font-weight:600}}}}
@@ -437,7 +476,7 @@ def selftest() -> int:
     assert live_doc.index('data-frame=full') < live_doc.index('id="ballot"') < live_doc.index('id="grounds"')
     ballot_html = ballot_table(live_matrix, live_cards)
     assert ballot_html.count('data-ballot-list=') == 14 and 'Беннет' in ballot_html
-    for name in ('Яшар!', 'Резервисты'):
+    for name in ('Резервисты',):
         row_html = next(r for r in re.findall(r'<tr data-ballot-list=.*?</tr>', ballot_html) if name in r)
         assert '<td colspan="5">голосов в этом Кнессете нет</td>' in row_html
         assert not any(a in row_html for a in ('↑', '↓', '↕', 'href='))
@@ -448,7 +487,16 @@ def selftest() -> int:
         assert esc(entry["ru"]) in ballot_html and esc(entry["leaders"]) in ballot_html
         assert all(esc(note) in ballot_html for note in entry["absent"])
         assert all(f'href="f-{fid}.html"' in ballot_html for fid in entry["factions"])
-    assert esc(ballot_input["small_lists_note"]) in ballot_html
+    yashar = next(r for r in re.findall(r'<tr data-ballot-list=.*?</tr>', ballot_html) if 'Яшар!' in r)
+    assert 'href="f-1098.html"' in yashar and 'colspan=' not in yashar
+    assert re.search(r'<td[^>]*>[↑↓↕]</td>', yashar)
+    assert next(r for r in ballot_input["lists"] if r["ru"] == "Яшар!")["factions"] == [1098]
+    details = re.search(r'<details><summary>Ещё 24 списка без мест в Кнессете</summary>(.*?)</details>', ballot_html).group(1)
+    expected_small = "Amcha Yisrael|Achi Movement|Ani VeAta – Israel's People Party|Betach|Biblical Bloc Party|Black Color|Brit Olam|Electoral System Reform|Gan Eden|HaKahal|Israel First|Kol HaNashim|Lights of Dawn|Mishpat Tzedek|Partnership to All|Personal Safety|Seder Chadash|Sharshar for Love & Unity|Shma|Tekuma|The Haredi Public|The Pirates|Together We'll Make It|Tsomet".split('|')
+    assert re.findall(r'<li>(.*?)</li>', details) == [esc(name) for name in expected_small]
+    assert len(expected_small) == 24
+    assert ballot_html.index('ballot-legend') < ballot_html.index('<table')
+    assert ballot_html.index('<details>') > ballot_html.index('</table>')
     assert all(esc(note) in ballot_html for note in ballot_input["unmapped_factions"].values())
     with TemporaryDirectory() as tmp:
         path = Path(tmp) / "ballot.json"
