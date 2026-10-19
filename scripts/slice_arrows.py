@@ -36,29 +36,45 @@ def load_signs(n: int, theme: str) -> dict | None:
     return {int(k): int(v["sign"] if isinstance(v, dict) else v) for k, v in d.items()}
 
 
-def gov_days(n: int) -> dict[int, int]:
-    """FactionID → дней в правительстве в N-м Кнессете (пересечение с жизнью фракции)."""
-    p = ROOT / "data" / f"periods_{n}.yaml"
-    t = p.read_text(encoding="utf-8")
+def gov_spans(n: int) -> dict[int, list[tuple[str, str]]]:
+    """FactionID → слитые интервалы в правительстве N-го Кнессета, обрезанные жизнью фракции."""
+    t = (ROOT / "data" / f"periods_{n}.yaml").read_text(encoding="utf-8")
     life = {r["Id"]: (r["StartDate"][:10], (r.get("FinishDate") or r["StartDate"])[:10])
             for r in json.loads((ROOT / "data" / "kns_faction_20_24.json").read_text(encoding="utf-8"))}
-    out: dict[int, int] = {}
+    raw: dict[int, list] = {}
     for fid, s, f in re.findall(r"faction_id: (\d+)\n.*?\n\s+government: \d+\n\s+start: (\S+)\n\s+finish: (\S+)", t):
         fid = int(fid)
         a, b = life.get(fid, (s, f))
         lo, hi = max(s, a), min(f if f != "null" else b, b)
         if lo < hi:
-            out[fid] = out.get(fid, 0) + (date.fromisoformat(hi) - date.fromisoformat(lo)).days
+            raw.setdefault(fid, []).append((lo, hi))
+    out = {}
+    for fid, spans in raw.items():
+        merged = []
+        for lo, hi in sorted(spans):
+            if merged and lo <= merged[-1][1]:
+                merged[-1] = (merged[-1][0], max(hi, merged[-1][1]))
+            else:
+                merged.append((lo, hi))
+        out[fid] = merged
     return out
 
 
-def role(days: int, life_days: int) -> str:
-    """Доля жизни фракции в правительстве: ≥80% — в правительстве, ≤20% — в оппозиции.
-    Ликуд в 24-м: два месяца переходного правительства из девятнадцати — оппозиция."""
-    share = days / max(life_days, 1)
-    if days < MIN_GOV_DAYS or share <= 0.2:
-        return "оппозиция"
-    return "правительство" if share >= 0.8 else "часть срока в правительстве"
+def _days(spans) -> int:
+    return sum((date.fromisoformat(b) - date.fromisoformat(a)).days for a, b in spans)
+
+
+def role(spans: list, life_days: int) -> str:
+    """Роль словами и с датами, без порога-отсечки: читатель видит, когда партия была у власти.
+    Короче MIN_GOV_DAYS — шум однодневных фракций и переходов, считается оппозицией."""
+    days = _days(spans)
+    if days < MIN_GOV_DAYS:
+        return "в оппозиции"
+    if days >= life_days * 0.9:
+        return "в правительстве"
+    when = ", ".join(f"{a[5:7]}.{a[:4]}–{b[5:7]}.{b[:4]}" for a, b in spans
+                     if (date.fromisoformat(b) - date.fromisoformat(a)).days >= MIN_GOV_DAYS)
+    return f"в правительстве {when}, остальное время в оппозиции"
 
 
 def check_lineage(lin: dict, factions: dict[int, int]) -> None:
@@ -87,7 +103,7 @@ def compute() -> dict:
             out["knessets"][str(n)] = {"status": "нет выгрузки"}
             continue
         votes = json.loads(vp.read_text(encoding="utf-8"))
-        gd = gov_days(n)
+        gd = gov_spans(n)
         arrows, have = {}, []
         for th in THEMES4:
             signs = load_signs(n, th)
@@ -111,7 +127,7 @@ def compute() -> dict:
                     continue
                 cell["links"].append({
                     "fid": fid, "type": typ, "note": note[0] if note else "", "votes": voted,
-                    "role": "коалиция без министров" if fid in coalition else role(gd.get(fid, 0), life[fid]),
+                    "role": "в коалиции, без министров" if fid in coalition else role(gd.get(fid, []), life[fid]),
                     "themes": {th: {k: arrows[th].get(fid, {}).get(k) for k in ("arrow", "up", "down")}
                                for th in have}})
             members = {s: m for s, m in lin.get("personal_ids", {}).get(let, {}).items()}
@@ -137,9 +153,11 @@ def selftest() -> int:
         pass
     else:
         raise AssertionError("фракция 24-го под 20-м Кнессетом не поймана")
-    assert role(0, 1000) == "оппозиция" and role(29, 1000) == "оппозиция"
-    assert role(900, 1000) == "правительство" and role(300, 1000) == "часть срока в правительстве"
-    assert role(68, 588) == "оппозиция", "два месяца переходного правительства не делают партию правительственной"
+    assert role([], 1000) == "в оппозиции"
+    assert role([("2020-01-01", "2020-01-20")], 1000) == "в оппозиции", "однодневки и переходы — шум"
+    assert role([("2020-01-01", "2022-09-01")], 970) == "в правительстве"
+    r = role([("2021-04-06", "2021-06-13")], 588)
+    assert r.startswith("в правительстве 04.2021–06.2021") and "оппозиции" in r, r
     print("самопроверка slice_arrows пройдена: 7 утверждений")
     return 0
 

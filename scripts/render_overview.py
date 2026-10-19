@@ -2222,7 +2222,7 @@ def slice_word(t: dict | None, key: str) -> str:
     return f'{word} <small>законов: {count}</small>'
 
 
-def slice_block(letters: str, data: Path | None = None) -> str:
+def slice_block(letters: str, data: Path | None = None, ru: str = "") -> str:
     """Срезы 20–24 (владелец 19.10). Нет data/slices.json — блока нет, без заглушки."""
     p = data or ROOT / "data" / "slices.json"
     if not p.exists():
@@ -2243,10 +2243,13 @@ def slice_block(letters: str, data: Path | None = None) -> str:
             continue
         units = []
         for link in cell.get("links", []):
-            label = esc(link["note"] or names.get(link["fid"], str(link["fid"])))
+            he = names.get(link["fid"], str(link["fid"]))
+            label = (esc(link["note"]) if link["note"] else esc(ru) if ru else "") + \
+                f' <span lang=he dir=rtl>{esc(he)}</span>'
+            label = label.strip()
             if link["type"] == "joint":
                 label += " <small>(общий список — голоса одни на всех участников)</small>"
-            units.append((f'<bdi>{label}</bdi>, {SLICE_ROLE[link["role"]]}', link["themes"]))
+            units.append((f'<bdi>{label}</bdi>, {esc(link["role"])}', link["themes"]))
         if cell.get("personal", {}).get("themes"):
             who = ", ".join(cell["personal"]["stats"])
             units.append((f'личные голоса: {esc(who)}', cell["personal"]["themes"]))
@@ -2404,7 +2407,7 @@ def ballot_pages(matrix: dict, cards: dict, summaries: dict,
 </style></head><body>
 <nav class=crumbs><a href="index.html#ballot">Все списки</a></nav>
 <h1><span class="ballot-letters" lang="he" dir="rtl" title="буквы на бюллетене">{esc(entry["letters"])}</span> {esc(entry["ru"])} <span lang=he dir=rtl><bdi>{esc(entry["he"])}</bdi></span></h1>
-<p class=lead>{esc(entry["leaders"])}</p>{short}{slice_block(entry["letters"])}
+<p class=lead>{esc(entry["leaders"])}</p>{short}{slice_block(entry["letters"], ru=entry["ru"])}
 <p class="letters-source">{esc(ballot["letters_source"])}</p>
 <h2>Подробности</h2><p>«Не уверены» — вывод может смениться, если смысл каждого десятого закона прочитан с ошибкой.</p>{body}<footer>{SHORT_FRAME}</footer>
 </body></html>'''

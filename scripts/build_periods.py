@@ -59,9 +59,12 @@ def main() -> int:
 
     rows = fetch_all("KNS_PersonToPosition", flt=f"KnessetNum eq {K25_NUM}")
     facs: dict[int, set] = collections.defaultdict(set)      # PersonID → {(id, name)}
+    member: dict[int, list] = collections.defaultdict(list)  # PersonID → [(id, name, start, finish)]
     for r in rows:
         if r.get("FactionID"):
             facs[r["PersonID"]].add((r["FactionID"], (r.get("FactionName") or "").strip()))
+            member[r["PersonID"]].append((r["FactionID"], (r.get("FactionName") or "").strip(),
+                                          d10(r.get("StartDate")), d10(r.get("FinishDate")) or "9999"))
 
     mins = [r for r in rows if r.get("GovMinistryID") and r.get("GovernmentNum")]
     print(f"позиций 25-го Кнессета: {len(rows)} · министерских: {len(mins)} · "
@@ -76,9 +79,20 @@ def main() -> int:
             continue                                          # министр вне фракций Кнессета
         if len(person_facs) > 1:
             multi_faction.append((r["PersonID"], person_facs))
+        s0, f0 = d10(r.get("StartDate")), d10(r.get("FinishDate")) or "9999"
+        if K25_NUM != 25:
+            # Срезы 20–24: министр приписывается фракции, в которой состоял В ТО ВРЕМЯ.
+            # Без этого Ямина 23-го выходила «в правительстве» через Рафи Переца,
+            # перешедшего в Байт Йегуди и оставшегося министром (замер 19.10).
+            # 25-й не трогаем: его справочник — критерий, и он сгенерирован прежним правилом.
+            hit = {(fid, fn) for fid, fn, ms, mf in member[r["PersonID"]] if max(ms, s0) < min(mf, f0)}
+            person_facs = hit or person_facs
         for fid, fname in person_facs:
             key = (fid, fname, r["GovernmentNum"])
             s, f = d10(r.get("StartDate")), d10(r.get("FinishDate"))
+            if K25_NUM != 25:
+                ms, mf = max((m[2], m[3]) for m in member[r["PersonID"]] if m[0] == fid)
+                s, f = max(s, ms), (min(f or "9999", mf) if mf != "9999" else f)
             cur = span.setdefault(key, {"start": s, "finish": f, "ministries": set(),
                                         "persons": set()})
             if s and (not cur["start"] or s < cur["start"]):
