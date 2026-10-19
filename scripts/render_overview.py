@@ -400,7 +400,7 @@ def selftest() -> int:
         fid = row["anchor_id"]
         card = live_cards.get(fid, {})
         brief = faction_summary(row, card, "покрытие для проверки", laws)
-        assert brief.count('<p>') == 4
+        assert brief.count('<p>') >= 4
         expected = re.findall(r'<td>(.*?)</td>', re.search(
             rf'<tr data-owner-fid="{fid}">(.*?)</tr>', owner).group(1))
         assert re.findall(r': <b>(.*?)</b>', brief) == expected
@@ -1147,6 +1147,27 @@ def check_index_links(site: Path) -> int:
     return len(parser.hrefs)
 
 
+_THEME_CACHE: dict = {}
+
+
+def _theme_lines(row: dict) -> str:
+    """Строки по описательным темам (покрытие вместо точности, 19.10)."""
+    from theme_arrows import THEMES, theme_arrows
+    if not _THEME_CACHE:
+        _THEME_CACHE.update({t: theme_arrows(t) for t in THEMES})
+    fid = ALIAS.get(row["anchor_id"], row["anchor_id"])
+    word = {"up": "↑", "down": "↓", "both": "↕"}
+    note = {"economy": " (↑ — на стороне производителя)",
+            "religion_state": " (↑ — больше религии в государстве)", "security": ""}
+    out = []
+    for t, title in THEMES.items():
+        a = _THEME_CACHE.get(t, {}).get(fid)
+        if a and a.get("arrow"):
+            out.append(f"<p><b>{esc(title)}:</b> {word[a['arrow']]} — законов в сторону "
+                       f"плюса {a['up']}, минуса {a['down']}{esc(note[t])}.</p>")
+    return "".join(out)
+
+
 def faction_summary(row: dict, card: dict, money_text: str, laws: list[dict]) -> str:
     """Четыре строки из уже рассчитанных данных, без наследования фракций."""
     from slice_party_theme import load_periods
@@ -1172,7 +1193,8 @@ def faction_summary(row: dict, card: dict, money_text: str, laws: list[dict]) ->
             f'<p><b>Суд, парламент, свободы:</b> {esc(direction)}.</p>'
             f'<p><b>Четыре закона владельца — последняя стадия:</b> {positions}.</p>'
             f'<p><b>Деньги:</b> {esc(money_text)}.</p>'
-            f'<p><b>В правительстве в 25-м Кнессете:</b> {esc(government)}.</p></section>')
+            f'<p><b>В правительстве в 25-м Кнессете:</b> {esc(government)}.</p>'
+            f'{_theme_lines(row)}</section>')
 
 
 def state_page(row: dict, brief: str = "") -> str:
