@@ -331,8 +331,12 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None, *, compact: b
         # shining 19.10: читатель не знал, чья позиция слева и справа от «·» в клетках списка из двух фракций
         import render_cheatsheet
         short = [render_cheatsheet._short(names[fid]).split(" (")[0] for fid in fids if fid in names]
+        # в шапке — с лидером («Государственный правый (Саара)»): читатель знает людей, не фракции (shining, круг 3)
+        short = [render_cheatsheet._short(names[fid]) for fid in fids if fid in names] if len(short) > 1 else short
         if len(short) > 1:
             absent += f'<span class=norec>в клетках через «·»: {esc(" · ".join(short))}</span>'
+            if len({s.rsplit(" (", 1)[-1] for s in short}) == 1:   # Кахоль-лаван: две записи фракции Ганца в 25-м Кнессете
+                absent += '<span class=norec>обе записи — фракция Ганца в этом Кнессете под разными названиями в базе Кнессета</span>'
         elif short and any("Беннет" in note for note in row["absent"]):
             absent += f'<span class=norec>судим по голосам фракции {esc(short[0])}</span>'
         who = (f'<th scope=row><span class="ballot-letters" lang="he" dir="rtl" title="буквы на бюллетене">{esc(row["letters"])}</span> '
