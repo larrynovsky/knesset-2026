@@ -30,10 +30,9 @@ import re, sys, pathlib, html as _h
 import hashlib, shutil, subprocess, tempfile
 
 # ─────────────────────────────────────────────────────────────── канон отчёта
-# Шестое значение — решение владельца 18.10.2026 (ревью R8-F04): у партии с
-# разбором обязательств против бюджета клетка «деньги» не «искали, не нашли».
+# Решение владельца 19.10: в денежной клетке разрешено покрытие N из M.
 CLOSED = ["укрепляла", "ослабляла", "и туда и обратно",
-          "искали, не нашли", "мы сюда не дошли", "разобрано — без вывода"]
+          "искали, не нашли", "мы сюда не дошли", "в бюджете нашлась строка под {n} из {m} обещаний"]
 ARROW = {"укрепляла": "↑", "ослабляла": "↓", "и туда и обратно": "↕"}
 FORBIDDEN = [r"прогон", r"чек-?лист", r"кворум", r"размеч|размет", r"перепис",
              r"классификатор", r"валидатор", r"единиц[аеы]\s+наблюдения",
@@ -193,15 +192,17 @@ def c_closed(src):
     cells = [(a, t) for a, t in cells_of(src["index.html"]) if t]
     bad = []
     for a, t in cells:
-        if t not in CLOSED: bad.append(f"вне списка: {t[:40]!r}")
+        if t not in CLOSED[:-1] and not re.fullmatch(r"в бюджете нашлась строка под [0-9]+ из [0-9]+ обещаний", t): bad.append(f"вне списка: {t[:40]!r}")
         elif a != ARROW.get(t, ""): bad.append(f"{t!r} со стрелкой {a!r}")
     return len(cells), sorted(set(bad))[:4], f"{len(cells)} клеток со значением"
 
-@check("ни одной цифры в клетке обзора",
+@check("цифры только в денежном покрытии",
        [("число в клетке", lambda s: cell_edit(s, lambda w: w + " 7 из 10"))])
 def c_digits(src):
     tds = re.findall(r"<td class=c-(?:inst|eq)[^>]*>(.*?)</td>", src["index.html"], flags=re.S)
-    bad = [t[:30] for t in tds if re.search(r"\d", _h.unescape(re.sub(r"<[^>]+>", "", t)))]
+    bad = [t[:30] for t in tds if re.search(r"\d", re.sub(
+        r"в бюджете нашлась строка под [0-9]+ из [0-9]+ обещаний", "",
+        _h.unescape(re.sub(r"<[^>]+>", "", t))))]
     return len(tds), bad[:3], f"{len(tds)} клеток"
 
 @check("лексика страниц партий",
@@ -255,9 +256,10 @@ def c_palette(src):
 def c_sem(src):
     bad = []
     for n, s in src.items():
-        if "<table" in s:
-            if "<thead" not in s: bad.append(f"{n}: таблица без thead")
-            if "scope=" not in s: bad.append(f"{n}: th без scope")
+        for table in re.findall(r"<table\b[^>]*>.*?</table>", s, flags=re.S):
+            if "<thead" not in table: bad.append(f"{n}: таблица без thead")
+            if any("scope=" not in th for th in re.findall(r"<th\b[^>]*>", table)):
+                bad.append(f"{n}: th без scope")
         if "<details" in s and "<summary" not in s: bad.append(f"{n}: details без summary")
         if "dir=rtl" in s and "<bdi>" not in s: bad.append(f"{n}: RTL без bdi")
     return len(src), bad[:3], ""

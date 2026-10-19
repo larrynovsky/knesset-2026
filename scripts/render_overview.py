@@ -29,15 +29,12 @@ MOCK = ROOT / "design" / "mockup_v5" / "index.html"
 MATRIX = ROOT / "data" / "coverage_matrix.json"
 OUT = ROOT / "site" / "index.html"
 
-# Закрытый список значений клетки — канон D2 из приёмки 01.08 и шестое
-# значение по решению владельца 18.10 (R8-F04): «разобрано — без вывода».
-# Разбор по записям есть, сводного вывода о фракции нет. Без него
-# разобранная партия читалась как «искали, не нашли» — то есть пустой.
+# Канон D2; решение владельца 19.10: денежное покрытие N из M.
 CELL = {"up": ("↑", "укрепляла", ""), "down": ("↓", "ослабляла", ""),
         "both": ("↕", "и туда и обратно", ""),
         "none": ("", "искали, не нашли", "tx-none"),
         "miss": ("", "мы сюда не дошли", "tx-miss"),
-        "reviewed": ("", "разобрано — без вывода", "tx-rev")}
+        "reviewed": ("", "в бюджете нашлась строка под {n} из {m} обещаний", "tx-rev")}
 
 
 def css_from_mockup() -> str:
@@ -48,8 +45,9 @@ def css_from_mockup() -> str:
     return m.group(1)
 
 
-def cell(kind: str, label: str) -> str:
+def cell(kind: str, label: str, value: str | None = None) -> str:
     a, word, tx = CELL[kind]
+    word = value or word
     cls = "v nd " + tx if tx else "v"
     arrow = f'<span class=a>{a}</span>&#8201;' if a else ""
     return (f'<span class="{cls}">{arrow}{esc(word)}'
@@ -92,18 +90,17 @@ def alpha_ok(ax: dict) -> bool:
 
 
 def rows(m: dict, cards: dict | None = None,
-         budgets: set | None = None) -> tuple[str, int, int]:
+         budgets: dict | None = None) -> tuple[str, int, int]:
     """Строки обзора. Возвращает разметку, число клеток и число заполненных.
 
-    budgets — фракции, у которых есть карточка разбора обязательств против
-    бюджета. Клетка «деньги» у них — «разобрано — без вывода», а не
-    «искали, не нашли»: разбор не пустой, но вывода о фракции он не даёт."""
+    budgets — денежное покрытие N из M по разобранным карточкам фракций."""
     cards = cards or {}
-    budgets = budgets or set()
+    budgets = budgets or {}
+    names = party_names(m, cards)
     out, total, filled = [], 0, 0
     for r in m["lines"]:
         a, b = r["a"]["status"], r["b"]["status"]
-        who = (f'<td class=who><a href="f-{r["anchor_id"]}.html">{esc(r["line"][:44])}</a>')
+        who = (f'<td class=who><a href="f-{r["anchor_id"]}.html">{esc(names[r["anchor_id"]])}</a><span class=norec lang=he dir=rtl><bdi>{esc(r["line"])}</bdi></span>')
         if b == "not_exposed":
             # R23: горизонт назван — справочник составов охватывает 25-й Кнессет
             who += ('<span class=norec>в 25-м Кнессете в правительстве не была</span>')
@@ -147,7 +144,7 @@ def rows(m: dict, cards: dict | None = None,
                "денежных обещаний в соглашении не найдено"
                if b == "observed" and k2 == "none" else
                "обязательства против бюджета")
-        c2 = cell(k2, lab)
+        c2 = cell(k2, lab, budgets.get(r["anchor_id"]) if k2 == "reviewed" else None)
         total += 1
         if k2 not in ("miss", "none", "reviewed"):
             filled += 1
@@ -184,26 +181,49 @@ def other_themes() -> str:
             f'<a href="method.html">Как мы считаем</a>.</p>')
 
 
-def grounds_block() -> str:
-    """Ссылка на основания — только если пометки владельца существуют.
-    Без них блок не рисуется: обзор не обещает того, чего нет."""
-    marks = sorted((ROOT / "criteria").glob("owner_marks_*.yaml"))
-    if not marks:
-        return ""
-    sys.path.insert(0, str(ROOT / "scripts"))
-    from render_grounds import read_marks
-    m = read_marks(marks[-1])
-    n_bad = sum(1 for v in m.values() if v["mark"] == "недопустимо")
-    return (f'<h2 id="grounds">Основания</h2>'
-            f'<p>Автор прочитал {len(m)} актов, не видя, кто как голосовал, '
-            f'и пометил {n_bad} как недопустимые. '
-            f'<a href="grounds.html">Кто за эти акты голосовал — по актам и '
-            f'по строкам бюллетеня</a>. Документ не говорит «вычеркнуть»; '
-            f'он показывает, кто проголосовал за то, что прочитано и помечено.</p>')
+def party_names(matrix: dict, cards: dict) -> dict:
+    """Те же переводы, что у faction_page и state_page."""
+    names = json.loads((ROOT / "criteria/wikidata_crosscheck.json").read_text(encoding="utf-8"))
+    by_he = {n["he"]: n["mine"] for group in ("agree", "differ", "missing") for n in names[group]}
+    return {r["anchor_id"]: (cards.get(r["anchor_id"], {}).get("party_ru")
+                             or by_he.get(r["line"], r["line"])) for r in matrix["lines"]}
+
+
+def grounds_block(matrix: dict, cards: dict) -> str:
+    """Последняя стадия: отбор и позиции берём из render_grounds."""
+    from render_grounds import MARKS, read_marks, load_all, act_votes, vote_table
+    votes, names, _, _, table, split = load_all()
+    marked = [b for b, mark in read_marks(MARKS).items() if mark["mark"] == "недопустимо"]
+    ru = party_names(matrix, cards)
+    fids = [str(r["anchor_id"]) for r in matrix["lines"]]
+    latest = {}
+    for bill in marked:
+        vs = act_votes(votes["rows"], bill, table)
+        if not vs:
+            raise Refuse(f"акт {bill}: нет последней стадии")
+        latest[bill] = vote_table(vs[-1], table, {}, fids, split)
+    heads = ''.join(f'<th scope=col><a href="grounds.html#a{b}">{esc(names[str(b)]["ru"])}</a>'
+                    f'<span class=norec>{latest[b]["date"]}</span></th>' for b in marked)
+    rows = []
+    for r in matrix["lines"]:
+        fid = str(r["anchor_id"])
+        cells = []
+        for bill in marked:
+            groups = latest[bill]["groups"]
+            position = "за" if fid in groups["for"] else "против" if fid in groups["against"] else "нет позиции"
+            cells.append(f'<td>{position}</td>')
+        # владелец 19.10: партии на двух языках
+        rows.append(f'<tr data-owner-fid="{fid}"><th scope=row><a href="f-{fid}.html">{esc(ru[r["anchor_id"]])}</a>'
+                    f' <span class=he lang=he dir=rtl><bdi>{esc(r["line"])}</bdi></span></th>{"".join(cells)}</tr>')
+    return ('<h2 id="grounds">Фракции и четыре закона владельца</h2>'
+            '<p>Четыре акта, помеченные владельцем «недопустимо». Позиция на последней стадии; '
+            '<a href="grounds.html">все стадии и основания</a>.</p>'
+            '<table class="owner-laws"><thead><tr><th scope=col>Фракция</th>' + heads +
+            '</tr></thead><tbody>' + ''.join(rows) + '</tbody></table>')
 
 
 def build(m: dict, cards: dict | None = None,
-          budgets: set | None = None) -> tuple[str, int, int]:
+          budgets: dict | None = None) -> tuple[str, int, int]:
     body, total, filled = rows(m, cards, budgets)
     rev = body.count("tx-rev")
     miss = total - filled - rev
@@ -212,7 +232,9 @@ def build(m: dict, cards: dict | None = None,
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>Что фракции делали — 25-й Кнессет</title>
-<style>{css_from_mockup()}</style></head><body>
+<style>{css_from_mockup()}
+.owner-laws{{width:100%;table-layout:fixed}} .owner-laws th,.owner-laws td{{padding:9px 6px;overflow-wrap:anywhere}} .owner-laws th{{font-size:13px}} .owner-laws td{{font-size:14px}}
+</style></head><body>
 <h1>Что фракции делали на самом деле</h1>
 <p class=lead>27 октября в бюллетене будет около двенадцати списков. Этот
 документ нужен для одного: вычеркнуть два-три из них и уметь объяснить себе
@@ -221,10 +243,10 @@ def build(m: dict, cards: dict | None = None,
 <p>Мы смотрим на поступки, а не на заявления. Слова перед выборами стоят ноль;
 голос в Кнессете записан поимённо и никуда не денется.</p>
 {FRAME}
-{grounds_block()}
+{grounds_block(m, cards or {})}
 <h2>Сначала о том, чего мы не знаем</h2>
 <p>Клеток в таблице ниже — <b class=big>{total}</b>. С итоговым выводом — {filled};
-в {rev} разбор есть, но вывода нет; в остальных {miss} нужный разбор не
+в {rev} показано покрытие обещаний бюджетными строками; в остальных {miss} нужный разбор не
 проведён или искомого не нашли — что именно, сказано на странице фракции.</p>
 <p>Это разные вещи, и подписаны они по-разному.
 <b class=tx-miss>«Не дошли»</b> значит, что нужный разбор ещё не проведён.
@@ -232,9 +254,8 @@ def build(m: dict, cards: dict | None = None,
 <b class=tx-none>«Искали, не нашли»</b> — что не найдено то, что названо в
 подписи (например, соглашение или денежные обещания в нём), а не «нарушений
 не нашли».
-<b class=tx-rev>«Разобрано — без вывода»</b> — что обещания из коалиционного
-соглашения сверены с бюджетом по одному, и каждая запись лежит на странице
-фракции; сводного вывода о фракции мы из них не делаем.
+В денежных клетках указано, под сколько самостоятельных обещаний нашлась
+строка бюджета. Разбор каждого обещания — на странице фракции.
 Ни одно из этих состояний не значит «к этой партии вопросов нет». Пустая клетка
 рассказывает про нас, а не про партию.</p>
 <h2>Шестнадцать строк бюллетеня</h2>
@@ -297,6 +318,23 @@ def selftest() -> int:
         {"anchor_id": 3, "line": "без связи",
          "a": {"status": "lineage_unresolved"}, "b": {"status": "source_missing"}}],
         "source": {"votes_at": "2026-07-31"}}
+    # Решение 19.10: считаем самостоятельные деньги; все три вида найденных строк.
+    cs = [{"granularity": g} for g in ("exact_takana", "subset_of_line", "spread_over_lines",
+                                       "not_found", "not_budgetary")]
+    cs.append({"granularity": "exact_takana", "duplicate_of": "first"})
+    assert budget_summary([{"commitments": cs}]) == "в бюджете нашлась строка под 3 из 4 обещаний"
+    live_matrix = json.loads(MATRIX.read_text(encoding="utf-8"))
+    live_cards = load_cards()
+    owner = grounds_block(live_matrix, live_cards)
+    assert owner.count('data-owner-fid=') == 16 and owner.count('<td>') == 64
+    assert '<td>раскол</td>' not in owner and '<td>воздержались</td>' not in owner
+    assert 'grounds.html#a2199044' not in owner
+    # У Еш Атид на последней стадии 2207472 позиции нет, прежнее «против» не наследуем.
+    ya = re.search(r'<tr data-owner-fid="1102">(.*?)</tr>', owner).group(1)
+    assert re.findall(r'<td>(.*?)</td>', ya) == ['против', 'нет позиции', 'нет позиции', 'против']
+    assert 'Религиозный сионизм' in owner and 'Ликуд' in owner
+    live_doc, _, _ = build(live_matrix, live_cards)
+    assert live_doc.index('data-frame=full') < live_doc.index('class="owner-laws"') < live_doc.index('Сначала о том')
     # ── ЧИСЛИТЕЛЬНОЕ СОГЛАСУЕТСЯ С ЧИСЛОМ ────────────────────────────────
     # «2 обязательств» и «остальные не разобраны» при полном разборе — язык
     # сборщика, а не документа; страница Оцма (2 из 2) показала оба 10.10.
@@ -471,8 +509,8 @@ def selftest() -> int:
     # R8-F04, решение владельца 18.10: разобранная партия — не «пустая».
     # Ожидаемые слова записаны здесь, а не взяты из CELL: мутант словаря
     # обязан покраснеть.
-    mr, _, fl_r = rows(mk_m("observed"), {1110: fcard_ax}, {1110})
-    assert "разобрано — без вывода" in mr and "искали, не нашли" not in mr, \
+    mr, _, fl_r = rows(mk_m("observed"), {1110: fcard_ax}, {1110: "в бюджете нашлась строка под 1 из 2 обещаний"})
+    assert "в бюджете нашлась строка под 1 из 2 обещаний" in mr and "искали, не нашли" not in mr, \
         "разобранная партия показана как «искали, не нашли»"
     assert fl_r == fl_o, "«разобрано — без вывода» посчитано как заполненная клетка"
     assert "разобрано" not in mo, "партия без карточки разбора получила «разобрано»"
@@ -497,6 +535,13 @@ def selftest() -> int:
     # R19-F02 (M06): проводка обзора — разобранная строка без клетки
     # «разобрано» и неразобранная с ней отвергаются.
     check_overview_money(mr, {1110}, {1110})
+    try:
+        check_overview_money(mr.replace("под 1 из 2", "под 2 из 2"),
+                             {1110: "в бюджете нашлась строка под 1 из 2 обещаний"})
+    except Refuse:
+        pass
+    else:
+        raise AssertionError("подменённое денежное число прошло")
     # R22-F02 (W04b): строка без денежной клетки и чужая клетка отвергаются
     no_eq = re.sub(r"<td class=c-eq[^>]*>.*?</td>", "", mo, flags=re.S)
     for bad_doc, bad_set, lines in ((mo, {1110}, {1110}), (mr, set(), {1110}),
@@ -507,8 +552,8 @@ def selftest() -> int:
             pass
         else:
             raise AssertionError("обзор с потерянной проводкой разборов прошёл")
-    dr, tr, fr = build(mk_m("observed"), {1110: fcard_ax}, {1110})
-    assert f"в 1 разбор есть, но вывода нет; в остальных {tr - fr - 1}" in dr, \
+    dr, tr, fr = build(mk_m("observed"), {1110: fcard_ax}, {1110: "в бюджете нашлась строка под 1 из 2 обещаний"})
+    assert f"в 1 показано покрытие обещаний бюджетными строками; в остальных {tr - fr - 1}" in dr, \
         "счёт пустых клеток включил разобранную"
     # ── ГРАНИЦА ПУБЛИКАЦИИ, А НЕ ТОЛЬКО ВЫЧИСЛЕНИЯ ──────────────────────
     # Правило объявило «при альфе ниже порога стрелка не публикуется
@@ -605,7 +650,7 @@ def selftest() -> int:
            for code, year, _ in REF_NUM.findall(repr(c))}
     bc[0]["data_fingerprint"] = fingerprint(bc[0], idx, [])
     block = budget_block(bc, idx, [])
-    shas = faction_page(fcard, frow, fv, block)
+    shas = faction_page(fcard, frow, fv, block, budget_summary(bc))
     # R18-F02: журнал правок Ноам (why версии с «блок noam-p2-79») доходит
     # до читателя через budget_block переведённым — снятый вызов
     # reader_terms у why краснеет здесь, а не только в отдельной функции.
@@ -686,14 +731,14 @@ def selftest() -> int:
     rejects("сырой счёт ожиданий", lambda: check_budget_page(
         shas + "<p>ожидают решения о сопоставлении: 24</p>", bc, idx, []))
     rejects("клетка «разобрано» снята", lambda: check_budget_page(
-        shas.replace("разобрано — без вывода", "разбор обязательств"), bc, idx, []))
+        shas.replace(budget_summary(bc), "разбор обязательств"), bc, idx, []))
     # R22-F02 (W03): та же строка заголовка вне <summary> не считается
     rejects("заголовок вынесен из summary абзацем", lambda: check_budget_page(
-        shas.replace("<summary>Деньги — <b class=tx-rev>разобрано — без вывода</b>",
-                     "<p>Деньги — <b class=tx-rev>разобрано — без вывода</b></p>"
+        shas.replace(f"<summary>Деньги — <b class=tx-rev>{budget_summary(bc)}</b>",
+                     f"<p>Деньги — <b class=tx-rev>{budget_summary(bc)}</b></p>"
                      "<summary>Деньги — <b class=tx-none>искали, не нашли</b>"), bc, idx, []))
     rejects("заголовок клетки подменён, фраза осталась абзацем", lambda: check_budget_page(
-        shas.replace("Деньги — <b class=tx-rev>разобрано — без вывода</b>",
+        shas.replace(f"Деньги — <b class=tx-rev>{budget_summary(bc)}</b>",
                      "Деньги — <b class=tx-none>искали, не нашли</b>")
         + "<p>разобрано — без вывода</p>", bc, idx, []))
     print("ЗЕЛЁНЫЙ: четыре бюджетных разбора доставлены на страницу")
@@ -835,6 +880,14 @@ def _terms_prose(text: str) -> str:
     return text
 
 
+def budget_summary(cards: list) -> str:
+    commitments = [c for card in cards for c in card.get("commitments", [])
+                   if not c.get("duplicate_of") and c.get("granularity") != "not_budgetary"]
+    found = sum(c.get("granularity") in ("exact_takana", "subset_of_line", "spread_over_lines")
+                for c in commitments)
+    return CELL["reviewed"][1].format(n=found, m=len(commitments))
+
+
 def budget_block(cards: list, idx: dict, titles: list) -> str:
     """§11: проверка и подстановка читают один индекс; старый CLI не вызывается."""
     out = []
@@ -909,6 +962,7 @@ def _money_td(doc: str, fid: int) -> str:
 def _cell_word(html: str, where: str) -> str:
     words = [w for _, w, _ in CELL.values() if f"{w}<span class=lb>" in html
              or f">{w}</b>" in html]
+    words += re.findall(r"в бюджете нашлась строка под [0-9]+ из [0-9]+ обещаний(?=<span class=lb>|</b>)", html)
     if len(words) != 1:
         raise Refuse(f"{where}: значений клетки {words}, а не одно")
     return words[0]
@@ -920,16 +974,19 @@ def _money_summaries(page: str) -> list:
             if x.lstrip().startswith("Деньги — ")]
 
 
-def check_overview_money(doc: str, reviewed: set, lines: set | None = None) -> None:
+def check_overview_money(doc: str, reviewed: set | dict, lines: set | None = None) -> None:
     """R19-F02/R22-F02: у каждой строки бюллетеня ровно одна клетка «деньги»,
-    и «разобрано — без вывода» стоит ровно у разобранных."""
+    и денежное покрытие стоит ровно у разобранных."""
     lines = set(lines) if lines is not None else set(reviewed)
-    if not reviewed <= lines:
-        raise Refuse(f"разобранные вне строк бюллетеня: {sorted(reviewed - lines)}")
+    if not set(reviewed) <= lines:
+        raise Refuse(f"разобранные вне строк бюллетеня: {sorted(set(reviewed) - lines)}")
     for fid in lines:
         if (fid in reviewed) != (_cell_word(_money_td(doc, fid), f"обзор {fid}")
-                                 == "разобрано — без вывода"):
+                                 .startswith("в бюджете нашлась строка под ")):
             raise Refuse(f"клетка «деньги» строки {fid} не согласована с разбором")
+        if isinstance(reviewed, dict) and fid in reviewed:
+            if _cell_word(_money_td(doc, fid), f"обзор {fid}") != reviewed[fid]:
+                raise Refuse(f"денежное покрытие строки {fid} не совпало с карточками")
 
 
 def check_money_same(doc: str, page: str, fid: int, unresolved: bool = False) -> None:
@@ -957,8 +1014,8 @@ def check_budget_page(page: str, cards: list, idx: dict, titles: list) -> None:
             if stale in page:
                 raise Refuse(f"страница с разбором обязательств говорит «{stale}»")
         # именно в заголовке денежной клетки (R19-F02, M11), не где угодно
-        if [_cell_word(h, "страница") for h in _money_summaries(page)] != ["разобрано — без вывода"]:
-            raise Refuse("у разобранной партии нет клетки «разобрано — без вывода»")
+        if [_cell_word(h, "страница") for h in _money_summaries(page)] != [budget_summary(cards)]:
+            raise Refuse("денежное покрытие в заголовке не совпало с карточками")
     for card in cards:
         for date in card["snapshots"].values():
             if esc(date) not in page:
@@ -1046,8 +1103,10 @@ def main() -> int:
     if reviewed != reviewed_from_files():
         raise Refuse(f"разборы загружены не все: {sorted(reviewed)} против "
                      f"{sorted(reviewed_from_files())} по файлам")
-    doc, total, filled = build(m, cards, reviewed)
-    check_overview_money(doc, reviewed, {r["anchor_id"] for r in m["lines"]})
+    summaries = {fid: budget_summary(bc) for fid, bc in budgets.items() if bc}
+    doc, total, filled = build(m, cards, summaries)
+    check_overview_money(doc, summaries,
+                         {r["anchor_id"] for r in m["lines"]})
     bad = jargon(doc)
     if bad:
         print(f"ОТКАЗ: внутренний язык в обзоре: {bad}")
@@ -1065,7 +1124,7 @@ def main() -> int:
         else:
             bc = budgets.get(r["anchor_id"], [])
             budget = budget_block(bc, idx, titles) if bc else ""
-            page = faction_page(c, r, votes_for(r["anchor_id"]), budget)
+            page = faction_page(c, r, votes_for(r["anchor_id"]), budget, budget_summary(bc))
             check_budget_page(page, bc, idx, titles)
             check_money_same(doc, page, r["anchor_id"])
         bad = jargon(page)
@@ -1119,7 +1178,7 @@ def _gloss(desc: str) -> str:
     return gloss(desc, _SIGNS)
 
 
-def faction_page(card: dict, row: dict, votes: list, budget: str = "") -> str:
+def faction_page(card: dict, row: dict, votes: list, budget: str = "", summary: str = "") -> str:
     """Страница фракции. Клетка оси — details, как в макете; счёт
     голосований уходит ВНУТРЬ раскрытия, а не вываливается на страницу."""
     ru, he = card.get("party_ru"), card.get("party_he")
@@ -1176,9 +1235,8 @@ def faction_page(card: dict, row: dict, votes: list, budget: str = "") -> str:
                f'отсева.</p>')
     cells = [det(head1, cert1, inner1, True)]
     if budget:
-        s2, c2 = ('Деньги — <b class=tx-rev>разобрано — без вывода</b>',
-                  "каждая запись соглашения сверена с бюджетом отдельно; "
-                  "сводного вывода о фракции нет")
+        s2, c2 = (f'Деньги — <b class=tx-rev>{esc(summary)}</b>',
+                  "самостоятельные денежные обязательства из коалиционного соглашения")
     elif row["b"]["status"] == "observed" and row["b"].get("commitments") == 0:
         # R19-F01: та же клетка, что в обзоре; сырой нулевой счёт карты не
         # печатается — он ничего не говорит читателю.
