@@ -96,12 +96,12 @@ def build(m: dict, cards: dict) -> str:
                 continue
             unsure = rate is not None and rob_label(rate) != "устойчива"
             words.append((LEAN[arrow], unsure))
-            parts.append((f"{who}: " if who else "") + f"{down} раз за ослабление, {up} за укрепление")
+            parts.append((f"{who}: " if who else "") + f"{down} {plural_ru(down, 'раз', 'раза', 'раз')} за ослабление, {up} за укрепление")
         merged = {}
         for w, unsure in words:          # одинаковое направление — один раз, с худшей уверенностью
             merged[w] = merged.get(w, False) or unsure
         words = [w + (" (не уверены)" if u else "") + (" (уверенность не считали)" if personal else "") for w, u in merged.items()]
-        lean = ("<b>" + " / ".join(words) + "</b><br><small>" + "; ".join(parts)
+        lean = (" / ".join(words) + "<br><small>" + "; ".join(parts)
                 + "</small>") if words else "нет данных"
         # религия: направление по голосам, полярность — владельца
         if personal:
@@ -114,16 +114,17 @@ def build(m: dict, cards: dict) -> str:
                 e = rob_rel.get(str(ro._al(f)))
                 rels.append((a.get("arrow"), a.get("up", 0), a.get("down", 0),
                              e["rates"]["0.10"] if e else None, _short(names[f]).split(" (")[0] if len(fids) > 1 else ""))
-        rel_words = {}
-        rel_parts = []
+        rel_items = []
         for arrow, up, down, rate, who in rels:
             w = REL.get(arrow, "мало данных")
             unsure = arrow in REL and (personal or (rate is not None and rob_label(rate) != "устойчива"))
-            rel_words[w] = rel_words.get(w, False) or unsure
-            if arrow in REL:
-                rel_parts.append((f"{who}: " if who else "") + f"{up} за больше, {down} за меньше")
-        rel = (" / ".join(w + (" (не уверены)" if u else "") for w, u in rel_words.items())
-) if fids or personal else "нет данных"   # счёт по религии — на сайте: лист обязан влезть в одну A4
+            rel_items.append((w + (" (не уверены)" if unsure else ""), who))
+        # разные слова у фракций одного списка — назвать, чьё какое (shining 19.10: «какое из двух брать?»)
+        if len({w for w, _ in rel_items}) > 1:
+            rel = " / ".join(f"{w} <small>({who})</small>" if who else w for w, who in rel_items)
+        else:
+            rel = rel_items[0][0] if rel_items else "нет данных"
+        rel = rel if fids or personal else "нет данных"   # счёт по религии — на сайте: лист обязан влезть в одну A4
         tr = (f'<tr data-ballot-list="{esc(row["he"])}">'
               f'<th scope=row><span class="ballot-letters" lang="he" dir="rtl">{esc(row["letters"])}</span>'
               f'<b>{esc(row["ru"])}</b> <span lang=he dir=rtl><bdi>{esc(row["he"])}</bdi></span>'
@@ -142,7 +143,7 @@ def build(m: dict, cards: dict) -> str:
     za = sum(1 for c in likud[0] if c.startswith("<b>за</b>"))
     _, down, up, _, _ = likud[2][0]
     example = (f'Пример: Ликуд голосовал «за» по {za} из 4 законов, а по суду и правам в целом '
-               f'<b>{likud[1][0]}</b>: {down} раз голосовал за ослабление и {up} раз — за укрепление.')
+               f'{likud[1][0]}: {down} {plural_ru(down, "раз", "раза", "раз")} голосовал за ослабление и {up} {plural_ru(up, "раз", "раза", "раз")} — за укрепление.')
     votes_line = ro.data_periods(ro.ROOT / "data")[0]
     heads = ('<th scope=col class=lawsh><span class="ballot-laws heads">'
              + "".join(f'<span>{h}</span>' for h in LAW_HEADS) + '</span></th>')
@@ -177,10 +178,11 @@ tr{{break-inside:avoid}}
 <div class=how>
 <p><b>Одна строка — один список в бюллетене.</b> Слева буквы — те же, что на бумажке на участке. Дальше — как депутаты этого списка голосовали в нынешнем Кнессете. Квадрат справа — отметить список, который ты для себя исключаешь.</p>
 <p><b>Четыре средние колонки</b> — законы о судах, которые ты сам 10.10 пометил «недопустимо», ещё не зная, кто за них голосовал. <b>за</b> — проголосовали ЗА такой закон; «против» — против; «не голос.» — не голосовали: у оппозиции это обычно бойкот (не поддержали, но и не нажали «против»). Юрсоветник — пока законопроект: голосовали на ранней стадии.</p>
-<p><b>Колонка «Суд и права в целом»</b> — около 130 законов о суде, контроле Кнессета над правительством и правах граждан (смысл каждого закона определили три модели ИИ и перепроверили по тексту). <b>ослаблял</b> — фракция чаще голосовала за ослабление; <b>укреплял</b> — наоборот; числа — сколько раз в какую сторону. <b>не уверены</b> — если смысл части законов прочитан с ошибкой, вывод может смениться.</p>
+<p><b>Колонка «Суд и права в целом»</b> — около 130 законов о суде, контроле Кнессета над правительством и правах граждан (смысл каждого закона определили три модели ИИ и перепроверили по тексту). «ослаблял» — фракция чаще голосовала за ослабление; «укреплял» — наоборот; числа — сколько раз в какую сторону. «не уверены» (здесь и в колонке религии) — если смысл части законов прочитан с ошибкой, вывод может смениться; «уверенность не считали» — у Яшар!: это голоса двух человек, такую проверку к ним не применяли.</p>
 <p><b>Колонка «Религия в государстве»</b> — законы о месте религии в государстве (та же проверка ИИ). <b>за больше религии</b> выделено жирным: ты 19.10 сказал, что для тебя это довод исключить список. «за меньше религии» — наоборот.</p>
 <p>{example}</p>
-<p>Где не работает: новые списки в этом Кнессете не голосовали — о них лист молчит. Это сводка голосований, а не совет, за кого голосовать.</p>
+<p><b>Жирным</b> выделено только то, что ты сам назвал доводом исключить: «за» по четырём законам и «за больше религии».</p>
+<p>Где не работает: «Резервисты» в этом Кнессете не заседали — о них лист молчит; «Яшар!» — по личным голосам двоих. Это сводка голосований, а не совет, за кого голосовать.</p>
 </div>
 <table><thead><tr><th scope=col>Буквы · список · лидеры</th>{heads}<th scope=col class=leanh>Суд и права в целом</th><th scope=col class=relh>Религия в государстве</th><th scope=col>Ис&shy;клю&shy;чаю</th></tr></thead>
 <tbody>{"".join(rows)}</tbody></table>
