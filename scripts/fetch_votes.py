@@ -77,6 +77,32 @@ K25_START = "2022-11-15T00:00:00Z"
 K25_END = "2026-09-01T00:00:00Z"
 K25_NUM = 25
 
+# Временные срезы (владелец 19.10: «с 2016 или ближайшей каденции до него»).
+# Окно Кнессета N = [PlenumStart первого пленума N, PlenumStart первого пленума N+1)
+# по KNS_KnessetDates, прочитано 19.10.2026 — второй путь к границам (KNS-L006),
+# не календарь из головы. У KNS_PlenumVote нет KnessetNum: сдвиг на день тихо
+# меняет корпус, поэтому даты здесь и только здесь.
+WINDOWS = {
+    20: ("2015-03-31T00:00:00Z", "2019-04-30T00:00:00Z"),
+    21: ("2019-04-30T00:00:00Z", "2019-10-03T00:00:00Z"),
+    22: ("2019-10-03T00:00:00Z", "2020-03-16T00:00:00Z"),
+    23: ("2020-03-16T00:00:00Z", "2021-04-06T00:00:00Z"),
+    24: ("2021-04-06T00:00:00Z", "2022-11-15T00:00:00Z"),
+    25: (K25_START, K25_END),
+}
+
+
+def use_knesset(n: int) -> None:
+    """Переключить модуль на Кнессет n. 25 — прежнее поведение байт в байт."""
+    global SCAN, OUT, K25_START, K25_END, K25_NUM
+    if n not in WINDOWS:
+        raise SystemExit(f"Кнессет {n} вне WINDOWS {sorted(WINDOWS)}")
+    K25_START, K25_END = WINDOWS[n]
+    K25_NUM = n
+    if n != 25:
+        SCAN = ROOT / "data" / f"bills_scan_{n}.json"
+        OUT = ROOT / "data" / f"votes_{n}.json"
+
 
 def load_bills() -> dict[str, dict]:
     """Наши законопроекты: нормализованное имя → запись из чек-листа."""
@@ -446,7 +472,10 @@ def main() -> int:
     ap.add_argument("--dump-divergences", action="store_true",
                     help="напечатать сами расхождения и выйти: материал для "
                          "вердиктов, которых требует гейт §3. Ничего не решает.")
+    ap.add_argument("--knesset", type=int, default=25,
+                    help="номер Кнессета (срезы 20–24); по умолчанию 25")
     a = ap.parse_args()
+    use_knesset(a.knesset)
 
     bills = load_bills()                      # контроль: по имени
     bills_by_id = load_bills_by_id()          # основной путь: по идентификатору
@@ -454,7 +483,7 @@ def main() -> int:
           f"(по имени схлопывается до {len(bills)} — дубли имён считаются здесь)")
 
     heads = fetch_headers()
-    print(f"голосований 25-го Кнессета: {len(heads)}")
+    print(f"голосований {K25_NUM}-го Кнессета: {len(heads)}")
 
     # --- сшивка голосование ↔ законопроект ---------------------------------
     # ОСНОВНОЙ ПУТЬ: прямой ключ. КОНТРОЛЬ: имя. См. докстринг модуля.
@@ -507,6 +536,17 @@ def main() -> int:
     verdicts = load_adjudication(ROOT)
     need = [t for t in cls3["содержательное"] + cls3["потеря"]
             if t[0] not in verdicts]
+    if need and K25_NUM != 25:
+        # §3-exempt: срезы 20–24. Вердикты по расхождениям прямого ключа и имени
+        # писались для 25-го; для срезов владелец 19.10 поставил покрытие выше
+        # точности. Основной путь — прямой ключ (7299/7300 на 25-м); расхождения
+        # не молчат: число печатается и пишется в выход как control_unadjudicated.
+        print(f"\n§3-exempt (срез {K25_NUM}): {len(need)} расхождений без вердикта "
+              f"— берётся прямой ключ, расхождения записаны в выход")
+        need_exempt = len(need)
+        need = []
+    else:
+        need_exempt = 0
     if need:
         print(f"\n§3 ОТКАЗ: {len(need)} расхождений без вердикта в "
               f"criteria/vote_link_adjudication_*.yaml. Содержательное "
@@ -595,6 +635,7 @@ def main() -> int:
         "link_classes": dict(cls),
         "control_by_name_pairs": len(by_name_pairs),
         "control_only_name_pairs": len(only_name),
+        "control_unadjudicated": need_exempt,
         "matched_votes": len(matched), "matched_bills": len(bills_hit),
         "bills_in_checklist": len(bills_by_id),
         "expected_matched_bills": a.expect_matched,
@@ -720,7 +761,13 @@ def selftest() -> int:
     assert v == {10: "ключ прав, имя выбрало тёзку", 13: "пункта нет"}, v
     assert 99 not in v, "строка вне блока verdicts не имеет права стать вердиктом"
 
-    print("самопроверка fetch_votes пройдена: 28 утверждений "
+    # Окна срезов смыкаются: конец N == начало N+1. Дыра = потерянные голосования,
+    # нахлёст = голос записан двум Кнессетам.
+    ks = sorted(WINDOWS)
+    for x, y in zip(ks, ks[1:]):
+        assert WINDOWS[x][1] == WINDOWS[y][0], f"окна {x} и {y} не смыкаются"
+
+    print("самопроверка fetch_votes пройдена: 29 утверждений "
           "(8 мост, 6 прямой ключ, 8 расхождения, 6 кэш)")
     return 0
 

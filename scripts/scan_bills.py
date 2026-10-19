@@ -252,8 +252,17 @@ def selftest() -> int:
 def main() -> int:
     if "--selftest" in sys.argv:
         return selftest()
-    print("законопроекты 25-го Кнессета…")
-    bills = fetch_all("KNS_Bill", flt="KnessetNum eq 25",
+    global OUT, ALL_OUT
+    kn = 25
+    if "--knesset" in sys.argv:
+        kn = int(sys.argv[sys.argv.index("--knesset") + 1])
+    if kn != 25:
+        # Срезы 20–24: тот же лексикон — тот же инструмент, иначе срезы
+        # сравнивали бы разные приборы. Выход рядом, 25-й не трогается.
+        OUT = ROOT / "data" / f"bills_scan_{kn}.json"
+        ALL_OUT = ROOT / "data" / f"bills_all_names_{kn}.json"
+    print(f"законопроекты {kn}-го Кнессета…")
+    bills = fetch_all("KNS_Bill", flt=f"KnessetNum eq {kn}",
                       select="Id,Name,KnessetNum,TypeDesc,SubTypeDesc,StatusID,PublicationDate")
     # KNS_IsraelLaw убран осознанно, а не из-за ошибки фильтра (она была: 400,
     # поле датировки называется иначе). Единица голосования — ЗАКОНОПРОЕКТ;
@@ -295,7 +304,7 @@ def main() -> int:
     core = [m for m in matched
             if m["basic_law"] or "A_суд" in m["groups"] or "C_надзор" in m["groups"]]
 
-    print(f"\nзаконопроектов 25-го Кнессета: {len(bills)}")
+    print(f"\nзаконопроектов {kn}-го Кнессета: {len(bills)}")
     print(f"совпало с чек-листом: {len(matched)}  ({len(matched) * 100 // max(len(bills), 1)}%)")
     for g, n in sorted(by_grp.items(), key=lambda x: -x[1]):
         print(f"   {g:<18} {n}")
@@ -307,7 +316,12 @@ def main() -> int:
     # --- оракул отбора -------------------------------------------------------
     print("\nоракул отбора — обязаны найтись ВСЕ:")
     misses = []
-    for date, words, title in ORACLE:
+    # Оракул отбора — акты 25-го Кнессета; на срезах его нечем заменить.
+    # Отказ от проверки произносится (§23 п.2), а не получается сам собой.
+    oracle = ORACLE if kn == 25 else []
+    if kn != 25:
+        print(f"   оракула для Кнессета {kn} нет: список известных актов писался для 25-го")
+    for date, words, title in oracle:
         year = date[:4]
         found = [m for m in matched
                  if any(w in m["name"] for w in words)
