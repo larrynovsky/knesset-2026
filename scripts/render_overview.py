@@ -679,8 +679,13 @@ def grounds_block(matrix: dict, cards: dict) -> str:
     """Последняя стадия: общий источник со сводками фракций."""
     laws = owner_law_positions([str(r["anchor_id"]) for r in matrix["lines"]])
     ru = party_names(matrix, cards)
-    heads = ''.join(f'<th scope=col><a href="grounds.html#a{law["bill"]}">{esc(law["name"])}</a>'
-                    f'<span class=norec>{law["date"]}</span></th>' for law in laws)
+    from render_cheatsheet import LAW_HEADS, LAW_KEYS
+    assert len(laws) == len(LAW_HEADS)
+    assert all(key in law["name"] for law, key in zip(laws, LAW_KEYS))
+    heads = ''.join(f'<th scope=col><a href="grounds.html#a{law["bill"]}" title="{esc(law["name"])}">'
+                    f'<span class="law-full">{esc(law["name"])}</span>'
+                    f'<span class="law-short">{head.split("<br>", 1)[0]}</span></a>'
+                    f'<span class=norec>{law["date"]}</span></th>' for law, head in zip(laws, LAW_HEADS))
     rows = []
     for r in matrix["lines"]:
         fid = str(r["anchor_id"])
@@ -706,7 +711,13 @@ def build(m: dict, cards: dict | None = None,
 <meta name="robots" content="noindex, nofollow">
 <title>Что фракции делали — 25-й Кнессет</title>
 <style>{css_from_mockup()}
-.owner-laws{{width:100%;min-width:36rem;table-layout:fixed}} .owner-laws th,.owner-laws td{{padding:9px 6px;overflow-wrap:anywhere}} .owner-laws th{{font-size:13px}} .owner-laws td{{font-size:14px}}
+.owner-laws{{width:100%;table-layout:fixed}} .owner-laws th,.owner-laws td{{padding:9px 6px;overflow-wrap:anywhere}} .owner-laws th{{font-size:13px}} .owner-laws td{{font-size:14px}}
+.law-short{{display:none}}
+@media screen and (max-width:600px){{
+.owner-laws .law-full{{display:none}} .owner-laws .law-short{{display:inline}}
+.owner-laws th:first-child{{width:30%}}
+.owner-laws th,.owner-laws td{{overflow-wrap:break-word;word-break:normal;hyphens:auto}}
+}}
 .ballot{{width:100%;table-layout:auto;border-collapse:collapse;font:13px/1.4 system-ui,sans-serif}}
 .ballot th,.ballot td{{padding:8px 4px;text-align:left;vertical-align:top;border-bottom:1px dotted var(--rule)}}
 .ballot,.ballot *{{overflow-wrap:normal;word-break:normal;hyphens:manual}}
@@ -875,6 +886,10 @@ def selftest() -> int:
     live_cards = load_cards()
     owner = grounds_block(live_matrix, live_cards)
     assert owner.count('data-owner-fid=') == 16 and owner.count('<td title=') == 64
+    from render_cheatsheet import LAW_HEADS
+    assert re.findall(r'<span class="law-short">(.*?)</span>', owner) == [h.split("<br>", 1)[0] for h in LAW_HEADS]
+    full = re.findall(r'title="([^"]*)"><span class="law-full">(.*?)</span>', owner)
+    assert len(full) == 4 and all(title == label for title, label in full)
     assert '<td>раскол</td>' not in owner and '<td>воздержались</td>' not in owner
     assert 'grounds.html#a2199044' not in owner
     # У Еш Атид на последней стадии 2207472 позиции нет, прежнее «против» не наследуем.

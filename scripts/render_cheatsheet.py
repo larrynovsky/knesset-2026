@@ -175,6 +175,7 @@ td.laws-cells{{padding:0}}.ballot-laws{{display:flex}}.ballot-laws>span{{flex:1 
 .crossout{{display:block;width:6mm;height:6mm;border:1.5px solid black;margin:auto}}
 tr{{break-inside:avoid}}
 @page{{size:A4 portrait;margin:7mm}}
+@media screen and (max-width:600px){{th,td{{overflow-wrap:anywhere}}.ballot-laws>span{{min-width:0;overflow-wrap:anywhere}}}}
 @media print{{body{{width:190mm;max-width:none;margin:0;padding:0;zoom:.70}}a{{text-decoration:none}}thead{{display:table-header-group}}}}
 </style></head><body>
 <h1>Кого исключить из выбора 27.10 — шпаргалка</h1>
