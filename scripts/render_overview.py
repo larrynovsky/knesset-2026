@@ -2254,7 +2254,7 @@ def slice_block(letters: str, data: Path | None = None, ru: str = "") -> str:
             continue
         empty = kn.get("signed_bills") == 0
         units = []
-        shown = cell.get("links", []) + (cell.get("silent", []) if empty else [])
+        shown = cell.get("links", []) + ([x for x in cell.get("silent", []) if isinstance(x, dict)] if empty else [])
         for link in shown:
             he = names.get(link["fid"], str(link["fid"]))
             label = (esc(link["note"]) if link["note"] else esc(ru) if ru else "") + \
@@ -2305,7 +2305,8 @@ def slice_block(letters: str, data: Path | None = None, ru: str = "") -> str:
             'Направление называем, когда позиция фракции есть хотя бы по трём законам темы '
             '(меньше — «мало законов»), а в одну сторону легли две трети; иначе — «и так, и так».</p>'
             '<p>В правительстве партия голосует иначе, чем в оппозиции: если направление поменялось '
-            'вместе с ролью, это не обязательно смена взглядов.</p>'
+            'вместе с ролью, это не обязательно смена взглядов. Фракции одной коалиции часто голосуют '
+            'одинаково — тогда и строки у них совпадают.</p>'
             '<table class="list-short-table"><thead><tr><th scope="col">Кнессет</th>' +
             "".join(f'<th scope="col">{t}</th>' for _, _, t in SLICE_THEMES) + '</tr></thead><tbody>' +
             "".join(rows) + '</tbody></table><p class=dim>25-й Кнессет (2022–2026) — в таблице «Коротко» выше.</p></section>')

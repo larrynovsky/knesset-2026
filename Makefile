@@ -1,6 +1,8 @@
 # §14: детерминированность локальной сборки, не восстановление источников.
 PY ?= python3
 
+
+.PHONY: slices
 .PHONY: help check check-net fetch fetch-report validate report robustness selftest-code stamp reproduce layout selftest repro-selftest
 
 help:
@@ -56,11 +58,14 @@ selftest-code:
 robustness:
 	$(PY) scripts/arrow_robustness.py
 
-report: robustness selftest-code
+slices:
+	# срезы 20–24: data/slices.json нужен selftest рендера — считается до него
+	$(PY) scripts/slice_arrows.py
+
+report: robustness slices selftest-code
 	# §24 локально, как на Studio: иначе MANIFEST отстаёт молча и Studio встаёт (19.10, 14:04–15:40)
 	$(PY) scripts/check_artifacts.py
-	# срезы 20–24 (владелец 19.10): пересчёт до сборки, независимая сверка после
-	$(PY) scripts/slice_arrows.py
+	# срезы 20–24 (владелец 19.10): пересчёт — цель slices, независимая сверка после сборки
 	$(PY) scripts/check_report_canon.py --build
 	$(PY) scripts/crosscheck_owner_laws.py
 	$(PY) scripts/crosscheck_slices.py
