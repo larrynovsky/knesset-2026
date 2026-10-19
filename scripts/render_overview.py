@@ -68,7 +68,9 @@ def css_from_mockup() -> str:
     m = re.search(r"<style>(.*?)</style>", MOCK.read_text(encoding="utf-8"), re.S)
     if not m:
         raise SystemExit("ОТКАЗ: в макете не найден <style> — форма не читается")
-    return m.group(1)
+    return (m.group(1) + "\nfooter{font-size:12px;color:#666;margin-top:2rem}"
+            "\nfooter .data-period,footer .frame{display:inline;margin:0;padding:0;border:0;font:inherit}"
+            "\nfooter .data-period::after{content: ' · '}")
 
 
 def cell(kind: str, label: str, value: str | None = None) -> str:
@@ -318,14 +320,10 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None, *, compact: b
         if any(fid not in names for fid in fids):
             raise Refuse(f"бюллетень: неизвестная фракция у {row['ru']}")
         absent = "".join(f'<span class=norec>{esc(note)}</span>' for note in row["absent"])
-        links = ", ".join(f'<a href="f-{fid}.html">{esc(names[fid])}</a>' for fid in fids)
-        sources = f'<span class=norec>по голосам: {links}</span>' if fids else ""
-        if personal:
-            sources += '<span class=norec>Для сравнения: <a href="f-1098.html">фракция Ганца</a>, суд ' + sym[cards.get(1098, {}).get("axis_institutions", {}).get("arrow")] + '</span>'
         who = (f'<th scope=row><span class="ballot-letters" lang="he" dir="rtl" title="буквы на бюллетене">{esc(row["letters"])}</span> '
                f'<a href="l-{number}.html">{esc(row["ru"])} '
                f'<span lang=he dir=rtl><bdi>{esc(row["he"])}</bdi></span></a>'
-               f'<span class=norec>{esc(row["leaders"])}</span>{sources}{absent}</th>')
+               f'<span class=norec>{esc(row["leaders"])}</span>{absent}</th>')
         law_marks = []
         for law in (personal["laws"] if personal else laws):
             positions = dict.fromkeys("—" if law["positions"][_al(fid)] == "нет позиции"
@@ -384,7 +382,7 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None, *, compact: b
             else:
                 cells = re.search(r'<td.*?</td>', cells)[0]
             cells += '<td><span class="crossout" aria-label="вычеркнуть"></span></td>'
-        body.append(f'<tr data-ballot-list="{esc(row["he"])}">{who}{law_cell}{cells}</tr>')
+        body.append(f'<tr data-ballot-list="{esc(row["he"])}" data-fids="{",".join(map(str, fids))}">{who}{law_cell}{cells}</tr>')
     if compact:
         from datetime import date
         template = (MOCK.parent / "cheatsheet.html").read_text(encoding="utf-8")
@@ -632,7 +630,6 @@ def build(m: dict, cards: dict | None = None,
 проголосовали».</p>
 <p>Мы смотрим на поступки, а не на заявления. Голос в Кнессете
 проверяем по сохранённой поимённой записи.</p>
-{FRAME}
 {ballot_table(m, cards or {}, money_rows=body)}
 <details class="faction-details"><summary>Подробно по 16 записям о фракциях 25-го Кнессета (включая прежние составы)</summary>
 {grounds_block(m, cards or {})}
@@ -667,6 +664,7 @@ def build(m: dict, cards: dict | None = None,
 <div class=foot><p>Первая грубая итерация, 19.10.2026.
 Форма принята 01.08.2026. Снимок голосований:
 {esc(str(m.get("source", {}).get("votes_at", "не объявлен"))[:10])}.</p></div>
+<footer><details><summary>Кто сделал и на каких данных</summary>{FRAME}</details></footer>
 </body></html>"""
     return doc, total, filled
 
@@ -760,8 +758,8 @@ def selftest() -> int:
     assert re.findall(r'<td[^>]*>(.*?)</td>', ya) == ['— (1 против)', '—', '—', 'против']
     assert 'Религиозный сионизм' in owner and 'Ликуд' in owner
     live_doc, _, _ = build(live_matrix, live_cards)
-    assert live_doc.index('data-frame=full') < live_doc.index('class="owner-laws"') < live_doc.index('Сначала о том')
-    assert live_doc.index('data-frame=full') < live_doc.index('id="ballot"') < live_doc.index('id="grounds"')
+    assert live_doc.index('class="owner-laws"') < live_doc.index('Сначала о том') < live_doc.index('data-frame=full')
+    assert live_doc.index('id="ballot"') < live_doc.index('id="grounds"') < live_doc.index('data-frame=full')
     # Оракул CSS-контракта; геометрию браузера он не заменяет.
     assert '.ballot,.ballot *{overflow-wrap:normal;word-break:normal;hyphens:manual}' in live_doc
     assert '.ballot thead th{white-space:nowrap}' in live_doc
@@ -777,7 +775,7 @@ def selftest() -> int:
     # Проверка разметки, не геометрии: четыре подписи и значения в прежнем порядке.
     for row_html in re.findall(r'<tr data-ballot-list=.*?</tr>', ballot_html):
         axes = re.findall(r'<td class="ballot-axis"(?: data-personal=1)? data-l="([^"]+)">(.*?)</td>', row_html)
-        if 'href="f-' in row_html:
+        if re.search(r'data-fids="[0-9]', row_html) or "data-personal=1" in row_html:
             assert [label for label, value in axes] == ['Суд', 'Религия', 'Экономика', 'Безопасность']
         else:
             assert not axes
@@ -832,18 +830,16 @@ def selftest() -> int:
     table = ballot_html.split('<table class="ballot">')[1].split('</table>')[0]
     assert table.count('scope=col') == 7 and 'нет позиции' not in table
     assert 'Читается по голосам фракций' not in table
-    for row in re.findall(r'<tr data-ballot-list=.*?</tr>', table):
-        if 'href="f-' in row:
-            first = row.split('</th>')[0]
-            assert ('по голосам: ' in first or 'по личным голосам' in first) and row.count('href=') == first.count('href=')
+    assert 'по голосам: ' not in table and 'Для сравнения: ' not in table
+    assert 'href="f-' not in table and 'data-fids="1096,1108"' in table
     print("ЗЕЛЁНЫЙ: 4 закона в бюллетене — Ликуд за; Резервисты —; расхождения сохранены; пустой источник отклонён")
     ballot_input = json.loads((ROOT / "criteria/ballot_2026.json").read_text(encoding="utf-8"))
     for entry in ballot_input["lists"]:
         assert esc(entry["ru"]) in ballot_html and esc(entry["leaders"]) in ballot_html
         assert all(esc(note) in ballot_html for note in entry["absent"])
-        assert all(f'href="f-{fid}.html"' in ballot_html for fid in entry.get("factions", []))
+        assert f'data-fids="{",".join(map(str, entry.get("factions", [])))}"' in ballot_html
     yashar = next(r for r in re.findall(r'<tr data-ballot-list=.*?</tr>', ballot_html) if 'Яшар!' in r)
-    assert 'href="f-1098.html"' in yashar and 'colspan=' not in yashar
+    assert 'href="f-1098.html"' not in yashar and 'colspan=' not in yashar
     assert "не оценивалась" not in yashar
     assert 'class="robustness"' in yashar
     rates = json.loads((ROOT / "data/arrow_robustness.json").read_text())["topics"]
@@ -885,7 +881,7 @@ def selftest() -> int:
         split_html = ballot_table(live_matrix, test_cards)
         likud = next(r for r in re.findall(r'<tr data-ballot-list=.*?</tr>', split_html) if 'Ликуд' in r)
         assert len(re.findall(r'↑ / ↓', re.sub(r'<[^>]+>|\?', '', likud))) == 4
-        assert 'f-1096.html' in likud and 'f-1108.html' in likud
+        assert 'data-fids="1096,1108"' in likud
     print("ЗЕЛЁНЫЙ: бюллетень — 14 строк; 14 удалений из JSON отклонены; расхождения стрелок сохранены")
 
     # v44: синтетические входы; проверяем конечные клетки, включая худший значок.
@@ -1169,8 +1165,8 @@ def selftest() -> int:
         assert "вне закрытого списка" in str(e)
     assert "<script" not in doc, "§13: в выводе появился JavaScript"
     assert 'content="noindex, nofollow"' in doc, "§16: нет noindex"
-    assert doc.index("data-frame=full") < doc.index("<table"), \
-        "§17: рамка обязана стоять раньше первой таблицы"
+    assert doc.index("<footer>") < doc.index("data-frame=full") < doc.index("</footer>"), \
+        "v62: полная рамка в подвале"
     assert "в 25-м Кнессете в правительстве не была" in doc, \
         "§7: неправившая строка обязана нести пометку, иначе её пустота " \
         "неотличима от нашей недоработки"
@@ -1359,9 +1355,8 @@ def selftest() -> int:
         "со страницы фракции нет пути к разбору по правилам отсева"
     assert "<script" not in fp, "§13: скрипт на странице фракции"
     assert 'content="noindex, nofollow"' in fp, "§16: нет noindex на странице фракции"
-    assert fp.index("data-frame=short") < fp.index("<h1"), \
-        "§17: короткая рамка обязана стоять ДО заголовка — читатель, пришедший " \
-        "по прямой ссылке, встречает её раньше всего остального"
+    assert fp.index("<footer>") < fp.index("data-frame=short") < fp.index("</footer>"), \
+        "v62: короткая рамка в подвале"
     assert "<bdi>" in fp and "dir=rtl" in fp, "§12: иврит без bdi/rtl переставляется"
     assert "\u05dc\u05d4\u05e2\u05d1\u05d9\u05e8" in fp, "§10: смысл «за» не дошёл до страницы"
     assert "искали, не нашли" in fp, "§7: не экспонирована — не «не дошли»"
@@ -2092,10 +2087,11 @@ def ballot_pages(matrix: dict, cards: dict, summaries: dict,
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex, nofollow"><title>{esc(entry["ru"])}</title>
 <style>{css_from_mockup()}</style></head><body>
-<nav class=crumbs><a href="index.html#ballot">Все списки</a></nav>{SHORT_FRAME}
+<nav class=crumbs><a href="index.html#ballot">Все списки</a></nav>
 <h1><span class="ballot-letters" lang="he" dir="rtl" title="буквы на бюллетене">{esc(entry["letters"])}</span> {esc(entry["ru"])} <span lang=he dir=rtl><bdi>{esc(entry["he"])}</bdi></span></h1>
 <p class="letters-source">{esc(ballot["letters_source"])}</p>
-<p class=lead>{esc(entry["leaders"])}</p><p>{LEGEND}</p>{body}</body></html>'''
+<p class=lead>{esc(entry["leaders"])}</p><p>{LEGEND}</p>{body}<footer>{SHORT_FRAME}</footer>
+</body></html>'''
     return pages
 
 
@@ -2110,7 +2106,7 @@ def state_page(row: dict, brief: str = "") -> str:
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex, nofollow"><title>Связь не установлена</title>
 <style>{css_from_mockup()}</style></head><body>
-<nav class=crumbs><a href="index.html">Все фракции</a></nav>{SHORT_FRAME}
+<nav class=crumbs><a href="index.html">Все фракции</a></nav>
 <h1>Строка {esc(row["anchor_id"])}: {esc(ru)} <span lang=he dir=rtl><bdi>{esc(row["line"])}</bdi></span></h1>
 {brief}
 <p class=lead>Связь строки бюллетеня с фракцией не установлена.</p>
@@ -2120,7 +2116,8 @@ def state_page(row: dict, brief: str = "") -> str:
 людей других фракций.</p>
 <p>Это не значит, что партия не голосовала, не была в правительстве или
 что к ней нет вопросов. Это также не обвинение: мы не установили связь,
-необходимую для таких выводов.</p></body></html>'''
+необходимую для таких выводов.</p><footer>{SHORT_FRAME}</footer>
+</body></html>'''
 
 
 def main() -> int:
@@ -2409,13 +2406,13 @@ def faction_page(card: dict, row: dict, votes: list, budget: str = "", summary: 
 <title>{esc(ru)} — 25-й Кнессет</title>
 <style>{css_from_mockup()}</style></head><body>
 <nav class=crumbs><a href="index.html">Все фракции</a> · {esc(ru)}</nav>
-{SHORT_FRAME}
 <h1>{esc(ru)} <span class=he lang=he dir=rtl><bdi>{esc(he)}</bdi></span></h1>
 {brief}
 {''.join(cells)}
 {''.join(body)}
 <div class=foot><p>Первая грубая итерация, 19.10.2026. Форма принята
 01.08.2026. Снимок голосований: {esc(str((card.get("snapshots") or {}).get("votes_25", "не указан"))[:10])}.</p></div>
+<footer>{SHORT_FRAME}</footer>
 </body></html>"""
 
 

@@ -171,7 +171,7 @@ table.time th,table.time td{{overflow-wrap:anywhere}}
 table.time thead{{display:none}} table.time td:before{{content:attr(data-l);display:block;font-weight:bold}}
 table.time tr{{margin-bottom:1rem}}}}
 </style></head><body><nav class=crumbs><a href="index.html">Все фракции</a> · Время</nav>
-{SHORT_FRAME}<h1>Как менялась доля расхождений с залом</h1>
+<h1>Как менялась доля расхождений с залом</h1>
 <p class=lead>25-й Кнессет, по вопросам правового государства: только голосования по законопроектам,
 попавшим в выгрузку. Это не все голосования созыва и не оценка партий.</p>
 <p>Окно: {esc(data['window'][0])} — {esc(data['window'][1])}, правая граница не включена.
@@ -206,7 +206,8 @@ table.time tr{{margin-bottom:1rem}}}}
 <details><summary>Все квартальные доли и знаменатели</summary>{matrix(quarter, names)}</details>
 <details><summary>Технические сведения об источниках</summary><p class=foot>Источник: data/votes_25.json; SHA-256: {digest}.
 Названия: criteria/faction_names_ru.yaml. Фракции — из cards/*-k25-votes.yaml.
-Полугодовые и квартальные доли рассчитаны из одного снимка.</p></details></body></html>'''
+Полугодовые и квартальные доли рассчитаны из одного снимка.</p></details><footer>{SHORT_FRAME}</footer>
+</body></html>'''
     validate_page(doc)
     return doc, changes
 

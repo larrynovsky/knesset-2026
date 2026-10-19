@@ -168,7 +168,7 @@ def c_plural_ru(src):
 def c_ballot_money(src):
     from render_overview import load_ballot, _money_td, check_money_same
     doc = src["index.html"]
-    rows = re.findall(r'<tr data-ballot-list="([^"]+)">(.*?)</tr>', doc, re.S)
+    rows = re.findall(r'<tr data-ballot-list="([^"]+)"[^>]*>(.*?)</tr>', doc, re.S)
     expected = load_ballot()["lists"]
     bad = []
     if len(rows) != len(expected):
@@ -245,7 +245,9 @@ def list_page_mutant(src, pattern, replacement, filename="l-1.html"):
 
 
 @check("страница списка = строка таблицы (v52)",
-       [("подмена стрелки l-1", lambda s: list_page_mutant(s,
+       [("удалены data-fids", lambda s: edit(s, "index.html", 'data-fids=', 'data-lost=')),
+        ("подмена data-fids", lambda s: edit(s, "index.html", 'data-fids="1096,1108"', 'data-fids="1096"')),
+        ("подмена стрелки l-1", lambda s: list_page_mutant(s,
            r'(<p data-theme="institutions"><b>[^<]+</b> )[↑↓↕]', r'\1↑')),
         ("подмена позиции закона в таблице", lambda s: list_page_mutant(s,
            r'(<span class="ballot-laws"><span title="[^"]*">)<b>за</b>',
@@ -263,7 +265,7 @@ def c_list_table(src):
     # Ожидание 14 объявлено владельцем; пустые/дублированные поля — отказ.
     clean = lambda s: re.sub(r"\s+", " ", text_of(s)).strip()
     bad, seen = [], 0
-    rows = re.findall(r'<tr data-ballot-list="[^"]*">(.*?)</tr>', src.get("index.html", ""), re.S)
+    rows = re.findall(r'(<tr data-ballot-list="[^"]*"[^>]*>.*?)</tr>', src.get("index.html", ""), re.S)
     pages = {f"l-{i}.html" for i in range(1, 15)}
     if len(rows) != 14:
         bad.append(f"бюллетень: строк {len(rows)}, ожидалось 14")
@@ -285,10 +287,12 @@ def c_list_table(src):
 
         same("буквы", re.findall(r'<span class="ballot-letters"[^>]*>([^<]+)</span>', row),
              re.findall(r'<h1><span class="ballot-letters"[^>]*>([^<]+)</span>', page))
-        # Только источники голосов в заголовке строки; сравнение Ганца у Яшар
-        # не является источником личной позиции.
-        sources = re.search(r'по голосам: (.*?)</span>', row)
-        fids = re.findall(r'href="f-(\d+).html"', sources[1]) if sources else []
+        if 'по голосам: ' in row or 'Для сравнения: ' in row:
+            bad.append(f"{name} ({filename}): служебные строки в бюллетене")
+        sources = re.search(r'data-fids="([0-9,]*)"', row.split('>')[0])
+        if not sources:
+            bad.append(f"{name} ({filename}): нет data-fids")
+        fids = sources[1].split(",") if sources and sources[1] else []
         sections = re.findall(r'<h2><a href="f-(\d+).html">.*?</h2>(.*?)(?=<h2>|</body>)', page, re.S)
         if fids != [fid for fid, _ in sections]:
             bad.append(f"{name} ({filename}): состав фракций расходится")
@@ -391,9 +395,9 @@ def _frame_after(src):
     d["index.html"] = (s[:i] + s[j:]).replace("</tbody></table>", "</tbody></table>" + fr, 1)
     return d
 
-@check("рамка на каждом документе, до первой карточки",
+@check("рамка на каждом документе, в подвале",
        [("маркер рамки удалён", lambda s: edit(s, anyfile(s), "data-frame", "data-xxxxx")),
-        ("рамка сдвинута за таблицу", _frame_after)])
+        ("рамка вынесена из подвала", _frame_after)])
 def c_frame(src):
     bad = []
     for n, s in src.items():
@@ -402,9 +406,15 @@ def c_frame(src):
         m = re.search(r'data-frame=["\']?(full|short)', s)
         if not m:
             bad.append(f"{n}: маркера нет"); continue
-        b = s.find("<body")
-        first = min([p for p in (s.find("<table", b), s.find("<details", b)) if p > 0] or [1 << 30])
-        if m.start() > first: bad.append(f"{n}: рамка после первой карточки")
+        footer = re.search(r'<footer>.*?</footer>', s, re.S)
+        if (not footer or s.count("<footer>") != 1
+                or not re.fullmatch(r"\s*</body>\s*</html>\s*", s[footer.end():])
+                or not footer.start() < m.start() < footer.end()):
+            bad.append(f"{n}: рамка вне подвала")
+        if n == "index.html" and not re.search(
+                r'<details><summary>Кто сделал и на каких данных</summary>.*?data-frame=full.*?</details>',
+                footer[0] if footer else "", re.S):
+            bad.append("index.html: полная рамка не свёрнута")
         if n == "index.html" and m.group(1) != "full": bad.append("index.html: рамка не full")
     return len(src), bad, f"{len(src)}/{len(src)}, позиция верна"
 
@@ -468,7 +478,7 @@ def c_owner_votes(src):
             if any(not re.search(r"\(" + count + r"\)", item) for item in items):
                 bad.append(f"{name}: нет текстового счёта")
     for row in re.findall(r'<tr data-ballot-list=.*?</tr>', src["index.html"]):
-        if 'href="f-1102.html"' in row:
+        if re.search(r'data-fids="(?:[0-9]+,)*1102(?:,[0-9]+)*"', row):
             cell = re.search(r'<span class="ballot-laws">(.*?)</span></td>', row)
             if not cell or not re.search(r'<span title="[^"]*">— \(1 против\)</span>', cell[1]):
                 bad.append("Беяхад: бойкот Еш Атид потерян")
@@ -490,10 +500,12 @@ def c_method(src):
     from render_method import build, facts
     from render_overview import data_periods
     votes_period, budget_period = data_periods(ROOT / "data")
-    expected = build(facts()).replace('</h1>', '</h1>\n' + votes_period + '\n' + budget_period, 1)
+    expected = build(facts())
     actual = src.get("method.html", "")
     bad = []
-    if text_of(actual) != text_of(expected):
+    # v62: строки периода переехали в подвал — их проверяет c_data_periods; здесь сверяем объяснение
+    strip = lambda h: re.sub(r'<p class="data-period"[^>]*>[^<]*</p>|<footer>.*?</footer>', '', h, flags=re.S)
+    if text_of(strip(actual)) != text_of(strip(expected)):
         bad.append("method.html: объяснение или числа расходятся с источниками")
     if 'href="cheatsheet.html"' not in actual:
         bad.append("method.html: нет ссылки на шпаргалку A4")
@@ -702,13 +714,10 @@ def c_data_periods(src):
                                        + re.escape(source) + r'">([^<]*)</p>', page))
             if len(matches) != 1 or _h.unescape(matches[0][1]) != expected:
                 bad.append(f'{name}: отсутствует или неверен период {source}')
-        # Обе строки должны идти непосредственно после заголовка, вне details.
-        if not re.search(r'</h1>\s*<p class="data-period" data-source="votes_25.json">', page):
-            bad.append(f'{name}: период голосований не под заголовком')
-        if len(required) == 2 and not re.search(
-                r'data-source="votes_25.json">[^<]*</p>\s*'
-                r'<p class="data-period" data-source="budget_takanot">', page):
-            bad.append(f'{name}: период бюджета не в шапке')
+        footer = re.search(r'<footer>.*?</footer>', page, re.S)
+        for source, _ in required:
+            if not footer or f'data-source="{source}"' not in footer[0]:
+                bad.append(f'{name}: период {source} вне подвала')
     return len(src), bad, ''
 
 
@@ -743,6 +752,16 @@ def selftest(src):
     собственном мутанте, мертва — и это единственный способ это узнать."""
     # Каждый адрес проверяется отдельно: потеря строки на f-/l-/служебной
     # странице не должна маскироваться исправной строкой в обзоре.
+    frame_mutants = 0
+    for name, page in src.items():
+        if name == "cheatsheet.html":
+            continue
+        mutated = dict(src, **{name: re.sub(
+            r'<p class=frame data-frame=short>.*?</p>|<div class=note id=frame data-frame=full>.*?</div>',
+            '', page, flags=re.S)})
+        assert mutated[name] != page and c_frame(mutated)[1], f"пропущена потеря рамки: {name}"
+        frame_mutants += 1
+    print(f"v62: удаление каждой рамки — {frame_mutants} мутантов красные")
     period_mutants = 0
     for name, page in src.items():
         for match in re.finditer(r'<p class="data-period"[^>]*>[^<]*</p>', page):
@@ -907,7 +926,7 @@ def build_site(root, destination):
                  "sys.argv=sys.argv[:1]; sys.exit(t.main())")
     subprocess.run([sys.executable, "-c", time_page, str(destination)],
                    cwd=root / "scripts", check=True)
-    # Общая шапка всех публикуемых страниц, включая новые страницы сборки.
+    # Общий подвал всех публикуемых страниц, включая новые страницы сборки.
     from render_overview import data_periods
     votes_period, budget_period = data_periods(root / "data")
     for path in destination.rglob("*.html"):
@@ -917,9 +936,9 @@ def build_site(root, destination):
         periods = votes_period
         if path.name in ("index.html", "method.html") or path.name.startswith(("l-", "f-")) or '₪' in page:
             periods += '\n' + budget_period
-        if '</h1>' not in page:
-            raise ValueError(f"ОТКАЗ: нет заголовка для периода данных: {path.name}")
-        path.write_text(page.replace('</h1>', '</h1>\n' + periods, 1), encoding="utf-8")
+        if '<footer>' not in page:
+            raise ValueError(f"ОТКАЗ: нет подвала для периода данных: {path.name}")
+        path.write_text(page.replace('<footer>', '<footer>' + periods + '\n', 1), encoding="utf-8")
     (destination / "robots.txt").write_text("User-agent: *\nAllow: /\n", encoding="utf-8")
     from render_overview import check_index_links, Refuse
     try:

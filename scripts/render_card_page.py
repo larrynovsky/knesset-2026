@@ -152,7 +152,6 @@ def page(card: dict, buckets: dict, names: dict) -> str:
 <style>{css_from_mockup()}</style></head><body>
 <nav class=crumbs><a href="index.html">Все фракции</a> ·
 <a href="f-{fid}.html">{esc(ru)}</a> · суд, парламент и свободы</nav>
-{SHORT_FRAME}
 <h1>{esc(ru)} <span class=he lang=he dir=rtl><bdi>{esc(he)}</bdi></span>:
 что из голосований вообще считается</h1>
 <p class=lead>{head}</p>
@@ -179,6 +178,7 @@ def page(card: dict, buckets: dict, names: dict) -> str:
 </p><p>Формула согласия и порог раскола — на странице <a href="time.html">«Время»</a>.</p>
 <details><summary>Технические сведения для проверки</summary><p>Отпечаток данных: {esc(card.get("data_fingerprint"))}. Правила отсева —
 criteria/declared_before_arrow_2026-10-07.yaml, арифметика — scripts/direction_confidence.py.</p></details></div>
+<footer>{SHORT_FRAME}</footer>
 </body></html>"""
 
 
@@ -248,8 +248,8 @@ def selftest() -> int:
     p = page(card, b, {"100": {"ru": "Акт"}})
     assert "<script" not in p, "§13: скрипт на странице решения"
     assert 'content="noindex, nofollow"' in p, "§16: нет noindex"
-    assert p.index("data-frame=short") < p.index("<h1"), \
-        "§17: рамка обязана стоять ДО заголовка"
+    assert p.index("<footer>") < p.index("data-frame=short") < p.index("</footer>"), \
+        "v62: рамка вне подвала"
     assert "f-7.html" in p, "нет пути к переписи — читатель её не найдёт"
     assert "Мы сюда не дошли" in p, \
         "карточка без решения выдала утверждение о направлении"

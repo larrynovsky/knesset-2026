@@ -202,7 +202,6 @@ def build(marks: dict, votes: dict, names: dict, ru: dict, fids: list,
 <title>Основания — 25-й Кнессет</title>
 <style>{css_from_mockup()}</style>{extra}</head><body>
 <nav class=crumbs><a href="index.html">Все фракции</a> · Основания</nav>
-{SHORT_FRAME}
 <h1>Основания</h1>
 <p class=lead>Владелец прочитал {len(marks)} {plural_ru(len(marks), 'акт', 'акта', 'актов')}, не видя, кто как голосовал,
 и пометил {len(marked)} как недопустимые. Ниже — кто за эти акты голосовал,
@@ -236,6 +235,7 @@ def build(marks: dict, votes: dict, names: dict, ru: dict, fids: list,
 <p class=dim>Названия актов, не числа. Списки без фракции в 25-м Кнессете здесь
 отсутствуют. Личные голоса представителей нового списка, если они доступны, показаны на странице списка в обзоре.</p>
 {per_line(marked, tables, fids, ru, names)}
+<footer>{SHORT_FRAME}</footer>
 </body></html>"""
 
 
@@ -281,7 +281,7 @@ def selftest() -> int:
     votes, names, ru, fids, table, split = load_all()
     page = build(marks, votes, names, ru, fids, table, split)
     assert 'content="noindex, nofollow"' in page
-    assert page.index("data-frame=short") < page.index("<h1")
+    assert page.index("<footer>") < page.index("data-frame=short") < page.index("</footer>")
     marked = [b for b, m in marks.items() if m["mark"] == "недопустимо"]
     for b in marked:
         assert f'id="a{b}"' in page, f"помеченный акт {b} не на странице"

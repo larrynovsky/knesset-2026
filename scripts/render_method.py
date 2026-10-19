@@ -214,7 +214,7 @@ def build(f: dict) -> str:
 <title>Как это сделано — 25-й Кнессет</title>
 <style>{css_from_mockup()}</style></head><body>
 <nav class=crumbs><a href="index.html">Все списки</a> · Как это сделано</nav>
-{SHORT_FRAME}
+
 <h1>Как это сделано</h1>
 <p class=lead>Состояние на вечер 19.10.2026. Мы смотрим, как голосовали партии,
 какие денежные обещания подписывали и что удалось найти в бюджете.
@@ -388,6 +388,7 @@ IDI (en.idi.org.il/israeli-elections-and-parties/elections/2026/),
 Стрелка <b>{verdict}</b>. Этот старый порог не следует путать с нынешней проверкой устойчивости:
 даже устойчивый результат может опираться на общую ошибку моделей.</p>
 </details>
+<footer>{SHORT_FRAME}</footer>
 </body></html>"""
 
 
@@ -395,7 +396,7 @@ def selftest() -> int:
     f = facts()
     page = build(f)
     assert 'content="noindex, nofollow"' in page, "§16: нет noindex"
-    assert page.index("data-frame=short") < page.index("<h1"), "§17: рамка после заголовка"
+    assert page.index("<footer>") < page.index("data-frame=short") < page.index("</footer>"), "v62: рамка вне подвала"
     # Каждое число словаря обязано быть на странице — страница не вправе
     # выборочно молчать о замере.
     for k in ("alpha", "alpha_threshold", "pairs", "agree", "attempted",

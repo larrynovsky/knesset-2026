@@ -185,7 +185,6 @@ def build(themes: dict, counts: dict) -> str:
 <title>Что мы меряем — 25-й Кнессет</title>
 <style>{css_from_mockup()}</style></head><body>
 <nav class=crumbs><a href="index.html">Все фракции</a> · Что мы меряем</nav>
-{SHORT_FRAME}
 <h1>Что мы меряем</h1>
 <p class=lead>В обзоре четыре темы: суд, парламент и свободы; государство и религия; экономика; безопасность.</p>
 <p>Направления по всем четырём темам уже рассчитываются. Действующие правила и ограничения
@@ -215,7 +214,9 @@ def build(themes: dict, counts: dict) -> str:
 исходного объявления рамки. Это история выбора тем;
 текущие правила и результаты находятся по ссылкам выше. Автор — частное лицо, проект никто не
 финансирует и ни с кем не согласовывал.</p></div>
-</details></body></html>"""
+</details>
+<footer>{SHORT_FRAME}</footer>
+</body></html>"""
 
 
 def selftest() -> int:
@@ -275,8 +276,8 @@ def selftest() -> int:
     page = build(live, counts_from_repo())
     assert "<script" not in page, "§13: скрипт на странице осей"
     assert 'content="noindex, nofollow"' in page, "§16: нет noindex"
-    assert page.index("data-frame=short") < page.index("<h1"), \
-        "§17: рамка обязана стоять ДО заголовка"
+    assert page.index("<footer>") < page.index("data-frame=short") < page.index("</footer>"), \
+        "v62: рамка вне подвала"
     for a in live["themes"]:
         assert a["title_ru"] in page, f"ось {a['id']} потерялась на странице"
     # ── ЗНАЧЕНИЕ КАЖДОГО ОБЪЯВЛЕННОГО ПОЛЯ СТОИТ НА СТРАНИЦЕ ────────────
