@@ -235,6 +235,13 @@ def c_compact_ballot(src):
 
 
 def list_page_mutant(src, pattern, replacement, filename="l-1.html"):
+    # 19.10: якорь зависит от данных — если на заданной странице его нет,
+    # берётся первая страница списка, где он есть (мутант не должен умирать от смены данных)
+    if not re.search(pattern, src[filename]):
+        # одна фракция в списке: у двух свёртка «худшей» устойчивости законно гасит часть подмен
+        filename = next((n for n in sorted(src) if re.fullmatch(r"l-[0-9]+\.html", n)
+                         and re.search(pattern, src[n])
+                         and len(re.findall(r'<h2><a href="f-', src[n])) == 1), filename)
     changed, n = re.subn(pattern, replacement, src[filename], count=1)
     if n != 1:
         raise LookupError(f"{filename}: якорь {pattern!r} не найден")
@@ -254,7 +261,7 @@ def list_page_mutant(src, pattern, replacement, filename="l-1.html"):
         ("потеря разделителя направлений", lambda s: edit(s, "index.html",
            '</small></span> / <span', '</small></span> <span')),
         ("потеря устойчивости l-14", lambda s: list_page_mutant(s,
-           r'(<small class="robustness"[^>]*>) \(шаткая\)', r'\1 (устойчива)', "l-14.html"))])
+           r'(<p data-theme="[a-z_]+"><b>[^<]+</b> [↑↓↕]<small class="robustness"[^>]*>) \(шаткая\)', r'\1 (устойчива)', "l-14.html"))])
 def c_list_table(src):
     # §20–24: читаем выход двух рендеров, не вызываем их расчётные функции.
     # Ожидание 14 объявлено владельцем; пустые/дублированные поля — отказ.
