@@ -201,7 +201,9 @@ def c_ballot_money(src):
 
 
 @check("компактные клетки бюллетеня (v42)",
-       [("удалено объяснение четырёх законов", lambda s: edit(s, "index.html", "ты сам 10.10 пометил «недопустимо», ещё не зная, кто за них голосовал", "выбраны четыре закона")),
+       [("v65: удалено объяснение выделения религии", lambda s: edit(s, "index.html",
+           "↑ выделено: ты 19.10 сказал, что для тебя это довод исключить список", "подмена")),
+        ("удалено объяснение четырёх законов", lambda s: edit(s, "index.html", "ты сам 10.10 пометил «недопустимо», ещё не зная, кто за них голосовал", "выбраны четыре закона")),
         ("удалено пояснение направления", lambda s: edit(s, "index.html", 'title="ослаблял;', 'title="подмена;')),
         ("убран значок ненадёжной стрелки", lambda s: dict(s, **{"index.html": re.sub(
            r'(title="[^";]+; ненадёжна: [0-9.]+%">[↑↓↕]<small class="robustness">) \(не уверены\)(</small>)', r'\1\2', s["index.html"], count=1)})),
@@ -220,7 +222,8 @@ def c_compact_ballot(src):
     if not reading or any(text not in reading[0] for text in (
             "Одна строка — один список", "ты сам 10.10 пометил «недопустимо», ещё не зная, кто за них голосовал",
             "у оппозиции это обычно бойкот", "Где не работает:",
-            "Что значат колонки тем и денег", "Пример: Ликуд голосовал «за»")):
+            "Что значат колонки тем и денег", "Пример: Ликуд голосовал «за»",
+            "↑ выделено: ты 19.10 сказал, что для тебя это довод исключить список")):
         bad.append("нет читательского пояснения v63")
     meanings = {"Суд": ("укреплял", "ослаблял"),
                 "Религия": ("больше места религии", "меньше места религии"),
@@ -228,13 +231,16 @@ def c_compact_ballot(src):
                 "Безопасность": ("расширял полномочия силовых структур", "сужал полномочия силовых структур")}
     for attrs, cell in entries:
         topic = re.search(r'data-l="([^"]+)"', attrs)[1]
-        for meaning, arrow in re.findall(r'<span title="([^";]+); [^"]*">([↑↓↕])', cell):
+        for meaning, arrow in re.findall(r'<span title="([^";]+); [^"]*">(?:<b>)?([↑↓↕])', cell):
             expected_word = dict(zip(("↑", "↓", "↕"), (*meanings[topic], "и так, и так")))[arrow]
             if meaning != expected_word:
                 bad.append("title не объясняет направление")
-        notes = re.findall(r'<span title="[^";]+; (устойчива|шаткая|ненадёжна): ([0-9.]+)%">[↑↓↕]<small class="robustness">(.*?)</small></span>', cell)
-        if len(notes) != len(re.findall(r'[↑↓↕]', cell)):
+        notes = re.findall(r'<span title="[^";]+; (устойчива|шаткая|ненадёжна): ([0-9.]+)%(?:; [^"]*)?">(?:<b>)?[↑↓↕](?:</b>)?<small class="robustness">(.*?)</small></span>', cell)
+        if len(notes) != len(re.findall(r'[↑↓↕]', re.sub(r'<[^>]+>', '', cell))):
             bad.append("стрелка без title со словом и процентом")
+        for title in re.findall(r'<span title="([^"]*)"><b>↑</b>', cell):
+            if topic == "Религия" and "↑ выделено: ты 19.10 сказал, что для тебя это довод исключить список" not in title:
+                bad.append("нет личного основания выделения в title религии")
         for word, percent, mark in notes:
             expected = {"устойчива": "", "шаткая": " (не уверены)", "ненадёжна": " (не уверены)"}[word]
             if mark != expected:
@@ -279,7 +285,15 @@ def list_page_mutant(src, pattern, replacement, filename="l-1.html"):
            r'(<p data-theme="[a-z_]+"><b>[^<]+</b> [^<]*?) \(не уверены\)', r'\1', "l-14.html")),
         ("потеря Коротко", lambda s: list_page_mutant(s, r'<section class="list-short">.*?</section>', '')),
         ("подмена счёта Коротко", lambda s: list_page_mutant(s, r'(data-short-axis="1096">[^<]*?: )\d+ раз', r'\g<1>999 раз')),
-        ("подмена закона Коротко", lambda s: list_page_mutant(s, r'(data-short-laws="1096">.*?)<b>за</b>', r'\1против')),
+        ("подмена закона Коротко", lambda s: list_page_mutant(s, r'(data-list-law="1">.*?)<b>за</b>', r'\1против')),
+        ("v65: подмена имени фракции l-1", lambda s: list_page_mutant(s,
+           r'(data-list-law="1">.*?)<small>\(Ликуд\)</small>', r'\1<small>(ШАС)</small>')),
+        ("v65: снято выделение религии", lambda s: list_page_mutant(s,
+           r'(data-l="Религия"><span title="[^"]*">)<b>↑</b>', r'\1↑', "index.html")),
+        ("v65: выделена экономика", lambda s: list_page_mutant(s,
+           r'(data-l="Экономика"><span title="[^"]*">)↑', r'\1<b>↑</b>', "index.html")),
+        ("v65: снято выделение религии l-1", lambda s: list_page_mutant(s,
+           r'(<p data-theme="religion_state"><b>[^<]+</b> )<b title="[^"]*">(.*?)</b>', r'\1\2')),
         ("подмена денег Коротко", lambda s: edit(s, "l-1.html", 'data-short-money="1096">', 'data-short-money="1096">подмена'))])
 def c_list_table(src):
     # §20–24: читаем выход двух рендеров, не вызываем их расчётные функции.
@@ -330,9 +344,18 @@ def c_list_table(src):
             positions = re.findall(r'<p>[^<]+: (за|против|воздержались|не голосовали|нет позиции) \(\d{4}-', page)
             page_laws = [["не голос." if v in ("не голосовали", "нет позиции") else v for v in positions]]
         if fids or personal:
-            expected = ["/".join(dict.fromkeys(v[i] for v in page_laws)) for i in range(4)] if page_laws and all(len(v) == 4 for v in page_laws) else []
-            # имена фракций в смешанной клетке (<small>(Ликуд)</small>) — подпись, не позиция; порядок фракций тот же
-            same("4 закона", [re.sub(r"\s*/\s*", "/", clean(re.sub(r"\s*<small>\([^<]*\)</small>", "", v))) for v in table_laws], expected)
+            from render_cheatsheet import _short
+            faction_names = [_short(clean(v)).split(" (")[0] for v in
+                             re.findall(r'<h2><a href="f-\d+.html">(.*?)</a>', page)]
+            expected = []
+            if page_laws and all(len(v) == 4 for v in page_laws):
+                for i in range(4):
+                    positions = list(dict.fromkeys(v[i] for v in page_laws))
+                    expected.append(" / ".join(v[i] + " (" + who + ")" for v, who in zip(page_laws, faction_names))
+                                    if len(positions) > 1 and not personal else "/".join(positions))
+            same("4 закона", [clean(v) for v in table_laws], expected)
+            list_laws = re.findall(r'<span data-list-law="[1-4]">(.*?)</span>', page, re.S)
+            same("4 закона с именами и выделением", table_laws, list_laws)
         else:
             same("4 закона без голосов", clean(law_cell[1]) if law_cell else "", "нет данных" if 'голосов в этом Кнессете нет' in page else "")
         table_axes = re.findall(r'<td class="ballot-axis"[^>]*>(.*?)</td>', row, re.S)
@@ -341,6 +364,11 @@ def c_list_table(src):
             for section in ([page] if personal else [v for _, v in sections]):
                 match = re.search(r'<p data-(?:personal-)?theme="' + topic + r'"><b>[^<]+</b> (.*?)</p>', section, re.S)
                 value = clean(match[1]) if match else ""
+                if topic in ("religion_state", "economy", "security") and match:
+                    emphasized = re.findall(r'<b(?: [^>]*)?>(.*?)</b>', match[1])
+                    should_mark = topic == "religion_state" and value.startswith("больше места религии")
+                    if bool(emphasized) != should_mark:
+                        bad.append(f"{filename}: выделение {topic} не соответствует решению владельца")
                 words = {
                     "institutions": ("укреплял", "ослаблял"),
                     "religion_state": ("больше места религии", "меньше места религии"),
@@ -368,6 +396,12 @@ def c_list_table(src):
                     expected = " / ".join(grouped.values()) if all(values) else ""
                 actual = clean(table_axes[i]) if len(table_axes) == 4 else ""
                 same(topic, actual, expected)
+                if topic in ("religion_state", "economy", "security") and len(table_axes) == 4:
+                    cell = table_axes[i]
+                    emphasized = re.findall(r'<b>(.*?)</b>', cell)
+                    wanted = ["↑"] * actual.count("↑") if topic == "religion_state" else []
+                    if emphasized != wanted:
+                        bad.append(f"{filename}: выделение {topic} в обзоре не соответствует решению владельца")
             else:
                 same(topic, "нет голосов" if 'голосов в этом Кнессете нет' in row else "", "нет голосов" if 'голосов в этом Кнессете нет' in page else "")
         for fid, section in sections:
@@ -389,7 +423,7 @@ def c_list_table(src):
             bad.append(f"{filename}: нет четырёх строк Коротко перед подробностями")
         same("буквы Коротко", re.findall(r'<span class="ballot-letters"[^>]*>([^<]+)</span>', row),
              re.findall(r'<bdi>([^<]+)</bdi>', short))
-        for idx, (fid, section) in enumerate(sections if not personal else [("yashar", page)]):
+        for fid, section in (sections if not personal else [("yashar", page)]):
             who = (clean(re.search(r'<h2><a href="f-' + fid + r'.html">(.*?)</a>', page)[1])
                    if not personal else "Личные голоса Айзенкота и Тропера")
             for field, pattern in (("axis", r'<p data-(?:personal-)?theme="institutions"><b>[^<]+</b> (.*?)</p>'),
@@ -408,9 +442,6 @@ def c_list_table(src):
                         role = "как вторая сторона: " if value.startswith("подписала как вторая сторона") else ""
                         expected_detail = [f"{role}в бюджете нашлась статья под {found} из {total} денежных обещаний."]
                 same(f"Коротко {fid} {field}", [who + ": " + v for v in expected_detail], [clean(v) for v in brief])
-            brief_laws = re.findall(r'<span data-short-laws="' + fid + r'">(.*?)</span>', short, re.S)
-            labels = re.findall(r': (за|против|не голос\.|воздерж\.)', clean(brief_laws[0])) if len(brief_laws) == 1 else []
-            same(f"Коротко {fid} законы", [v.split(" (")[0].replace("воздержались", "воздерж.") for v in page_laws[idx]], labels)
         if not fids and not personal:
             if "нет данных — список в этом Кнессете не голосовал" not in short or "Суд и права: нет данных" not in short:
                 bad.append(f"{filename}: Коротко приписывает голоса новому списку")
