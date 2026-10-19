@@ -160,7 +160,9 @@ def c_plural_ru(src):
 
 
 @check("деньги бюллетеня = обзор = фракция (v53)",
-       [("подменено N", lambda s: edit(s, "index.html", '>вторая сторона: 46/71</span>', '>вторая сторона: 45/71</span>')),
+       [("v66: разделитель денег /", lambda s: list_page_mutant(s,
+           r'(data-l="Деньги">.*?) · ', r'\1 / ', "index.html")),
+        ("подменено N", lambda s: edit(s, "index.html", '>вторая сторона: 46/71</span>', '>вторая сторона: 45/71</span>')),
         ("подменён title", lambda s: dict(s, **{"index.html": re.sub(
             r'(<td data-l="Деньги"><span title=")[^"]+', r'\1подмена', s["index.html"], count=1)})),
         ("удалена денежная клетка", lambda s: dict(s, **{"index.html": re.sub(
@@ -188,7 +190,7 @@ def c_ballot_money(src):
                 value = "вторая сторона: " + value
             groups.setdefault(value if value != "?" else "<small>не разбирали</small>", []).append(full)
         cells = re.findall(r'<td data-l="Деньги">(.*?)</td>', row)
-        wanted = ' / '.join(f'<span title="{_h.escape(" / ".join(dict.fromkeys(full)), quote=True)}">{value}</span>'
+        wanted = ' · '.join(f'<span title="{_h.escape(" · ".join(dict.fromkeys(full)), quote=True)}">{value}</span>'
                             for value, full in groups.items()) or '<small>не разбирали</small>'
         if cells != [wanted]:
             bad.append(f"{_h.unescape(name)}: деньги или title расходятся с обзором")
@@ -201,18 +203,24 @@ def c_ballot_money(src):
 
 
 @check("компактные клетки бюллетеня (v42)",
-       [("v65: удалено объяснение выделения религии", lambda s: edit(s, "index.html",
-           "↑ выделено: ты 19.10 сказал, что для тебя это довод исключить список", "подмена")),
+       [("v66: подмена слова религии", lambda s: list_page_mutant(s,
+           r'(data-l="Религия"><span title="[^"]*"><b>)за больше религии', r'\1за меньше религии', "index.html")),
+        ("v66: возврат разделителя /", lambda s: list_page_mutant(s,
+           r'(data-l="(?:Религия|Экономика|Безопасность)">(?:(?!</td>).)*?) · ', r'\1 / ', "index.html")),
+        ("v66: мало законов (0)", lambda s: list_page_mutant(s,
+           r'(data-l="[^"]+">)нет законов', r'\1мало законов (0)', "index.html")),
+        ("v65: удалено объяснение выделения религии", lambda s: edit(s, "index.html",
+           "«за больше религии» выделено: ты 19.10 сказал, что для тебя это довод исключить список", "подмена")),
         ("удалено объяснение четырёх законов", lambda s: edit(s, "index.html", "ты сам 10.10 пометил «недопустимо», ещё не зная, кто за них голосовал", "выбраны четыре закона")),
         ("удалено пояснение направления", lambda s: edit(s, "index.html", 'title="ослаблял;', 'title="подмена;')),
         ("убран значок ненадёжной стрелки", lambda s: dict(s, **{"index.html": re.sub(
-           r'(title="[^";]+; ненадёжна: [0-9.]+%">[↑↓↕]<small class="robustness">) \(не уверены\)(</small>)', r'\1\2', s["index.html"], count=1)})),
+           r'(title="[^";]+; ненадёжна: [0-9.]+%">[^<]+<small class="robustness">) \(не уверены\)(</small>)', r'\1\2', s["index.html"], count=1)})),
         ("возвращено длинное единогласие", lambda s: dict(s, **{"index.html": re.sub(
           r'со всеми \(([0-9]+)(?:/[0-9]+)?\)', r'голосовали со всеми (почти единогласно: \1 законов)', s["index.html"], count=1)})),
         ("снят title устойчивости", lambda s: dict(s, **{"index.html": re.sub(
           r' title="[^";]+; устойчива: [0-9.]+%"', '', s["index.html"], count=1)})),
         ("снят значок личной стрелки", lambda s: dict(s, **{"index.html": re.sub(
-          r'(<td class="ballot-axis"[^>]*data-personal=1[^>]*><span title="[^"]*">[↑↓↕]<small class="robustness">) \(не уверены\)(</small>)',
+          r'(<td class="ballot-axis"[^>]*data-personal=1[^>]*><span title="[^"]*">[^<]+<small class="robustness">) \(не уверены\)(</small>)',
           r'\1\2', s["index.html"], count=1)}))])
 def c_compact_ballot(src):
     entries = re.findall(r'<td class="ballot-axis"([^>]*)>(.*?)</td>', src["index.html"], re.S)
@@ -223,23 +231,26 @@ def c_compact_ballot(src):
             "Одна строка — один список", "ты сам 10.10 пометил «недопустимо», ещё не зная, кто за них голосовал",
             "у оппозиции это обычно бойкот", "Где не работает:",
             "Что значат колонки тем и денег", "Пример: Ликуд голосовал «за»",
-            "↑ выделено: ты 19.10 сказал, что для тебя это довод исключить список")):
+            "«И так, и так» во всех четырёх темах",
+            "«за больше религии» выделено: ты 19.10 сказал, что для тебя это довод исключить список")):
         bad.append("нет читательского пояснения v63")
-    meanings = {"Суд": ("укреплял", "ослаблял"),
-                "Религия": ("больше места религии", "меньше места религии"),
-                "Экономика": ("на стороне производителя", "на стороне потребителя"),
-                "Безопасность": ("расширял полномочия силовых структур", "сужал полномочия силовых структур")}
+    from render_overview import THEME_WORDS
+    meanings = dict(zip(("Суд", "Религия", "Экономика", "Безопасность"), THEME_WORDS.values()))
     for attrs, cell in entries:
         topic = re.search(r'data-l="([^"]+)"', attrs)[1]
-        for meaning, arrow in re.findall(r'<span title="([^";]+); [^"]*">(?:<b>)?([↑↓↕])', cell):
-            expected_word = dict(zip(("↑", "↓", "↕"), (*meanings[topic], "и так, и так")))[arrow]
-            if meaning != expected_word:
-                bad.append("title не объясняет направление")
-        notes = re.findall(r'<span title="[^";]+; (устойчива|шаткая|ненадёжна): ([0-9.]+)%(?:; [^"]*)?">(?:<b>)?[↑↓↕](?:</b>)?<small class="robustness">(.*?)</small></span>', cell)
-        if len(notes) != len(re.findall(r'[↑↓↕]', re.sub(r'<[^>]+>', '', cell))):
-            bad.append("стрелка без title со словом и процентом")
-        for title in re.findall(r'<span title="([^"]*)"><b>↑</b>', cell):
-            if topic == "Религия" and "↑ выделено: ты 19.10 сказал, что для тебя это довод исключить список" not in title:
+        directions = re.findall(r'<span title="([^";]+); [^"]*">((?:<b>)?[^<]+(?:</b>)?)<small', cell)
+        for meaning, visible in directions:
+            if meaning not in meanings[topic] or text_of(visible).strip() != meaning:
+                bad.append("слово клетки или title не соответствует теме")
+        notes = re.findall(r'<span title="[^";]+; (устойчива|шаткая|ненадёжна): ([0-9.]+)%(?:; [^"]*)?">(?:<b>)?[^<]+(?:</b>)?<small class="robustness">(.*?)</small></span>', cell)
+        plain = text_of(cell).replace(" (не уверены)", "").strip()
+        parts = plain.split(" · ")
+        if any(part not in meanings[topic] and not re.fullmatch(r"(?:со всеми|мало законов) \([1-9][0-9]*\)|нет законов|—", part) for part in parts):
+            bad.append("неизвестное значение или разделитель фракций")
+        if len(notes) != sum(part in meanings[topic] for part in parts):
+            bad.append("направление без title со словом и процентом")
+        for title in re.findall(r'<span title="([^"]*)"><b>за больше религии</b>', cell):
+            if topic == "Религия" and "«за больше религии» выделено: ты 19.10 сказал, что для тебя это довод исключить список" not in title:
                 bad.append("нет личного основания выделения в title религии")
         for word, percent, mark in notes:
             expected = {"устойчива": "", "шаткая": " (не уверены)", "ненадёжна": " (не уверены)"}[word]
@@ -268,7 +279,14 @@ def list_page_mutant(src, pattern, replacement, filename="l-1.html"):
 
 
 @check("страница списка = строка таблицы (v52)",
-       [("удалены data-fids", lambda s: edit(s, "index.html", 'data-fids=', 'data-lost=')),
+       [("v66: разделитель законов /", lambda s: list_page_mutant(s,
+           r'(class="ballot-laws">.*?) · ', r'\1 / ', "index.html")),
+        ("v66: разделитель в пояснении /", lambda s: edit(s, "index.html", 'в клетках через «·»', 'в клетках через «/»')),
+        ("v66: мало законов (0) l-страницы", lambda s: list_page_mutant(s,
+           r'(data-theme="[a-z_]+"><b>[^<]+</b> )[^<]+', r'\1мало законов (0)')),
+        ("v66: подмена слова религии l-страницы", lambda s: list_page_mutant(s,
+           r'(data-theme="religion_state"><b>[^<]+</b> <b title="[^"]*">)за больше религии', r'\1за меньше религии')),
+        ("удалены data-fids", lambda s: edit(s, "index.html", 'data-fids=', 'data-lost=')),
         ("подмена data-fids", lambda s: edit(s, "index.html", 'data-fids="1096,1108"', 'data-fids="1096"')),
         ("подмена стрелки l-1", lambda s: list_page_mutant(s,
            r'(<p data-theme="institutions"><b>[^<]+</b> )ослаблял', r'\1укреплял')),
@@ -280,7 +298,7 @@ def list_page_mutant(src, pattern, replacement, filename="l-1.html"):
         ("подмена денег l-1", lambda s: edit(s, "l-1.html", '<b>Деньги:</b>', '<b>Деньги:</b> подмена')),
         ("потеря страницы l-14", lambda s: {k: v for k, v in s.items() if k != "l-14.html"}),
         ("потеря разделителя направлений", lambda s: edit(s, "index.html",
-           '</small></span> / <span', '</small></span> <span')),
+           '</small></span> · <span', '</small></span> <span')),
         ("потеря устойчивости l-14", lambda s: list_page_mutant(s,
            r'(<p data-theme="[a-z_]+"><b>[^<]+</b> [^<]*?) \(не уверены\)', r'\1', "l-14.html")),
         ("потеря Коротко", lambda s: list_page_mutant(s, r'<section class="list-short">.*?</section>', '')),
@@ -289,9 +307,9 @@ def list_page_mutant(src, pattern, replacement, filename="l-1.html"):
         ("v65: подмена имени фракции l-1", lambda s: list_page_mutant(s,
            r'(data-list-law="1">.*?)<small>\(Ликуд\)</small>', r'\1<small>(ШАС)</small>')),
         ("v65: снято выделение религии", lambda s: list_page_mutant(s,
-           r'(data-l="Религия"><span title="[^"]*">)<b>↑</b>', r'\1↑', "index.html")),
+           r'(data-l="Религия"><span title="[^"]*">)<b>за больше религии</b>', r'\1за больше религии', "index.html")),
         ("v65: выделена экономика", lambda s: list_page_mutant(s,
-           r'(data-l="Экономика"><span title="[^"]*">)↑', r'\1<b>↑</b>', "index.html")),
+           r'(data-l="Экономика"><span title="[^"]*">)легче бизнесу', r'\1<b>легче бизнесу</b>', "index.html")),
         ("v65: снято выделение религии l-1", lambda s: list_page_mutant(s,
            r'(<p data-theme="religion_state"><b>[^<]+</b> )<b title="[^"]*">(.*?)</b>', r'\1\2')),
         ("подмена денег Коротко", lambda s: edit(s, "l-1.html", 'data-short-money="1096">', 'data-short-money="1096">подмена'))])
@@ -324,6 +342,8 @@ def c_list_table(src):
              re.findall(r'<h1><span class="ballot-letters"[^>]*>([^<]+)</span>', page))
         if 'по голосам: ' in row or 'Для сравнения: ' in row:
             bad.append(f"{name} ({filename}): служебные строки в бюллетене")
+        if 'в клетках через «/»' in row or re.search(r'<td[^>]*>[^<]*мало законов \(0\)', row):
+            bad.append(f"{filename}: устаревший разделитель или нулевое покрытие")
         sources = re.search(r'data-fids="([0-9,]*)"', row.split('>')[0])
         if not sources:
             bad.append(f"{name} ({filename}): нет data-fids")
@@ -351,8 +371,8 @@ def c_list_table(src):
             if page_laws and all(len(v) == 4 for v in page_laws):
                 for i in range(4):
                     positions = list(dict.fromkeys(v[i] for v in page_laws))
-                    expected.append(" / ".join(v[i] + " (" + who + ")" for v, who in zip(page_laws, faction_names))
-                                    if len(positions) > 1 and not personal else "/".join(positions))
+                    expected.append(" · ".join(v[i] + " (" + who + ")" for v, who in zip(page_laws, faction_names))
+                                    if len(positions) > 1 and not personal else " · ".join(positions))
             same("4 закона", [clean(v) for v in table_laws], expected)
             list_laws = re.findall(r'<span data-list-law="[1-4]">(.*?)</span>', page, re.S)
             same("4 закона с именами и выделением", table_laws, list_laws)
@@ -366,40 +386,30 @@ def c_list_table(src):
                 value = clean(match[1]) if match else ""
                 if topic in ("religion_state", "economy", "security") and match:
                     emphasized = re.findall(r'<b(?: [^>]*)?>(.*?)</b>', match[1])
-                    should_mark = topic == "religion_state" and value.startswith("больше места религии")
+                    should_mark = topic == "religion_state" and value.startswith("за больше религии")
                     if bool(emphasized) != should_mark:
                         bad.append(f"{filename}: выделение {topic} не соответствует решению владельца")
-                words = {
-                    "institutions": ("укреплял", "ослаблял"),
-                    "religion_state": ("больше места религии", "меньше места религии"),
-                    "economy": ("на стороне производителя", "против производителя"),
-                    "security": ("больше полномочий силовых", "больше гражданского контроля"),
-                }[topic]
-                arrow = next((symbol for word, symbol in zip((*words, "и так, и так"), "↑↓↕")
-                              if value.startswith(word)), None)
-                if arrow:
+                from render_overview import THEME_WORDS
+                direction = next((word for word in THEME_WORDS[topic] if value.startswith(word)), None)
+                if direction:
                     mark = " (не уверены)" if "(не уверены)" in value else ""
-                    values.append(arrow + mark)
+                    values.append(direction + mark)
                 else:
-                    token = re.match(r'(?:со всеми|мало законов) \(\d+\)', value)
+                    token = re.match(r'(?:со всеми|мало законов) \([1-9][0-9]*\)|нет законов', value)
                     values.append(token[0] if token else "—" if value.startswith("направление не установлено") else "")
             if fids or personal:
-                if values and all(re.fullmatch(r'со всеми \(\d+\)', v) for v in values):
-                    expected = "со всеми (" + "/".join(re.search(r'\d+', v)[0] for v in values) + ")"
-                else:
-                    # Одинаковое направление сворачивается с худшей устойчивостью:
-                    # Неуверенность сохраняется; разные направления разделены «/».
-                    grouped = {}
-                    for v in values:
-                        key = v.removesuffix(" (не уверены)")
-                        grouped[key] = max(grouped.get(key, v), v, key=len)
-                    expected = " / ".join(grouped.values()) if all(values) else ""
+                # Одинаковое направление сворачивается с худшей устойчивостью.
+                grouped = {}
+                for v in values:
+                    key = v.removesuffix(" (не уверены)")
+                    grouped[key] = max(grouped.get(key, v), v, key=len)
+                expected = " · ".join(grouped.values()) if all(values) else ""
                 actual = clean(table_axes[i]) if len(table_axes) == 4 else ""
                 same(topic, actual, expected)
                 if topic in ("religion_state", "economy", "security") and len(table_axes) == 4:
                     cell = table_axes[i]
                     emphasized = re.findall(r'<b>(.*?)</b>', cell)
-                    wanted = ["↑"] * actual.count("↑") if topic == "religion_state" else []
+                    wanted = ["за больше религии"] * actual.count("за больше религии") if topic == "religion_state" else []
                     if emphasized != wanted:
                         bad.append(f"{filename}: выделение {topic} в обзоре не соответствует решению владельца")
             else:
@@ -686,7 +696,7 @@ def c_sem(src):
     elif '<table class="ballot">' not in overview[:block.start()] or '<table class="ballot">' in block[1]:
         bad.append("бюллетень должен предшествовать фракционному раскрытию")
     for n, s in src.items():
-        for group in re.finditer(r"<p>(?:в сторону (?:↑|↓|укрепления|ослабления)|больше места религии|меньше места религии|на стороне производителя|против производителя|больше полномочий силовых|больше гражданского контроля):</p>(.*?)(?=<p|</section>)", s, re.S):
+        for group in re.finditer(r"<p>(?:в сторону (?:↑|↓|укрепления|ослабления)|за больше религии|за меньше религии|легче бизнесу|строже к бизнесу|шире силовикам|уже силовикам):</p>(.*?)(?=<p|</section>)", s, re.S):
             block = group[1]
             if not re.fullmatch(r"<ul>(?:<li>.*?</li>)+</ul>", block, re.S):
                 bad.append(f"{n}: примеры без ul/li")

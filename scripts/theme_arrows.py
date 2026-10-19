@@ -258,7 +258,7 @@ def selftest() -> int:
                          patch.object(view, "party_names", return_value={1096: "A", 1108: "B"}), \
                          patch.object(view, "load_ballot", return_value={"unmapped_factions": {}, "lists": [{
                              "factions": [1096, 1108], "absent": [], "ru": "test", "he": "test", "leaders": "test", "letters": "אב"}]}):
-                        assert f"со всеми ({counts[0]}/{counts[1]})" in view.ballot_table(matrix, {})
+                        assert " · ".join(f"со всеми ({n})" for n in dict.fromkeys(counts)) in view.ballot_table(matrix, {})
             for n in (0, 1, 2):
                 small = theme_arrows("security", {"rows": unanimous[:0] if n == 0 else
                                                     [r for r in unanimous if r["bill_id"] <= n]})
