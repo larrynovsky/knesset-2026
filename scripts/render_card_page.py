@@ -128,7 +128,8 @@ def page(card: dict, buckets: dict, names: dict) -> str:
     sys.path.insert(0, str(ROOT / "scripts"))
     from render_overview import (CELL, SHORT_FRAME, css_from_mockup, esc)
     fid = card["faction_id"]
-    ru, he = card.get("party_ru"), card.get("party_he")
+    from render_overview import with_leader
+    ru, he = with_leader(card.get("faction_id") or 0, card.get("party_ru") or ""), card.get("party_he")
     cen = (card.get("votes") or {}).get("census") or {}
     ax = card.get("axis_institutions") or {}
     total = sum(b["votes"] for b in buckets.values())

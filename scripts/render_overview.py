@@ -181,11 +181,29 @@ def other_themes() -> str:
             f'<a href="method.html">Как мы считаем</a>.</p>')
 
 
+# Лидеры фракций в 25-м Кнессете (владелец 19.10: название + лидер или лидеры).
+# По памяти Claude на июнь 2026; не сверено с источником.
+LEADERS = {1095: "Арье Дери", 1096: "Биньямин Нетаньяху", 1097: "Бецалель Смотрич",
+           1098: "Бени Ганц", 1099: "Мансур Аббас", 1100: "Мерав Михаэли, затем Яир Голан",
+           1101: "Моше Гафни, Ицхак Гольдкнопф", 1102: "Яир Лапид",
+           1103: "Айман Уде, Ахмад Тиби", 1104: "Авигдор Либерман",
+           1105: "Бецалель Смотрич", 1106: "Итамар Бен-Гвир", 1107: "Ави Маоз",
+           1108: "Гидеон Саар", 1109: "Идан Роль", 1110: "Бени Ганц"}
+
+
+def with_leader(fid, name: str) -> str:
+    """«Название (лидер)», если лидера ещё нет в названии."""
+    lead = LEADERS.get(int(fid)) if str(fid).isdigit() else None
+    if not lead or lead.split()[-1].split(",")[0] in name:
+        return name
+    return f"{name} — {lead}"
+
+
 def party_names(matrix: dict, cards: dict) -> dict:
     """Те же переводы, что у faction_page и state_page."""
     names = json.loads((ROOT / "criteria/wikidata_crosscheck.json").read_text(encoding="utf-8"))
     by_he = {n["he"]: n["mine"] for group in ("agree", "differ", "missing") for n in names[group]}
-    return {r["anchor_id"]: (cards.get(r["anchor_id"], {}).get("party_ru")
+    return {r["anchor_id"]: with_leader(r["anchor_id"], cards.get(r["anchor_id"], {}).get("party_ru")
                              or by_he.get(r["line"], r["line"])) for r in matrix["lines"]}
 
 
@@ -1266,7 +1284,7 @@ def _gloss(desc: str) -> str:
 def faction_page(card: dict, row: dict, votes: list, budget: str = "", summary: str = "", brief: str = "") -> str:
     """Страница фракции. Клетка оси — details, как в макете; счёт
     голосований уходит ВНУТРЬ раскрытия, а не вываливается на страницу."""
-    ru, he = card.get("party_ru"), card.get("party_he")
+    ru, he = with_leader(card.get("faction_id") or 0, card.get("party_ru") or ""), card.get("party_he")
     v = card.get("votes") or {}
     cen = v.get("census") or {}
     cav = v.get("theme_caveat_ru", "")

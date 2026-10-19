@@ -100,7 +100,8 @@ HE: dict = {}   # ивритские названия фракций — вла�
 
 def two_lang(f, ru: dict) -> str:
     he = HE.get(f)
-    return E(ru.get(f, f)) + (f' <span class=he lang=he dir=rtl><bdi>{E(he)}</bdi></span>' if he else "")
+    from render_overview import with_leader
+    return E(with_leader(f, ru.get(f, f))) + (f' <span class=he lang=he dir=rtl><bdi>{E(he)}</bdi></span>' if he else "")
 
 
 def names_list(fids: list, ru: dict) -> str:
