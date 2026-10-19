@@ -2217,6 +2217,98 @@ def faction_summary(row: dict, card: dict, money_text: str, laws: list[dict], pl
 
 
 
+DYN_THEMES = (("rule_of_law", "institutions", "Суд и права"), ("religion_state", "religion_state", "Религия"),
+              ("economy", "economy", "Экономика"), ("security", "security", "Безопасность"))
+
+
+def spark(points: list, gov: list, labels: list, theme: str, w: int = 120, h: int = 50) -> str:
+    """Мини-график: доля законов в сторону «вверх» (up/(up+down)), точка — при ≥3 законах.
+    Без текста внутри SVG: масштаб viewBox исказил бы кегль; подписи — в HTML рядом."""
+    n, pad = len(points), 5
+    step = (w - 2 * pad) / max(n - 1, 1)
+    out = [f'<svg class="spk" viewBox="0 0 {w} {h}" role="img" aria-label="динамика">']
+    for i, g in enumerate(gov):
+        if g:
+            out.append(f'<rect class=gov x="{max(0, pad + i * step - step / 2):.1f}" y="0" width="{step:.1f}" height="{h}"/>')
+    out.append(f'<line class=mid x1="0" x2="{w}" y1="{h / 2}" y2="{h / 2}"/>')
+    prev = None
+    for i, (up, down) in enumerate(points):
+        if up + down < 3:
+            prev = None
+            continue
+        x, y = pad + i * step, 4 + (h - 8) * (1 - up / (up + down))
+        if prev:
+            out.append(f'<line class="ln t-{theme}" x1="{prev[0]:.1f}" y1="{prev[1]:.1f}" x2="{x:.1f}" y2="{y:.1f}"/>')
+        out.append(f'<circle class="pt t-{theme}" cx="{x:.1f}" cy="{y:.1f}" r="2.4"><title>{esc(labels[i])}: '
+                   f'{up} в одну сторону, {down} в другую</title></circle>')
+        prev = (x, y)
+    out.append("</svg>")
+    return "".join(out)
+
+
+def _in_gov(spans: list, a: str, b: str) -> bool:
+    """Полугодие закрашено, если фракция была в правительстве больше его половины."""
+    from datetime import date
+    tot = (date.fromisoformat(b) - date.fromisoformat(a)).days
+    inside = sum(max(0, (date.fromisoformat(min(b, f)) - date.fromisoformat(max(a, s))).days) for s, f in spans)
+    return inside * 2 > tot
+
+
+def dyn_block(entry: dict, names: dict, data: Path | None = None) -> str:
+    """Главный график страницы списка: 25-й Кнессет по полугодиям, 4 темы (владелец 19.10)."""
+    p = data or ROOT / "data" / "dynamics_25.json"
+    if not p.exists():
+        return ""
+    d = json.loads(p.read_text(encoding="utf-8"))
+    bins = d["bins"]
+    labels = [f"{a[5:7]}.{a[:4]}–{b[5:7]}.{b[:4]}" for a, b in bins]
+    fids = [str(f) for f in entry.get("factions", [])] or (["yashar"] if entry.get("personal") else [])
+    if not fids:
+        return ""
+    rows = []
+    for fid in fids:
+        ser = d["series"].get(fid, {})
+        gov = [_in_gov(d["gov"].get(fid, []), a, b) for a, b in bins]
+        who = "личные голоса Айзенкота и Тропера" if fid == "yashar" else names.get(int(fid), fid)
+        tds = "".join(f'<td>{spark(ser.get(th, [[0, 0]] * len(bins)), gov, labels, th)}</td>' for th, _, _ in DYN_THEMES)
+        rows.append(f'<tr><th scope="row"><bdi>{esc(who)}</bdi></th>{tds}</tr>')
+    head = "".join(f'<th scope="col">{t}<small>вверх — {esc(THEME_WORDS[k][0])}</small></th>' for _, k, t in DYN_THEMES)
+    return ('<section class="list-dyn"><h2>Как менялось в 25-м Кнессете</h2>'
+            '<p>Линия — по полугодиям с 11.2022 по 09.2026: какая доля законов темы легла в сторону, '
+            'названную под заголовком колонки. Верх — все законы в эту сторону, пунктир — поровну, низ — все в другую. '
+            'Точка — если законов в полугодии хотя бы три. Тень — фракция в правительстве. Наведите на точку — числа.</p>'
+            '<table class="list-short-table dyn-table"><thead><tr><th scope="col">Фракция</th>' + head +
+            '</tr></thead><tbody>' + "".join(rows) + '</tbody></table>'
+            '<p class="dyn-axis">В каждом графике слева — конец 2022, справа — лето 2026.</p></section>')
+
+
+def slice_spark(letters: str, entry: dict, data: Path | None = None) -> str:
+    """Под срезами — один мини-график «суд и права» по Кнессетам 20→25 (данных хватает только здесь)."""
+    p = data or ROOT / "data" / "slices.json"
+    q = ROOT / "data" / "dynamics_25.json"
+    if not p.exists() or not q.exists():
+        return ""
+    d = json.loads(p.read_text(encoding="utf-8"))
+    dyn = json.loads(q.read_text(encoding="utf-8"))
+    pts, gov, labels = [], [], []
+    for k in (20, 23, 24):
+        links = d["lines"].get(letters, {}).get(str(k), {}).get("links", [])
+        lk = next((l for l in links if l["type"] in ("party", "leader")), links[0] if links else None)
+        t = (lk or {}).get("themes", {}).get("rule_of_law") or {}
+        pts.append([t.get("up") or 0, t.get("down") or 0])
+        gov.append(bool(lk) and lk["role"] in ("в правительстве", "в коалиции, без министров"))
+        labels.append(f'{k}-й Кнессет' + (f' ({lk["note"] or ""})' if lk and lk["note"] else ""))
+    fids = [str(f) for f in entry.get("factions", [])] or (["yashar"] if entry.get("personal") else [])
+    tot = [sum(x[0] for x in dyn["series"].get(fids[0], {}).get("rule_of_law", [])),
+           sum(x[1] for x in dyn["series"].get(fids[0], {}).get("rule_of_law", []))] if fids else [0, 0]
+    pts.append(tot); gov.append(False); labels.append("25-й Кнессет (все полугодия вместе)")
+    if sum(1 for u, dn in pts if u + dn >= 3) < 2:
+        return ""
+    return ('<div class="slice-spark"><p><b>Суд и права по Кнессетам 20 → 23 → 24 → 25</b> '
+            '(21-й и 22-й без законов темы). Линия идёт по главной партии списка в каждом Кнессете; '
+            'тень — в правительстве.</p>' + spark(pts, gov, labels, "rule_of_law", w=120, h=50) + '</div>')
+
+
 SLICE_YEARS = {20: "2015–2019", 21: "2019", 22: "2019–2020", 23: "2020–2021", 24: "2021–2022"}
 SLICE_THEMES = (("rule_of_law", "institutions", "Суд и права"), ("religion_state", "religion_state", "Религия"),
                 ("economy", "economy", "Экономика"), ("security", "security", "Безопасность"))
@@ -2243,6 +2335,7 @@ def slice_block(letters: str, data: Path | None = None, ru: str = "") -> str:
     if not p.exists():
         return ""
     d = json.loads(p.read_text(encoding="utf-8"))
+    factions_of = {e["letters"]: e.get("factions", []) for e in load_ballot()["lists"]}
     by_k = d["lines"].get(letters, {})
     names = {r["Id"]: r["Name"] for r in json.loads((ROOT / "data" / "kns_faction_20_24.json").read_text(encoding="utf-8"))}
     rows = []
@@ -2312,6 +2405,7 @@ def slice_block(letters: str, data: Path | None = None, ru: str = "") -> str:
             '<p>В правительстве партия голосует иначе, чем в оппозиции: если направление поменялось '
             'вместе с ролью, это не обязательно смена взглядов. Фракции одной коалиции часто голосуют '
             'одинаково — тогда и строки у них совпадают.</p>'
+            + slice_spark(letters, {"factions": factions_of.get(letters, []), "personal": letters == "דרך"}) +
             '<table class="list-short-table"><thead><tr><th scope="col">Кнессет</th>' +
             "".join(f'<th scope="col">{t}</th>' for _, _, t in SLICE_THEMES) + '</tr></thead><tbody>' +
             "".join(rows) + '</tbody></table><p class=dim>25-й Кнессет (2022–2026) — в таблице «Коротко» выше.</p></section>')
@@ -2447,10 +2541,14 @@ def ballot_pages(matrix: dict, cards: dict, summaries: dict,
 .list-short-table small{{display:block;font-size:.78rem;color:var(--dim);font-weight:400}}
 .short-who{{font-size:.78rem}}
 .slice-who{{font-size:.78rem;color:var(--dim);border-bottom:none}}
+.spk{{width:100%;height:auto;display:block}} .spk .gov{{fill:var(--panel)}} .spk .mid{{stroke:var(--rule);stroke-dasharray:2 2}}
+.spk .ln{{fill:none;stroke-width:1.6}} .t-rule_of_law{{stroke:var(--ax-inst);fill:var(--ax-inst)}} .t-religion_state{{stroke:var(--ax-rel);fill:var(--ax-rel)}}
+.t-economy{{stroke:var(--ax-econ);fill:var(--ax-econ)}} .t-security{{stroke:var(--ax-sec);fill:var(--ax-sec)}}
+.dyn-table th small{{display:block;font-weight:400;color:var(--dim);font-size:.78rem}} .slice-spark{{max-width:11rem}} .dyn-axis{{font-size:.78rem;color:var(--dim)}}
 </style></head><body>
 <nav class=crumbs><a href="index.html#ballot">Все списки</a></nav>
 <h1><span class="ballot-letters" lang="he" dir="rtl" title="буквы на бюллетене">{esc(entry["letters"])}</span> {esc(entry["ru"])} <span lang=he dir=rtl><bdi>{esc(entry["he"])}</bdi></span></h1>
-<p class=lead>{esc(entry["leaders"])}</p>{short}{slice_block(entry["letters"], ru=entry["ru"])}
+<p class=lead>{esc(entry["leaders"])}</p>{short}{dyn_block(entry, names)}{slice_block(entry["letters"], ru=entry["ru"])}
 <p class="letters-source">{esc(ballot["letters_source"])}</p>
 <h2>Подробности</h2><p>«Не уверены» — вывод может смениться, если смысл каждого десятого закона прочитан с ошибкой.</p>{body}<footer>{SHORT_FRAME}</footer>
 </body></html>'''

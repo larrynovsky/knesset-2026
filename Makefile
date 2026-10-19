@@ -53,7 +53,9 @@ selftest-code:
 	$(PY) scripts/build_line_cards.py --selftest
 	$(PY) scripts/render_card_page.py --selftest
 	$(PY) scripts/slice_arrows.py --selftest
+	$(PY) scripts/dynamics.py --selftest
 	$(PY) scripts/crosscheck_slices.py --selftest
+	$(PY) scripts/crosscheck_dynamics.py --selftest
 
 robustness:
 	$(PY) scripts/arrow_robustness.py
@@ -61,6 +63,7 @@ robustness:
 slices:
 	# срезы 20–24: data/slices.json нужен selftest рендера — считается до него
 	$(PY) scripts/slice_arrows.py
+	$(PY) scripts/dynamics.py
 
 report: robustness slices selftest-code
 	# §24 локально, как на Studio: иначе MANIFEST отстаёт молча и Studio встаёт (19.10, 14:04–15:40)
@@ -69,6 +72,7 @@ report: robustness slices selftest-code
 	$(PY) scripts/check_report_canon.py --build
 	$(PY) scripts/crosscheck_owner_laws.py
 	$(PY) scripts/crosscheck_slices.py
+	$(PY) scripts/crosscheck_dynamics.py
 
 stamp:
 	$(PY) scripts/build_report.py --stamp
