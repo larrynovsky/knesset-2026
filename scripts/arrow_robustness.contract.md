@@ -27,3 +27,13 @@ JSON: topics → theme → factions → faction ID → arrow/up/down/retained/ra
 
 Ponytail: потребность явно заказана; stdlib random/json достаточно;
 существующие compose/arrow_of и загрузчики использованы; новых зависимостей нет.
+
+Кэш v46: inputs_sha — SHA-256 имён и байтов голосов, direction_arrow, всех
+theme_signs/claude_tiebreak_signs/axis_second_reading, YAML порогов, таблиц
+for_option_sign и исходников расчёта/загрузчиков; RUNS, SEED, PS входят явно.
+Совпадение пропускает build; отсутствие/старый/повреждённый JSON пересчитывается.
+JSON заменяется атомарно; изменение входов во время расчёта вызывает отказ.
+Параллельные холодные запуски могут считать одновременно; блокировки нет.
+make robustness вызывает расчёт с кэшем; report зависит от robustness.
+--selftest проверяет однобайтовую мутацию каждого семейства входов, параметры,
+добавление/удаление файла и запрет build при совпавшем inputs_sha.

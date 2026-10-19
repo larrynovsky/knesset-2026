@@ -470,6 +470,7 @@ def build(m: dict, cards: dict | None = None,
 .ballot,.ballot *{{overflow-wrap:normal;word-break:normal;hyphens:manual}}
 .ballot thead th{{white-space:nowrap}}
 .ballot-legend{{margin:1rem 0}}
+.faction-details>summary{{cursor:pointer;font:14px/1.5 system-ui,sans-serif;overflow-wrap:normal}}
 .robustness{{font-size:.75em;white-space:nowrap}}
 .ballot th:first-child{{width:28%}}
 .ballot-laws{{display:flex;gap:4px;align-items:flex-start}}
@@ -494,6 +495,7 @@ def build(m: dict, cards: dict | None = None,
 голос в Кнессете записан поимённо и никуда не денется.</p>
 {FRAME}
 {ballot_table(m, cards or {})}
+<details class="faction-details"><summary>Подробно по 16 фракциям нынешнего Кнессета (для проверки)</summary>
 {grounds_block(m, cards or {})}
 <h2>Сначала о том, чего мы не знаем</h2>
 <p>Клеток в таблице ниже — <b class=big>{total}</b>С итоговым выводом — {filled};
@@ -521,6 +523,7 @@ def build(m: dict, cards: dict | None = None,
 {body}
 </tbody></table>
 {theme_table(m, cards)}
+</details>
 {other_themes()}
 <div class=foot><p>Первая грубая итерация, 19.10.2026.
 Форма принята 01.08.2026 (design/mockup_v5). Снимок голосований:
@@ -1305,7 +1308,9 @@ def selftest() -> int:
         for name in ("f-1.html", "f-2.html", "f-3.html", "axes.html", "grounds.html", "time.html", "method.html"):
             (site / name).write_text(state, encoding="utf-8")
         n = check_index_links(site)
-        (site / "index.html").write_text(doc + '<a href="missing.html">нет</a>', encoding="utf-8")
+        (site / "index.html").write_text(doc.replace(
+            '<details class="faction-details">',
+            '<details class="faction-details"><a href="missing.html">нет</a>'), encoding="utf-8")
         rejects("несуществующий href", lambda: check_index_links(site))
         (site / "index.html").write_text(doc, encoding="utf-8")
         assert check_index_links(site) == n

@@ -369,13 +369,21 @@ def c_palette(src):
     return len(used), sorted(used - decl), f"{len(used)} красок"
 
 @check("семантика: thead/scope, details/summary, bdi",
-       [("пример без списка", lambda s: edit(s, "index.html", "<h1>", "<p>в сторону ↑:</p><p>пример</p><h1>")),
+       [("фракции раскрыты по умолчанию", lambda s: edit(s, "index.html", '<details class="faction-details">', '<details open class="faction-details">')),
+        ("таблицы вынесены из раскрытия", lambda s: edit(s, "index.html", '</summary>\n<h2 id="grounds">', '</summary></details>\n<h2 id="grounds">')),
+        ("пример без списка", lambda s: edit(s, "index.html", "<h1>", "<p>в сторону ↑:</p><p>пример</p><h1>")),
         ("два примера в одном пункте", lambda s: edit(s, "index.html", "<h1>", "<p>в сторону укрепления:</p><ul><li><bdi>один</bdi>; <bdi>два</bdi></li></ul><h1>")),
         ("таблица без thead", lambda s: edit(s, "index.html", "<thead>", "<tbody-x>")),
         ("th без scope", lambda s: dict(s, **{"index.html": s["index.html"].replace("scope=col", "")})),
         ("RTL без bdi", lambda s: dict(s, **{k: v.replace("<bdi>", "").replace("</bdi>", "") for k, v in s.items()}))])
 def c_sem(src):
     bad = []
+    overview = src["index.html"]
+    block = re.search(r'<details class="faction-details"><summary>Подробно по 16 фракциям нынешнего Кнессета \(для проверки\)</summary>(.*?)</details>', overview, re.S)
+    if not block or re.findall(r'<table class=["\']?([\w-]+)', block[1]) != ["owner-laws", "ov", "acts"]:
+        bad.append("три фракционные таблицы должны быть в закрытом details в прежнем порядке")
+    elif '<table class="ballot">' not in overview[:block.start()] or '<table class="ballot">' in block[1]:
+        bad.append("бюллетень должен предшествовать фракционному раскрытию")
     for n, s in src.items():
         for group in re.finditer(r"<p>в сторону (?:↑|↓|укрепления|ослабления):</p>(.*?)(?=<p|</section>)", s, re.S):
             block = group[1]
@@ -456,6 +464,13 @@ def selftest(src):
     for bad in ("1 законов", "21 актов", "101 голосований", "131 обещаний",
                 "4 законов", "22 актов", "из 131 законов", "<b>21</b> актов"):
         assert c_plural_ru({"test.html": bad})[1], bad
+    # v47: закрытое раскрытие не должно скрывать клетки от канона.
+    overview = src["index.html"]
+    folded = overview.split('<details class="faction-details">', 1)[1].split('</details>', 1)[0]
+    assert CELL_RX.search(folded) and 'class=c-eq' in folded
+    unwrapped = dict(src, **{"index.html": overview.replace('<details class="faction-details">' + folded + '</details>', folded)})
+    for guard in (c_closed, c_digits, c_texture):
+        assert guard(src) == guard(unwrapped), guard.__name__
     print("── чистый вход: обязан быть зелёным")
     rows = run(src)
     if any(x[0] == "КРАСНЫЙ" for x in rows):

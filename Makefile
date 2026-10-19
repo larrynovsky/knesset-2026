@@ -1,7 +1,7 @@
 # §14: детерминированность локальной сборки, не восстановление источников.
 PY ?= python3
 
-.PHONY: help check check-net fetch fetch-report validate report selftest-code stamp reproduce layout selftest repro-selftest
+.PHONY: help check check-net fetch fetch-report validate report robustness selftest-code stamp reproduce layout selftest repro-selftest
 
 help:
 	@echo "check      — самопроверки без сети (валидатор карточки, генератор, §3, §24)"
@@ -41,7 +41,6 @@ validate:
 # Без браузера, ~1 с. Самопроверка канона идёт внутри --build на свежей
 # сборке, до замены site/.
 selftest-code:
-	$(PY) scripts/arrow_robustness.py
 	$(PY) scripts/arrow_robustness.py --selftest
 	$(PY) scripts/theme_arrows.py --selftest
 	$(PY) scripts/validate_cards.py --selftest
@@ -51,7 +50,10 @@ selftest-code:
 	$(PY) scripts/build_line_cards.py --selftest
 	$(PY) scripts/render_card_page.py --selftest
 
-report: selftest-code
+robustness:
+	$(PY) scripts/arrow_robustness.py
+
+report: robustness selftest-code
 	$(PY) scripts/check_report_canon.py --build
 
 stamp:

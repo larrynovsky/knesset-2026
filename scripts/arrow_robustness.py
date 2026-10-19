@@ -2,6 +2,7 @@
 """§14, §20: воспроизводимая чувствительность стрелок к ошибкам знаков."""
 from __future__ import annotations
 
+import hashlib
 import json
 import random
 import sys
@@ -16,6 +17,49 @@ RUNS, SEED = 2000, 35
 PS = (0.10, 0.17, 0.33)
 TITLES = {"rule_of_law": "Суд, парламент, свободы", **THEMES}
 LEGEND = "Устойчивость: ? — шаткая, ?? — ненадёжна (стрелка может смениться, если каждый десятый знак закона ошибочен)"
+
+
+def inputs_sha(root: Path = ROOT) -> str:
+    """Hash names and bytes, including membership of optional input families."""
+    from render_method import ARROW, VOTES
+    paths = {root / p.relative_to(ROOT) for p in (ARROW, VOTES)}
+    paths.update(root / "scripts" / name for name in (
+        "arrow_robustness.py", "direction_confidence.py", "theme_arrows.py",
+        "build_line_cards.py", "validate_cards.py", "render_method.py"))
+    for pattern in ("criteria/theme_signs_*.json", "criteria/claude_tiebreak_signs_*.json",
+                    "criteria/axis_second_reading_*.json", "criteria/declared_before_arrow_*.yaml",
+                    "docs/reference/for_option_sign_*.json"):
+        paths.update(root.glob(pattern))
+    digest = hashlib.sha256(json.dumps([RUNS, SEED, PS]).encode())
+    for path in sorted(paths):
+        digest.update(path.relative_to(root).as_posix().encode() + b"\0")
+        digest.update(hashlib.sha256(path.read_bytes()).digest())
+    return digest.hexdigest()
+
+
+def run() -> None:
+    sha = inputs_sha()
+    output = ROOT / "data" / "arrow_robustness.json"
+    try:
+        cached = json.loads(output.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        cached = None
+    if isinstance(cached, dict) and cached.get("inputs_sha") == sha:
+        print(f"устойчивость: кэш верен (sha {sha})")
+        return
+    data = build()
+    # Не выдаём расчёт за актуальный, если входы менялись во время симуляции.
+    if inputs_sha() != sha:
+        raise RuntimeError("входы устойчивости изменились во время расчёта")
+    data["inputs_sha"] = sha
+    (ROOT / "reviews" / "arrow_robustness_v35.md").write_text(review(data), encoding="utf-8")
+    # Уникальный временный файл: параллельный читатель не увидит обрезанный JSON.
+    from tempfile import NamedTemporaryFile
+    with NamedTemporaryFile(mode="w", encoding="utf-8", dir=output.parent,
+                            prefix=".arrow_robustness-", delete=False) as tmp:
+        json.dump(data, tmp, ensure_ascii=False, indent=2)
+        tmp.write("\n")
+    Path(tmp.name).replace(output)
 
 
 def label(rate: float) -> str:
@@ -108,6 +152,52 @@ def review(data: dict) -> str:
 
 def selftest() -> None:
     from unittest.mock import patch
+    from tempfile import TemporaryDirectory
+    # Список независим от discovery внутри inputs_sha: исключённый файл краснеет.
+    fixtures = ["data/votes_25.json", "data/direction_arrow_2026-10-07.json",
+                "criteria/theme_signs_economy.json", "criteria/theme_signs_religion_state.json",
+                "criteria/theme_signs_security.json", "criteria/claude_tiebreak_signs_test.json",
+                "criteria/axis_second_reading_test.json", "criteria/declared_before_arrow_test.yaml",
+                "docs/reference/for_option_sign_test.json"]
+    fixtures += ["scripts/" + name for name in (
+        "arrow_robustness.py", "direction_confidence.py", "theme_arrows.py",
+        "build_line_cards.py", "validate_cards.py", "render_method.py")]
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        for name in fixtures:
+            path = root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("1")
+        baseline = inputs_sha(root)
+        for name in fixtures:
+            path = root / name
+            path.write_text("0")
+            assert inputs_sha(root) != baseline, f"вход исключён из хеша: {name}"
+            path.write_text("1")
+        for name, value in (("RUNS", RUNS + 1), ("SEED", SEED + 1), ("PS", (.11, .17, .33))):
+            with patch(__name__ + "." + name, value):
+                assert inputs_sha(root) != baseline, name
+        optional = root / "criteria/axis_second_reading_extra.json"
+        optional.write_text("1")
+        assert inputs_sha(root) != baseline
+        optional.unlink()
+        assert inputs_sha(root) == baseline
+        # Имитация мутанта: байты одного входа перестали влиять на хеш.
+        original_read = Path.read_bytes
+        omitted = root / fixtures[0]
+        with patch.object(Path, "read_bytes", lambda p: b"1" if p == omitted else original_read(p)):
+            omitted.write_text("0")
+            try:
+                assert inputs_sha(root) != baseline, "вход исключён из хеша"
+            except AssertionError:
+                pass
+            else:
+                raise AssertionError("мутант хеша выжил")
+        assert inputs_sha(root) != baseline
+    with patch(__name__ + ".inputs_sha", return_value="test-sha"), \
+         patch.object(Path, "read_text", return_value='{"inputs_sha": "test-sha"}'), \
+         patch(__name__ + ".build", side_effect=AssertionError("симуляция при верном кэше")):
+        run()
     rows = [{"bill_id": i, "vote_id": i, "for_option_desc": "test",
              "by_faction": {"1|A": {"for": 10}, "2|B": {"against": 10}}} for i in range(100)]
     table, rule = {"test": {"sign": "carries"}}, {"split_below": .5, "drop_below": .1}
@@ -136,6 +226,4 @@ if __name__ == "__main__":
     if "--selftest" in sys.argv:
         selftest()
     else:
-        data = build()
-        (ROOT / "data" / "arrow_robustness.json").write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        (ROOT / "reviews" / "arrow_robustness_v35.md").write_text(review(data), encoding="utf-8")
+        run()
