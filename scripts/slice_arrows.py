@@ -95,7 +95,10 @@ def compute() -> dict:
                 continue
             have.append(th)
             arrows[th] = theme_arrows(th, votes, signs=signs)
+        signed = {b for th in have for b, sg in (load_signs(n, th) or {}).items() if sg}
+        voted_bills = {r["bill_id"] for r in votes["rows"]}
         out["knessets"][str(n)] = {"status": "ok" if have else "нет знаков", "themes": have,
+                                   "signed_bills": len(signed & voted_bills),
                                    "rows": len(votes["rows"]),
                                    "bills": len({r["bill_id"] for r in votes["rows"]})}
         for let, by_k in lin["lines"].items():

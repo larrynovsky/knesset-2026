@@ -351,6 +351,19 @@ def fetch_headers() -> list[dict]:
     """Шапки голосований 25-го Кнессета. §10: опции «за»/«против» обязательны."""
     flt = f"VoteDateTime ge {K25_START} and VoteDateTime lt {K25_END}"
     print(f"§23 ожидание для KNS_PlenumVote: спрашиваю независимым счётчиком…")
+    if K25_NUM == 20:
+        # Замер 19.10: $count по всему окну 20-го (7 537 голосований) сервер не
+        # отдаёт — пустой ответ, тайм-аут. По годам отдаёт. Ожидание объявляется
+        # по каждому году отдельно, сумма окон = окно Кнессета (смыкание ниже).
+        cuts = [K25_START] + [f"{y}-01-01T00:00:00Z" for y in range(2016, 2020)] + [K25_END]
+        cuts = sorted(c for c in cuts if K25_START <= c <= K25_END)
+        out = []
+        for lo, hi in zip(cuts, cuts[1:]):
+            out += fetch_all("KNS_PlenumVote", flt=f"VoteDateTime ge {lo} and VoteDateTime lt {hi}",
+                             select="Id,VoteDateTime,ItemID,SessionID,VoteTitle,VoteSubject,"
+                                    "IsNoConfidenceInGov,ForOptionDesc,AgainstOptionDesc,VoteStatusDesc")
+        assert len({h["Id"] for h in out}) == len(out), "окна по годам перекрылись"
+        return out
     return fetch_all(
         "KNS_PlenumVote", flt=flt,
         select="Id,VoteDateTime,ItemID,SessionID,VoteTitle,VoteSubject,"

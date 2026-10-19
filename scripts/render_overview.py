@@ -2237,6 +2237,10 @@ def slice_block(letters: str, data: Path | None = None) -> str:
         if kn.get("status") != "ok":
             rows.append(f'<tr data-slice-k="{k}">{head}<td colspan=4>ещё не посчитано</td></tr>')
             continue
+        if kn.get("signed_bills") == 0:
+            rows.append(f'<tr data-slice-k="{k}">{head}<td colspan=4>голосований по законам этих тем не было: '
+                        'Кнессет распустили через несколько месяцев</td></tr>')
+            continue
         units = []
         for link in cell.get("links", []):
             label = esc(link["note"] or names.get(link["fid"], str(link["fid"])))
