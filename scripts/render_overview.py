@@ -2215,7 +2215,7 @@ def slice_word(t: dict | None, key: str) -> str:
     if not t or not t.get("arrow"):
         n = (t or {}).get("up", 0) or 0
         n += (t or {}).get("down", 0) or 0
-        return f"мало законов ({n})" if n else "нет законов"
+        return f"мало законов ({n})" if n else "нет учтённых законов"
     word = dict(zip(("up", "down", "both"), THEME_WORDS[key]))[t["arrow"]]
     up, down = t.get("up", 0) or 0, t.get("down", 0) or 0
     count = f"{up} и {down}" if t["arrow"] == "both" else f'{up if t["arrow"] == "up" else down} из {up + down}'
@@ -2237,10 +2237,7 @@ def slice_block(letters: str, data: Path | None = None, ru: str = "") -> str:
         if kn.get("status") != "ok":
             rows.append(f'<tr data-slice-k="{k}">{head}<td colspan=4>ещё не посчитано</td></tr>')
             continue
-        if kn.get("signed_bills") == 0:
-            rows.append(f'<tr data-slice-k="{k}">{head}<td colspan=4>голосований по законам этих тем не было: '
-                        'Кнессет распустили через несколько месяцев</td></tr>')
-            continue
+        empty = kn.get("signed_bills") == 0
         units = []
         for link in cell.get("links", []):
             he = names.get(link["fid"], str(link["fid"]))
@@ -2257,9 +2254,19 @@ def slice_block(letters: str, data: Path | None = None, ru: str = "") -> str:
             rows.append(f'<tr data-slice-k="{k}">{head}<td colspan=4>личных голосов по законам этих тем нет</td></tr>')
             continue
         if not units:
-            rows.append(f'<tr data-slice-k="{k}">{head}<td colspan=4>в этом Кнессете списка и его людей не было</td></tr>')
+            text = ("фракции этого списка по законам нашей выборки не голосовали" if cell.get("silent")
+                    else "в этом Кнессете списка и его людей не было")
+            rows.append(f'<tr data-slice-k="{k}">{head}<td colspan=4>{text}</td></tr>')
             continue
+        if empty:
+            units.append(("", {}))
         for i, (label, themes) in enumerate(units):
+            if empty:
+                text = label or ('законов этих тем с понятным направлением в нашей выборке нет: Кнессет '
+                                 'работал несколько месяцев. Это не значит, что партии ничего не делали')
+                rows.append(f'<tr data-slice-k="{k}">' + (head if i == 0 else '<td></td>') +
+                            f'<td colspan=4 class=slice-who>{text}</td></tr>')
+                continue
             tds = "".join(f'<td data-slice-theme="{th}">{slice_word(themes.get(th), key)}</td>'
                           for th, key, _ in SLICE_THEMES)
             rows.append(f'<tr data-slice-k="{k}">' + (head if i == 0 else '<td></td>') +

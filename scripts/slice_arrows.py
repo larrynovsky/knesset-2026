@@ -104,6 +104,8 @@ def compute() -> dict:
             continue
         votes = json.loads(vp.read_text(encoding="utf-8"))
         gd = gov_spans(n)
+        for fid, spans in lin.get("gov_override", {}).get(str(n), {}).items():
+            gd[int(fid)] = [tuple(x) for x in spans]   # решение в критериях, причина — gov_override_note
         arrows, have = {}, []
         for th in THEMES4:
             signs = load_signs(n, th)
@@ -123,7 +125,9 @@ def compute() -> dict:
             for fid, typ, *note in by_k.get(str(n), []):
                 voted = sum(1 for r in votes["rows"] if any(k.split("|")[0] == str(fid) for k in r["by_faction"]))
                 if not voted:
-                    # фракция возникла после последнего голосования (роспуск 30.06.2022) — голосов нет
+                    # фракция возникла после последнего голосования (роспуск 30.06.2022) или не
+                    # голосовала по законам выборки — звена нет, но факт записан для страницы
+                    cell.setdefault("silent", []).append(fid)
                     continue
                 cell["links"].append({
                     "fid": fid, "type": typ, "note": note[0] if note else "", "votes": voted,

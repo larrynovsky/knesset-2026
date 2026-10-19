@@ -362,8 +362,15 @@ def fetch_headers() -> list[dict]:
             out += fetch_all("KNS_PlenumVote", flt=f"VoteDateTime ge {lo} and VoteDateTime lt {hi}",
                              select="Id,VoteDateTime,ItemID,SessionID,VoteTitle,VoteSubject,"
                                     "IsNoConfidenceInGov,ForOptionDesc,AgainstOptionDesc,VoteStatusDesc")
-        assert len({h["Id"] for h in out}) == len(out), "окна по годам перекрылись"
-        return out
+        # Источник сам отдаёт дубли строк (замер 19.10: голосование 37161 трижды в окне 2016;
+        # в 25-м — 1809 строк на 1806 голосований), и $count считает их тоже. Дубль — не
+        # перекрытие окон: окна смыкаются по WINDOWS и cuts. Сворачиваем по Id и называем число.
+        seen, uniq = set(), []
+        for h in out:
+            if h["Id"] not in seen:
+                seen.add(h["Id"]); uniq.append(h)
+        print(f"   дублей строк источника свёрнуто: {len(out) - len(uniq)}")
+        return uniq
     return fetch_all(
         "KNS_PlenumVote", flt=flt,
         select="Id,VoteDateTime,ItemID,SessionID,VoteTitle,VoteSubject,"
