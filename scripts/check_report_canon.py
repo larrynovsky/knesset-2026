@@ -636,10 +636,16 @@ def c_digits(src):
         _h.unescape(re.sub(r"<[^>]+>", "", t))))]
     return len(tds), bad[:3], f"{len(tds)} клеток"
 
-@check("v45: четыре закона — участие и счёт депутатов",
+@check("v45/v71: четыре закона — наличие фракции, участие и счёт депутатов",
        [("бойкот в бюллетене подменён голосом одного", lambda s: edit(s, "index.html", "не голос. (1 против)", "против")),
         ("бойкот подменён голосом одного", lambda s: edit(s, "index.html", "— (1 против)", "против")),
         ("потерян счёт", lambda s: edit(s, "index.html", "не голосовали ≥22", "не голосовали неизвестно")),
+        *[(f"v71 {name}: отсутствие подменено неучастием", lambda s, n=name: edit(s, n, ">фракции не было", ">не голос."))
+          for name in ("index.html", "cheatsheet.html", "l-1.html")],
+        *[(f"v71 {name}: неучастие подменено отсутствием", lambda s, n=name: edit(s, n, ">не голос. (1 против)<", ">фракции не было<"))
+          for name in ("index.html", "l-2.html")],
+        ("v71 шпаргалка: неучастие подменено отсутствием", lambda s: edit(s, "cheatsheet.html", ">не голос. <small>(1 против)</small>", ">фракции не было")),
+        ("v71 шпаргалка: потерян отдельный голос", lambda s: edit(s, "cheatsheet.html", " <small>(1 против)</small>", "")),
         ("потерян счёт в списке", lambda s: edit(s, "l-2.html", "не голосовали ≥22", "не голосовали неизвестно"))])
 def c_owner_votes(src):
     bad, inspected = [], 0
@@ -674,6 +680,58 @@ def c_owner_votes(src):
             bad.append("бюллетень: нет четырёх подсказок со счётом")
     if "— — нет позиции, фракция не голосовала или голосовала меньше трети; причины неучастия здесь не установлены" not in src["index.html"]:
         bad.append("нет легенды бойкота")
+    # v71 / v68: ожидание из сохранённых данных, а не owner_law_positions или HTML.
+    # Последняя запись каждого из четырёх актов в этом снимке — стадия принятия.
+    # Отсутствие ключа — правило снимка; исторических дат существования здесь нет.
+    from render_grounds import read_marks, MARKS
+    from render_overview import ALIAS
+    votes = json.loads((ROOT / "data/votes_25.json").read_text())["rows"]
+    bills = [b for b, m in read_marks(MARKS).items() if m["mark"] == "недопустимо"]
+    days = [max(r["date"] for r in votes if r.get("bill_id") == b)[:10] for b in bills]
+    active = [{k.split("|", 1)[0] for r in votes if r["date"][:10] == day
+               for k in r["by_faction"]} for day in days]
+    if len(active) != 4 or not all(active):
+        bad.append("v71: нет четырёх непустых дней голосований")
+    for fid, row in rows:
+        cells = re.findall(r'<td title="[^"]*">(.*?)</td>', row)
+        for i, cell in enumerate(cells[:4]):
+            absent = str(ALIAS.get(int(fid), int(fid))) not in active[i]
+            if (text_of(cell).strip() == "фракции не было") != absent:
+                bad.append(f"v71 фракция {fid}, закон {i+1}: отсутствие не совпало с данными дня")
+    ballot = json.loads((ROOT / "criteria/ballot_2026.json").read_text())["lists"]
+    for number, entry in enumerate(ballot, 1):
+        fids = entry.get("factions", [])
+        if not fids:
+            continue
+        for name in ("index.html", "cheatsheet.html", f"l-{number}.html"):
+            page = src.get(name, "")
+            if name.startswith("l-"):
+                for fid in fids:
+                    cells = re.findall(r'<td data-short-law="[1-4]" data-fid="' + str(fid) + r'">(.*?)</td>', page)
+                    if len(cells) != 4:
+                        bad.append(f"v71 {name}/{fid}: нет четырёх клеток")
+                    for i, cell in enumerate(cells[:4]):
+                        inspected += 1
+                        if (text_of(cell).strip() == "фракции не было") != (str(ALIAS.get(fid, fid)) not in active[i]):
+                            bad.append(f"v71 {name}/{fid}, закон {i+1}: неверное отсутствие")
+                continue
+            row = re.search(r'<tr data-ballot-list="' + re.escape(_h.escape(entry["he"], quote=True)) + r'".*?</tr>', page, re.S)
+            block = re.search(r'<span class="ballot-laws">(.*?)</span></td>', row[0], re.S) if row else None
+            cells = re.findall(r'<span(?: title="[^"]*")?>(.*?)</span>', block[1], re.S) if block else []
+            if len(cells) != 4:
+                bad.append(f"v71 {name}/{number}: нет четырёх клеток")
+            for i, cell in enumerate(cells[:4]):
+                inspected += 1
+                expected = sum(str(ALIAS.get(f, f)) not in active[i] for f in fids)
+                # Одинаковые позиции нескольких фракций объединяются в одну метку.
+                expected = 1 if expected == len(fids) else expected
+                if text_of(cell).count("фракции не было") != expected:
+                    bad.append(f"v71 {name}/{number}, закон {i+1}: неверное отсутствие")
+                if name == "cheatsheet.html" and 1102 in fids and i == 0 and "<small>(1 против)</small>" not in cell:
+                    bad.append("v71 Беяхад: шпаргалка потеряла отдельный голос")
+    for name in ("index.html", "cheatsheet.html"):
+        if "фракции не было — в день голосования такой фракции в Кнессете не было (раскол, переименование)" not in src[name]:
+            bad.append(f"v71 {name}: нет легенды отсутствия")
     return inspected, bad, f"{inspected} позиций с депутатским счётом"
 
 
