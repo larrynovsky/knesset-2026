@@ -6,7 +6,7 @@
   ],
   "period_start": "2021-06-13",
   "period_finish": "2022-12-29",
-  "declaration": "User v28, 19.10.2026; declared before OCR. Uncommitted by explicit request. Extraction rule unchanged.",
+  "declaration": "User v28, 19.10.2026; declared before OCR. Uncommitted by explicit request. Original extraction unchanged in v28; revised by user v31 below.",
   "candidate_lines_expected": null,
   "reason_if_unchecked": "No independent count of monetary lines in unread scans. Exact page counts protect corpus completeness, not semantic recall.",
   "agreements": [
@@ -67,5 +67,18 @@
       "period_id": "kaveiyesod-gov36"
     }
   ],
-  "page_count_evidence": "User counts in sorted filename order, verified independently with pdfinfo before completed OCR; initial party-order interpretation rejected."
+  "page_count_evidence": "User counts in sorted filename order, verified independently with pdfinfo before completed OCR; initial party-order interpretation rejected.",
+  "revision_v31": {
+    "authorization": "User v31, 19.10.2026; no commit requested; CA37 rule unchanged",
+    "budget_file": "budget_takanot_2021_2022.json",
+    "extraction": "CA36 only: explicit approval/funding verbs inherited within OCR paragraphs bounded by blank lines or numbered items; explicit funding without amount (including להפנות תקציבים), one per paragraph; bare budget mention is not commitment; quoted units, digit-unit hyphens, מיליארר/מיליארך supported. Original quote preserved.",
+    "raam_minimum_amounts_ils": [
+      30000000000,
+      2500000000,
+      20000000000,
+      1000000000,
+      100000000
+    ],
+    "limit": "Minimum recall reference, not a full census. No fuzzy arbitrary OCR correction; candidates remain subject to human mapping review."
+  }
 }

@@ -1314,7 +1314,7 @@ def _money_td(doc: str, fid: int) -> str:
 def _cell_word(html: str, where: str) -> str:
     words = [w for w in [v[1] for v in CELL.values()] + ["денежных обещаний пока не разбирали"] if f">{w}<span class=lb>" in html
              or f">{w}</b>" in html]
-    words += re.findall(r"в соглашении 2021 года найдено [0-9]+ денежных обещаний; [^<]+(?=<span class=lb>|</b>)", html)
+    words += re.findall(r"в соглашении 2021 года найдено [^<]+(?=<span class=lb>|</b>)", html)
     words += re.findall(r"в бюджете нашлась строка под [0-9]+ из [0-9]+ обещаний(?=<span class=lb>|</b>)", html)
     if len(words) != 1:
         raise Refuse(f"{where}: значений клетки {words}, а не одно")

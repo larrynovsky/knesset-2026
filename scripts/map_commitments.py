@@ -233,7 +233,13 @@ def _in_base(s: str) -> bool:
     return any(m in s for m in BASE_MARK)
 
 
-def candidates(lines: list[str], units: list[str]) -> list[dict]:
+# CA36-only revision: explicit funding/approval, never generic support for a budget.
+CA36_ACTION = re.compile(r"(?<![א-ת])(?:ו)?(?:לתקצב|תקצוב|תאשר|תאמצ|לאישור תכנית)(?![א-ת])")
+CA36_FUNDING = re.compile(r"לתקצב|תקצוב|יתוקצב|תתוקצב|להפנות תקציב|יוקצ[וה] תקציב")
+CA36_BUDGET = re.compile(r"תקציב|תקצוב|לתקצב|יתוקצב|תתוקצב")
+
+
+def candidates(lines: list[str], units: list[str], ca36: bool = False) -> list[dict]:
     """Строки с числом и денежной единицей, с якорем страницы и заголовком.
 
     Заголовок перечня сумм не содержит и потому сам кандидатом не является —
@@ -254,6 +260,9 @@ def candidates(lines: list[str], units: list[str]) -> list[dict]:
             return
         joined = " ".join(t for _, t in members)
         verb = verb_in(joined)
+        if ca36:
+            extra = CA36_ACTION.search(joined)
+            verb = verb or (extra.group() if extra else None)
         if verb:
             first = next((n for n, t in members if verb.split()[0] in t), members[0][0])
             paragraph.update(verb=verb, line=first,
@@ -267,11 +276,15 @@ def candidates(lines: list[str], units: list[str]) -> list[dict]:
             _close()
             paragraph, members = {}, []
             continue
+        if ca36 and re.match(r"^(?:[א-ת]\.|\d+\.|\+)\s|^\d+\s+(?:הממשלה|הצדדים|סיעת)", s):
+            _close()
+            paragraph, members = {}, []
         paragraphs[i] = paragraph
         members.append((i, s))
     _close()
 
     page, out, heading = None, [], None
+    funded_paragraphs = set()
     for i, raw in enumerate(lines, 1):
         s = raw.strip()
         m = re.fullmatch(r"⟦(\d+)⟧", s)
@@ -281,6 +294,15 @@ def candidates(lines: list[str], units: list[str]) -> list[dict]:
         if not s:
             continue
         has_money = bool(re.search(r"[0-9]", s)) and any(u in s for u in units)
+        budget_only = False
+        if ca36:
+            has_money = amount_of(s, ca36=True) is not None and bool(HEB.search(s))
+            budget_only = bool(CA36_BUDGET.search(s)) and not has_money
+            # A funding verb next to a sum belongs to that sum, not a second promise.
+            if budget_only and any(amount_of(t.strip(), ca36=True) is not None
+                                   for n, t in enumerate(lines, 1)
+                                   if paragraphs.get(n) is paragraphs[i]):
+                budget_only = False
         is_item = bool(ITEM_RE.match(s))
 
         if not has_money and any(v in s for v in VERBS_HEADING) and (
@@ -290,7 +312,12 @@ def candidates(lines: list[str], units: list[str]) -> list[dict]:
         if heading and not is_item and not has_money:
             heading = None            # перечень кончился
 
-        if has_money:
+        if ca36 and budget_only and CA36_FUNDING.search(s):
+            paragraph_id = id(paragraphs[i])
+            if paragraph_id in funded_paragraphs:
+                continue
+            funded_paragraphs.add(paragraph_id)
+        if has_money or budget_only:
             out.append({"line": i, "page": page, "quote_he": s,
                         "heading": heading if (heading and is_item) else None,
                         "paragraph_verb": paragraphs[i] or None})
@@ -366,8 +393,23 @@ def terms_of(quote: str, extra_stop: set[str] | None = None) -> list[str]:
     return uniq
 
 
-def amount_of(quote: str) -> float | None:
+def amount_of(quote: str, ca36: bool = False) -> float | None:
     """Сумма в шекелях, если она читается цифрами. Словесную не угадываем."""
+    if ca36:
+        normalized = quote.translate(str.maketrans({'״': '"', '“': '"', '”': '"', '׳': "'"}))
+        normalized = re.sub(r"מלש['\"](?:י)?ח", 'מלש"ח', normalized)
+        normalized = re.sub(r"מיליאר[רך]", "מיליארד", normalized)
+        normalized = re.sub(r"(?<=\d)\s*[-–—־]\s*", " ", normalized)
+        parsed = amount_of(normalized)
+        if parsed is not None:
+            return parsed
+        direct = re.search(r'(?<![\w.])(\d[\d.,]*)\s*(?:₪|ש"ח|שייח|שח)(?![א-ת])', normalized)
+        if direct:
+            try:
+                return float(direct.group(1).replace(',', ''))
+            except ValueError:
+                return None
+        return None
     m = re.search(r"(\d[\d.,]*)\s*(מלש\"ח|מלש'יח|מש\"ח|מיליון|מליון|"
                   r"מיליארד|מליארד|אלש\"ח)", quote)
     if not m:
@@ -716,6 +758,67 @@ def selftest() -> int:
             "declaration mismatch")
     print("GREEN: CA36 missing years cannot become a match, even with explicit code")
 
+    # v31 oracle: the user's independently supplied five amounts, actual OCR.
+    raam = next(a for a in ca36_entries() if a["file"] == "CA36-Raam.txt")
+    raam_lines = (ROOT / "data/agreements_ocr" / raam["file"]).read_text().splitlines()
+    expected_amounts = {30e9, 2.5e9, 20e9, 1e9, 100e6}
+    with contextlib.redirect_stdout(io.StringIO()):
+        actual = build_map(rule, "fixture-sha", raam, raam_lines, empty_budget, [])
+    assert expected_amounts <= {i["amount_ils"] for i in actual["items"]
+                               if i["category"] == "commitment"}, "CA36 Raam recall"
+    original_candidates = candidates
+    with patch.dict(globals(), candidates=lambda lines, units, **kw: original_candidates(lines, units)):
+        with contextlib.redirect_stdout(io.StringIO()):
+            mutant = build_map(rule, "fixture-sha", raam, raam_lines, empty_budget, [])
+    try:
+        assert expected_amounts <= {i["amount_ils"] for i in mutant["items"]
+                                   if i["category"] == "commitment"}, "CA36 Raam recall"
+    except AssertionError:
+        print("RED caught: old extraction rule loses Raam 30 billion")
+    else:
+        raise AssertionError("v31 recall oracle survived old-rule mutation")
+    for quote, amount in [('יוקצו 100-מלש״ח', 100e6), ('יוקצו 2.5 מיליארר', 2.5e9),
+                          ('יוקצו 100 שייח', 100), ('יוקצו 100 ₪', 100),
+                          ('יוקצו 100 ש"ח', 100), ('יוקצו 100 מלש"ח', 100e6)]:
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = build_map(rule, "fixture-sha", raam, [quote], empty_budget, [])
+        assert result["items"][0]["amount_ils"] == amount, quote
+        assert result["items"][0]["quote_he"] == quote
+        assert result["items"][0]["category"] == "commitment"
+    for quote, count in [('הממשלה יתוקצב', 1), ('הממשלה תפעל באמצעות תקצוב', 1),
+                         ('לקדם ולתקצב תוכנית לצפון', 1), ('תקציב המדינה שיועברו', 0),
+                         ('הוועדה לתקציב הבטחון', 0), ('לא יתוקצב הפרויקט', 0), ('כיום תקצוב הפרויקט', 0),
+                         ('03 ₪ 39', 0), ('קרקעות בשטתי 6. הכו6 ₪', 0)]:
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = build_map(rule, "fixture-sha", raam, [quote], empty_budget, [])
+        assert sum(i["category"] == "commitment" for i in result["items"]) == count, quote
+    for fixture, count in [(["1. לתקצב תוכנית לצפון", "2. לתקצב תוכנית לדרום"], 2),
+                           (["1. יתוקצבו צעדים", "תקצוב החינוך"], 1),
+                           (["1. להפנות תקציבים למימון תכניות"], 1)]:
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = build_map(rule, "fixture-sha", raam, fixture, empty_budget, [])
+        assert sum(i["category"] == "commitment" for i in result["items"]) == count
+    for n, words in [(1, "1 денежное обещание"), (4, "4 денежных обещания"),
+                     (5, "5 денежных обещаний"), (11, "11 денежных обещаний"),
+                     (21, "21 денежное обещание"), (24, "24 денежных обещания"),
+                     (0, "0 — правило извлечения ничего не нашло; это не значит, что обещаний нет")]:
+        assert words in ca36_summary(n, "сопоставление требует проверки")
+    # Exercise the actual CLI loader, not a fixture that supplies the right budget.
+    with TemporaryDirectory() as tmp:
+        args = argparse.Namespace(ca36=True, selftest=False, all=False, agreement=None,
+                                  data_dir=ROOT / "data", output_dir=Path(tmp))
+        with patch.dict(globals(), cli_args=lambda: args):
+            with contextlib.redirect_stdout(io.StringIO()):
+                assert main() == 0
+        for a in ca36_entries():
+            mapped = json.loads((Path(tmp) / f"commitment_map_{slug(a)}.json").read_text())
+            assert mapped["budget_missing_years"] == [], a["file"]
+            assert "budget_years_missing" not in mapped["counts"]["by_rejection"]
+            for item in mapped["items"]:
+                for candidate in item["candidates"]:
+                    assert set(candidate["years"]) == {"2021", "2022"}
+    print("GREEN: v31 actual CA36 CLI budget, five Raam amounts, OCR, negatives, Russian plurals")
+
     # Контрольная выборка v1.3 зашита: живые карты пересобраны под v1.4 и
     # прежней выборкой служить не могут (ревью Кодекса 18.10).
     baseline_counts = {"shas": (42, 21), "rz": (27, 13), "otzma": (10, 2),
@@ -781,7 +884,8 @@ def build_map(text: str, sha: str, agreement: dict, lines: list[str],
     # Стоп-слова, выведенные из объявленного в правиле, а не подобранные.
     dstop = _derived_stop(units, HEADING_MARK)
 
-    cands = candidates(lines, units)
+    ca36 = agreement["file"].startswith("CA36-")
+    cands = candidates(lines, units, ca36=True) if ca36 else candidates(lines, units)
     # §23-exempt: unread scans have no independent monetary-line census.
     # This exemption is explicit in the pre-OCR CA36 declaration.
     if expected is None and not agreement.get("reason_if_unchecked"):
@@ -804,11 +908,17 @@ def build_map(text: str, sha: str, agreement: dict, lines: list[str],
     for c in cands:
         require_quotes([c])
         cat, rule_fired = classify(c["quote_he"], c.get("paragraph_verb"))
+        if ca36 and amount_of(c["quote_he"], ca36=True) is None:
+            funding = CA36_FUNDING.search(c["quote_he"])
+            if not funding or re.search(r"לא\s+(?:יתוקצב|תתוקצב)", c["quote_he"]):
+                cat, rule_fired = "continuation", "упоминание бюджета без явного выделения"
+            elif funding and cat not in ("unit_rate", "status_quo", "estimate"):
+                cat, rule_fired = "commitment", f"финансирование без суммы: {funding.group()}"
         item = {
             **c,
             "category": cat,
             "category_rule": rule_fired,
-            "amount_ils": amount_of(c["quote_he"]),
+            "amount_ils": amount_of(c["quote_he"], ca36=ca36),
             # Признак берётся из цитаты ИЛИ из заголовка перечня: подпункт
             # «а. ремонт синагог — 30 млн» сам «в базе бюджета» не говорит,
             # это сказано строкой выше за все семь подпунктов сразу.
@@ -900,6 +1010,15 @@ def build_map(text: str, sha: str, agreement: dict, lines: list[str],
 
 
 
+def ca36_summary(n: int, status: str) -> str:
+    noun = ("денежное обещание" if n % 10 == 1 and n % 100 != 11 else
+            "денежных обещания" if n % 10 in (2, 3, 4) and n % 100 not in (12, 13, 14)
+            else "денежных обещаний")
+    count = (f"{n} {noun}" if n else
+             "0 — правило извлечения ничего не нашло; это не значит, что обещаний нет")
+    return f"в соглашении 2021 года найдено {count}; {status}"
+
+
 def ca36_summaries() -> dict:
     """Required CA36 inputs; missing map/OCR must stop publication (§24)."""
     from ocr_agreements import validate_corpus
@@ -918,8 +1037,7 @@ def ca36_summaries() -> dict:
             raise SystemExit("§14: stale CA36 declaration")
         n = sum(i["category"] == "commitment" for i in d["items"])
         status = d["budget_status"]
-        out[a["faction_id"] or slug(a)] = (
-            f"в соглашении 2021 года найдено {n} денежных обещаний; {status}")
+        out[a["faction_id"] or slug(a)] = ca36_summary(n, status)
     return out
 
 
@@ -935,7 +1053,11 @@ def main() -> int:
         expected = {Path(a["file"]).stem: a["pages"] for a in declaration["agreements"]}
         validate_corpus(json.loads((args.data_dir / "agreements_ocr_report_ca36.json").read_text()),
                         args.data_dir / "agreements_ocr", expected)
-    budget = json.loads((args.data_dir / TAKANOT.name).read_text(encoding="utf-8"))
+    budget_name = "budget_takanot_2021_2022.json" if args.ca36 else TAKANOT.name
+    budget = json.loads((args.data_dir / budget_name).read_text(encoding="utf-8"))
+    if args.ca36 and (budget["table"] != "raw_budget" or
+                      {r["year"] for r in budget["rows"]} != {2021, 2022}):
+        raise SystemExit("§11: CA36 budget must be raw_budget, years 2021–2022")
     changes = json.loads((args.data_dir / CHANGES.name).read_text(encoding="utf-8"))["rows"]
     for agreement in selected:
         lines = (args.data_dir / "agreements_ocr" / agreement["file"]).read_text(
