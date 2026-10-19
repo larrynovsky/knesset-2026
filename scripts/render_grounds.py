@@ -95,10 +95,18 @@ def vote_table(r: dict, table: dict, ru: dict, fids: list, split: float) -> dict
             "named": r.get("named_total"), "groups": groups}
 
 
+HE: dict = {}   # ивритские названия фракций — владелец 19.10: партии на двух языках
+
+
+def two_lang(f, ru: dict) -> str:
+    he = HE.get(f)
+    return E(ru.get(f, f)) + (f' <span class=he lang=he dir=rtl><bdi>{E(he)}</bdi></span>' if he else "")
+
+
 def names_list(fids: list, ru: dict) -> str:
     if not fids:
         return "<span class=dim>—</span>"
-    return ", ".join(f'<a href="f-{E(f)}.html">{E(ru.get(f, f))}</a>' for f in fids)
+    return ", ".join(f'<a href="f-{E(f)}.html">{two_lang(f, ru)}</a>' for f in fids)
 
 
 def act_section(bill: int, mark: dict, votes: list, names: dict, ru: dict) -> str:
@@ -152,7 +160,7 @@ def per_line(marked: list, tables: dict, fids: list, ru: dict, names: dict) -> s
             else:
                 no.append(f"{t} (в зале {last['named']}{prev})")
         li = lambda xs: "".join(f"<li>{E(x)}</li>" for x in xs) or "<li class=dim>—</li>"
-        out.append(f"""<section class=line><h3><a href="f-{E(f)}.html">{E(ru.get(f, f))}</a></h3>
+        out.append(f"""<section class=line><h3><a href="f-{E(f)}.html">{two_lang(f, ru)}</a></h3>
 <dl><dt>за акт на последней стадии</dt><dd><ul>{li(za)}</ul></dd>
 <dt>против</dt><dd><ul>{li(pr)}</ul></dd>
 <dt>нет позиции</dt><dd><ul>{li(no)}</ul></dd></dl></section>""")
@@ -240,6 +248,7 @@ def load_all():
     names = json.loads(trs[-1].read_text(encoding="utf-8"))["names"]
     cards = load_cards()
     ru = {str(k): (c.get("party_ru") or str(k)) for k, c in cards.items()}
+    HE.update({str(k): c.get("party_he") for k, c in cards.items() if c.get("party_he")})
     return votes, names, ru, sorted(ru), sign_table(), float(_arrow_split())
 
 
