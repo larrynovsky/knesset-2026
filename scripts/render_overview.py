@@ -246,7 +246,7 @@ def build(m: dict, cards: dict | None = None,
 {FRAME}
 {grounds_block(m, cards or {})}
 <h2>Сначала о том, чего мы не знаем</h2>
-<p>Клеток в таблице ниже — <b class=big>{total}</b>. С итоговым выводом — {filled};
+<p>Клеток в таблице ниже — <b class=big>{total}</b>С итоговым выводом — {filled};
 в {rev} показано покрытие обещаний бюджетными строками; в остальных {miss} нужный разбор не
 проведён или искомого не нашли — что именно, сказано на странице фракции.</p>
 <p>Это разные вещи, и подписаны они по-разному.
@@ -270,9 +270,9 @@ def build(m: dict, cards: dict | None = None,
 {body}
 </tbody></table>
 {other_themes()}
-<div class=foot><p>Первый выпуск на живых данных, 13.08.2026.
+<div class=foot><p>Первая грубая итерация, 19.10.2026.
 Форма принята 01.08.2026 (design/mockup_v5). Снимок голосований:
-{esc(m.get("source", {}).get("votes_at", "не объявлен"))}.</p></div>
+{esc(str(m.get("source", {}).get("votes_at", "не объявлен"))[:10])}.</p></div>
 </body></html>"""
     return doc, total, filled
 
@@ -1316,7 +1316,7 @@ def faction_page(card: dict, row: dict, votes: list, budget: str = "", summary: 
 <h1>{esc(ru)} <span class=he lang=he dir=rtl><bdi>{esc(he)}</bdi></span></h1>
 {''.join(cells)}
 {''.join(body)}
-<div class=foot><p>Первый выпуск на живых данных, 13.08.2026. Форма принята
+<div class=foot><p>Первая грубая итерация, 19.10.2026. Форма принята
 01.08.2026. Снимок голосований: {esc(str((card.get("snapshots") or {}).get("votes_25", "не указан"))[:10])}.</p></div>
 </body></html>"""
 
