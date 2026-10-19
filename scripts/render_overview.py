@@ -497,6 +497,33 @@ def selftest() -> int:
                                        "not_found", "not_budgetary")]
     cs.append({"granularity": "exact_takana", "duplicate_of": "first"})
     assert budget_summary([{"commitments": cs}]) == "в бюджете нашлась строка под 3 из 4 обещаний"
+    # v33: независимый путь по всем картам периода, не по списку агрегатора.
+    money_cards = load_cards("party_period")
+    leaders = leading_money(money_cards)
+    for fid, gov in ((1096, 37), (1102, 36)):
+        source_maps = [json.loads(p.read_text()) for p in (ROOT / "data").glob("commitment_map_*.json")]
+        expected = sum(i.get("category") == "commitment" for d in source_maps
+                       if d["period_id"].endswith(f"-gov{gov}") for i in d["items"])
+        assert leaders[fid]["commitments"] == expected
+    assert leaders[1096]["found"] == sum(budget_counts(cs)[0] for cs in money_cards.values())
+    assert leaders[1096]["independent"] == sum(budget_counts(cs)[1] for cs in money_cards.values())
+    assert leaders[1102]["found"] == 0  # кандидаты CA36 не принятые сопоставления
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        data = Path(tmp)
+        for p in (ROOT / "data").glob("commitment_map_*.json"):
+            (data / p.name).symlink_to(p)
+        for key in ("shas", "app-ay", "ca36-bw"):
+            path = data / f"commitment_map_{key}.json"
+            path.unlink()
+            try:
+                leading_money(money_cards, data)
+            except Refuse as exc:
+                assert path.name in str(exc)
+            else:
+                raise AssertionError(f"v33: пропажа {key} не обнаружена")
+            path.symlink_to(ROOT / "data" / path.name)
+    print("v33: суммы CA37/CA36 сверены; пропажа shas, app-ay, ca36-bw — отказ")
     live_matrix = json.loads(MATRIX.read_text(encoding="utf-8"))
     live_cards = load_cards()
     owner = grounds_block(live_matrix, live_cards)
@@ -647,6 +674,23 @@ def selftest() -> int:
     assert historical["ca36-meretz"] in democrats
     assert "KaveiYesod" not in repr(historical)
     assert 'Беннет' in list_pages['l-2.html'] and 'href="f-1102.html"' in list_pages['l-2.html']
+    leader_matrix = json.loads(MATRIX.read_text(encoding="utf-8"))
+    leader_texts = {fid: d["text"] for fid, d in leaders.items()}
+    for r in leader_matrix["lines"]:
+        if r["anchor_id"] in leaders:
+            r["b"]["status"] = "observed"
+    leader_doc = build(leader_matrix, live_cards, leader_texts)[0]
+    leader_lists = ballot_pages(leader_matrix, live_cards, leader_texts, laws, leaders=leaders)
+    for fid, list_name in ((1096, "l-1.html"), (1102, "l-2.html")):
+        r = next(r for r in leader_matrix["lines"] if r["anchor_id"] == fid)
+        text = leaders[fid]["text"]
+        brief = faction_summary(r, live_cards[fid], text, laws)
+        page = faction_page(live_cards[fid], r, [], leaders[fid]["detail"], text, brief)
+        check_money_same(leader_doc, page, fid)
+        assert f'<b>Деньги:</b> {esc(text)}.' in page
+        assert f'<b>Деньги:</b> {esc(text)}.' in leader_lists[list_name]
+        assert leaders[fid]["detail"] in page and leaders[fid]["detail"] in leader_lists[list_name]
+    print("v33: один денежный текст в обзоре, сводке фракции и списке; ссылки партнёров сохранены")
     for n, entry in enumerate(ballot_input["lists"], 1):
         page = list_pages[f"l-{n}.html"]
         assert f'href="l-{n}.html"' in ballot_html
@@ -1232,12 +1276,85 @@ def _terms_prose(text: str) -> str:
     return text
 
 
-def budget_summary(cards: list) -> str:
+def budget_counts(cards: list) -> tuple[int, int]:
     commitments = [c for card in cards for c in card.get("commitments", [])
                    if not c.get("duplicate_of") and c.get("granularity") != "not_budgetary"]
     found = sum(c.get("granularity") in ("exact_takana", "subset_of_line", "spread_over_lines")
                 for c in commitments)
-    return CELL["reviewed"][1].format(n=found, m=len(commitments))
+    return found, len(commitments)
+
+
+def budget_summary(cards: list) -> str:
+    found, total = budget_counts(cards)
+    return CELL["reviewed"][1].format(n=found, m=total)
+
+
+def leading_money(budgets: dict, data: Path | None = None) -> dict:
+    """§23: обязательный набор соглашений; нулевая карта тоже обязательна."""
+    from coverage_matrix import commitment_counts
+    data = data or ROOT / "data"
+    groups = {
+        1096: (37, [("shas", "1095", "ШАС", "f-1095.html"),
+                    ("yt", "1101", "Яхадут ха-Тора", "f-1101.html"),
+                    ("rz", "1105", "Религиозный сионизм", "f-1105.html"),
+                    ("otzma", "1106", "Оцма Йехудит", "f-1106.html"),
+                    ("noam", "1107", "Ноам", "f-1107.html"),
+                    ("u-right", "1108", "Новая надежда", "f-1108.html"),
+                    ("unity", "1098", "Национальное единство", "f-1098.html"),
+                    ("app-ay", "1101", "Яхадут ха-Тора — приложение", "f-1101.html")]),
+        1102: (36, [("ca36-bw", "1110", "Кахоль-Лаван", "f-1110.html"),
+                    ("ca36-labor", "1100", "Авода", "f-1100.html"),
+                    ("ca36-meretz", "meretz", "Мерец", "l-4.html"),
+                    ("ca36-nh", "1108", "Новая надежда", "f-1108.html"),
+                    ("ca36-raam", "1099", "РААМ", "f-1099.html"),
+                    ("ca36-yb", "1104", "НДИ", "f-1104.html"),
+                    ("ca36-yemina", "yemina", "Ямина", "l-2.html")]),
+    }
+    out = {}
+    for fid, (gov, entries) in groups.items():
+        total, periods, links = 0, set(), []
+        for key, partner, label, href in entries:
+            path = data / f"commitment_map_{key}.json"
+            if not path.is_file():
+                raise Refuse(f"CA{gov}: отсутствует обязательная карта {path.name}")
+            d = json.loads(path.read_text(encoding="utf-8"))
+            period = f"{partner}-gov{gov}"
+            if d["period_id"] != period or (gov == 36 and d["years"] != [2021, 2022]):
+                raise Refuse(f"CA{gov}: неверный период или годы {path.name}")
+            n = commitment_counts(d["items"])["commitments"]
+            if gov == 36 and (d.get("budget_status") != "сопоставление требует проверки"
+                              or any(i.get("granularity") for i in d["items"] if i.get("category") == "commitment")
+                              or any(c["period_id"] == period for cs in budgets.values() for c in cs)):
+                raise Refuse("CA36: появились решения о сопоставлении; пересмотреть сводку за 2021 год")
+            total += n
+            if n:
+                periods.add(period)
+            links.append(f'<li><a href="{href}">{esc(label)}</a>: {n}</li>')
+        # Приложение Яхадут ха-Тора не удваивает разбор того же периода.
+        reviewed = [c for cs in budgets.values() for c in cs if c["period_id"] in periods]
+        if gov == 37 and {c["period_id"] for c in reviewed} != periods:
+            raise Refuse("CA37: отсутствует разбор обещаний партнёра")
+        found, independent = budget_counts(reviewed)
+        text = (f"подписала как вторая сторона {total} денежных обещаний партнёрам "
+                f"в соглашениях правительства {gov}")
+        if gov == 37:
+            text += (f"; самостоятельных обещаний после разбора: {independent}; "
+                     f"в бюджете нашлась строка под {found}")
+            note = ("Первое число — сумма исходных записей в соглашениях, включая повторы "
+                    "и записи, признанные неденежными при разборе. Числа после разбора — "
+                    "сумма результатов партнёров. Это не число уникальных бюджетных строк.")
+        else:
+            text += (" (2021 год); подтверждённых сопоставлений с бюджетом 2021 года: 0; "
+                     "сопоставление требует проверки")
+            note = ("Автоматическое извлечение из сканов; полнота и отсутствие повторов "
+                    "не подтверждены ручным чтением. Возможные строки бюджета не считаются "
+                    "подтверждёнными. Ноль не означает, что обещания не финансировались.")
+        detail = ('<p>' + note + ' Подпись второй стороны не устанавливает авторство обещаний. '
+                  'Партнёры и исходное число обещаний в каждом соглашении:</p><ul>'
+                  + ''.join(links) + '</ul>')
+        out[fid] = dict(government=gov, commitments=total, found=found,
+                        independent=independent, text=text, detail=detail)
+    return out
 
 
 def budget_block(cards: list, idx: dict, titles: list) -> str:
@@ -1312,10 +1429,10 @@ def _money_td(doc: str, fid: int) -> str:
 
 
 def _cell_word(html: str, where: str) -> str:
+    from check_report_canon import MONEY_PATTERN
     words = [w for w in [v[1] for v in CELL.values()] + ["денежных обещаний пока не разбирали"] if f">{w}<span class=lb>" in html
              or f">{w}</b>" in html]
-    words += re.findall(r"в соглашении 2021 года найдено [^<]+(?=<span class=lb>|</b>)", html)
-    words += re.findall(r"в бюджете нашлась строка под [0-9]+ из [0-9]+ обещаний(?=<span class=lb>|</b>)", html)
+    words += re.findall(r"(?:" + MONEY_PATTERN + r")(?=<span class=lb>|</b>)", html)
     if len(words) != 1:
         raise Refuse(f"{where}: значений клетки {words}, а не одно")
     return words[0]
@@ -1335,7 +1452,8 @@ def check_overview_money(doc: str, reviewed: set | dict, lines: set | None = Non
         raise Refuse(f"разобранные вне строк бюллетеня: {sorted(set(reviewed) - lines)}")
     for fid in lines:
         if (fid in reviewed) != (_cell_word(_money_td(doc, fid), f"обзор {fid}")
-                                 .startswith(("в бюджете нашлась строка под ", "в соглашении 2021 года"))):
+                                 .startswith(("в бюджете нашлась строка под ", "в соглашении 2021 года",
+                                              "подписала как вторая сторона "))):
             raise Refuse(f"клетка «деньги» строки {fid} не согласована с разбором")
         if isinstance(reviewed, dict) and fid in reviewed:
             if _cell_word(_money_td(doc, fid), f"обзор {fid}") != reviewed[fid]:
@@ -1468,7 +1586,8 @@ def faction_summary(row: dict, card: dict, money_text: str, laws: list[dict]) ->
 
 
 def ballot_pages(matrix: dict, cards: dict, summaries: dict,
-                 laws: list[dict], source: Path | None = None) -> dict[str, str]:
+                 laws: list[dict], source: Path | None = None,
+                 leaders: dict | None = None) -> dict[str, str]:
     """Досье списка: данные каждой фракции отдельно, без общей стрелки."""
     from build_line_cards import arrows
     from render_method import ARROW, VOTES
@@ -1497,6 +1616,8 @@ def ballot_pages(matrix: dict, cards: dict, summaries: dict,
                 raise Refuse(f"бюллетень: неизвестная фракция {fid}")
             row, card = rows[fid], cards.get(fid, {})
             brief = faction_summary(row, card, summaries.get(fid, ""), laws)
+            if fid in (leaders or {}):
+                brief += leaders[fid]["detail"]
             ax = card.get("axis_institutions") or {}
             current = institutions.get(fid, {})
             if row["a"]["status"] == "observed" and ax.get("arrow"):
@@ -1560,6 +1681,7 @@ def main() -> int:
             row["b"]["commitments"] = maps[row["anchor_id"]]["commitments"]
     cards = load_cards()
     budgets = load_cards("party_period")
+    leaders = leading_money(budgets)
     idx, titles = budget_index() if budgets else ({}, [])
     reviewed = {k for k, v in budgets.items() if v}
     # R22-F01 (W01): набор разборов сверяется с файлами карточек независимым
@@ -1584,6 +1706,10 @@ def main() -> int:
     ca36 = ca36_summaries()
     summaries = {fid: budget_summary(bc) for fid, bc in budgets.items() if bc}
     summaries.update({fid: value for fid, value in ca36.items() if isinstance(fid, int)})
+    summaries.update({fid: value["text"] for fid, value in leaders.items()})
+    for row in m["lines"]:
+        if row["anchor_id"] in leaders:
+            row["b"]["status"] = "observed"
     doc, total, filled = build(m, cards, summaries)
     check_overview_money(doc, summaries,
                          {r["anchor_id"] for r in m["lines"]})
@@ -1606,6 +1732,8 @@ def main() -> int:
         else:
             bc = budgets.get(r["anchor_id"], [])
             budget = budget_block(bc, idx, titles) if bc else ""
+            if r["anchor_id"] in leaders:
+                budget = leaders[r["anchor_id"]]["detail"]
             if r["anchor_id"] in ca36:
                 if bc:
                     budget = ("<p>Соглашение правительства 37: " + esc(budget_summary(bc))
@@ -1624,7 +1752,7 @@ def main() -> int:
             return 1
         (OUT.parent / f"f-{r['anchor_id']}.html").write_text(page, encoding="utf-8")
         pages += 1
-    lists = ballot_pages(m, cards, summaries, laws)
+    lists = ballot_pages(m, cards, summaries, laws, leaders=leaders)
     for name, page in lists.items():
         (OUT.parent / name).write_text(page, encoding="utf-8")
     print(f"обзор + {pages} страниц фракций + {len(lists)} страниц списков -> {OUT.parent}")
