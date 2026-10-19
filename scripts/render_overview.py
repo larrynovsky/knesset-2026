@@ -231,13 +231,16 @@ def load_ballot(source: Path | None = None) -> dict:
     return ballot
 
 
-def robustness_note(fid: int, topic: str, arrow: str = "") -> str:
+def robustness_note(fid: int | list[int], topic: str, arrow: str = "") -> str:
     from arrow_robustness import label
     data = json.loads((ROOT / "data" / "arrow_robustness.json").read_text(encoding="utf-8"))
-    entry = data["topics"][topic]["factions"].get(str(ALIAS.get(fid, fid)))
-    if entry is None or entry["rates"]["0.10"] is None:
+    fids = fid if isinstance(fid, list) else [fid]
+    entries = [data["topics"][topic]["factions"].get(str(ALIAS.get(f, f))) for f in fids]
+    rates = [entry["rates"]["0.10"] for entry in entries if entry is not None
+             and entry["rates"]["0.10"] is not None]
+    if not rates:
         return esc(arrow)
-    rate = entry["rates"]["0.10"]
+    rate = min(rates)
     word = label(rate)
     mark = {"устойчива": "", "шаткая": "?", "ненадёжна": "??"}[word]
     if arrow:
@@ -284,15 +287,21 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
             axes = []
             for fid in fids:
                 ax = cards.get(fid, {}).get("axis_institutions") or {}
-                axes.append(robustness_note(fid, "rule_of_law", arrow=sym[ax.get("arrow")])
+                axes.append(sym[ax.get("arrow")]
                             if fid in observed and alpha_ok(ax) and ax.get("arrow") in ("up", "down", "both") else "—")
             values = [axes] + [[
                 arrows[t].get(fid, {}).get("text", "мало законов (0)")
                 if arrows[t].get(fid, {}).get("arrow") is None else
-                robustness_note(fid, t, arrow=sym[arrows[t][fid]["arrow"]]) for fid in fids] for t in themes]
+                sym[arrows[t][fid]["arrow"]] for fid in fids] for t in themes]
             for i, value in enumerate(values[1:], 1):
                 if all(re.fullmatch(r"со всеми \(\d+\)", v) for v in value):
                     values[i] = ["со всеми (" + "/".join(re.search(r"\d+", v)[0] for v in value) + ")"]
+            # Группируем направления, а не HTML с разными процентами устойчивости.
+            for i, (topic, value) in enumerate(zip(("rule_of_law",) + themes, values)):
+                values[i] = [robustness_note([fid for fid, v in zip(fids, value) if v == mark],
+                                            topic, arrow=mark)
+                             if mark in ("↑", "↓", "↕") else mark
+                             for mark in dict.fromkeys(value)]
             cells = "".join(
                 f'<td class="ballot-axis" data-l="{esc(label)}">{" / ".join(dict.fromkeys(value))}</td>'
                 for label, value in zip(["Суд", "Религия", "Экономика", "Безопасность"], values))
@@ -648,6 +657,56 @@ def selftest() -> int:
         assert len(re.findall(r'↑ / ↓', re.sub(r'<[^>]+>|\?', '', likud))) == 4
         assert 'f-1096.html' in likud and 'f-1108.html' in likud
     print("ЗЕЛЁНЫЙ: бюллетень — 14 строк; 14 удалений из JSON отклонены; расхождения стрелок сохранены")
+
+    # v44: синтетические входы; проверяем конечные клетки, включая худший значок.
+    import inspect
+    sample_ballot = {"lists": [{"ru": "Пример", "he": "X", "leaders": "A",
+                               "factions": [1096, 1108], "absent": []}],
+                     "unmapped_factions": {}}
+    sample_matrix = {"lines": [{"anchor_id": fid, "a": {"status": "observed"}}
+                               for fid in (1096, 1108)]}
+    sample_rates = {"topics": {topic: {"factions": {
+        str(fid): {"rates": {"0.10": rate}} for fid, rate in ((1096, .99), (1108, .75))}}
+        for topic in ("rule_of_law", "religion_state", "economy", "security")}}
+
+    read_text = Path.read_text
+
+    def check_v44(render):
+        for second, expected in (("down", "↓??"), ("up", "↓ / ↑??")):
+            sample_cards = {fid: {"axis_institutions": {"arrow": direction, "alpha": 1}}
+                            for fid, direction in ((1096, "down"), (1108, second))}
+            sample_themes = {fid: card["axis_institutions"] for fid, card in sample_cards.items()}
+            sample_laws = [{"name": "Пример", "positions": {
+                "1096": "за", "1108": "за" if second == "down" else "против"}}] * 4
+            with patch(__name__ + '.load_ballot', return_value=sample_ballot), \
+                 patch(__name__ + '.party_names', return_value={1096: "A", 1108: "B"}), \
+                 patch(__name__ + '.owner_law_positions', return_value=sample_laws), \
+                 patch('theme_arrows.theme_arrows', return_value=sample_themes), \
+                 patch.object(Path, 'read_text', autospec=True, side_effect=lambda path, *a, **kw:
+                              json.dumps(sample_rates) if path.name == 'arrow_robustness.json'
+                              else read_text(path, *a, **kw)):
+                rendered = render(sample_matrix, sample_cards)
+            axis_cells = re.findall(r'<td class="ballot-axis"[^>]*>(.*?)</td>', rendered)
+            assert len(axis_cells) == 4
+            assert [re.sub(r'<[^>]+>', '', c) for c in axis_cells] == [expected] * 4, "v44: стрелки/устойчивость"
+            assert all('ненадёжна: 75.00%' in c for c in axis_cells)
+            law_cell = re.search(r'<span class="ballot-laws">(.*?)</td>', rendered).group(1)
+            assert re.findall(r'<span title="Пример">(.*?)</span>', law_cell) == [
+                '<b>за</b>' if second == "down" else '<b>за</b>/против'] * 4, "v44: позиции законов"
+
+    check_v44(ballot_table)
+    # Мутант реально убирает группировку в рендере: одинаковые стрелки всегда через /.
+    mutant_source = inspect.getsource(ballot_table).replace('dict.fromkeys(value)', 'value')
+    mutant_ns = {}
+    exec(mutant_source, globals(), mutant_ns)
+    try:
+        check_v44(mutant_ns['ballot_table'])
+    except AssertionError as exc:
+        assert 'v44: стрелки/устойчивость' in str(exc)
+    else:
+        raise AssertionError('v44: мутант «всегда /» выжил')
+    print('ЗЕЛЁНЫЙ v44: одинаковые → одна стрелка с худшей устойчивостью; разные → /; за/за → за; мутант убит')
+
     # Граница малого покрытия: все темы остаются видимыми, даже при нуле.
     from theme_arrows import THEMES
     for n in range(4):
