@@ -207,18 +207,14 @@ def c_ballot_money(src):
           r'со всеми \(([0-9]+)(?:/[0-9]+)?\)', r'голосовали со всеми (почти единогласно: \1 законов)', s["index.html"], count=1)})),
         ("снят title устойчивости", lambda s: dict(s, **{"index.html": re.sub(
           r' title="устойчива: [0-9.]+%"', '', s["index.html"], count=1)})),
-        ("снята оговорка личной стрелки", lambda s: edit(s, "index.html",
-          ' title="Устойчивость личной стрелки не оценивалась"', ""))])
+        ("снят значок личной стрелки", lambda s: dict(s, **{"index.html": re.sub(
+          r'(<td class="ballot-axis"[^>]*data-personal=1[^>]*><span title="[^"]*">[↑↓↕]<small class="robustness">)\?{1,2}(</small>)',
+          r'\1\2', s["index.html"], count=1)}))])
 def c_compact_ballot(src):
     entries = re.findall(r'<td class="ballot-axis"([^>]*)>(.*?)</td>', src["index.html"], re.S)
     cells = [cell for _, cell in entries]
     bad = []
     for attrs, cell in entries:
-        if "data-personal=1" in attrs:
-            expected = re.findall(r'<span title="Устойчивость личной стрелки не оценивалась">[↑↓↕]</span>', cell)
-            if len(expected) != len(re.findall(r'[↑↓↕]', cell)):
-                bad.append("личная стрелка без оговорки об устойчивости")
-            continue
         notes = re.findall(r'<span title="(устойчива|шаткая|ненадёжна): ([0-9.]+)%">[↑↓↕]<small class="robustness">(.*?)</small></span>', cell)
         if len(notes) != len(re.findall(r'[↑↓↕]', cell)):
             bad.append("стрелка без title со словом и процентом")
@@ -321,6 +317,8 @@ def c_list_table(src):
                 value = clean(match[1]) if match else ""
                 arrow = re.match(r'[↑↓↕]', value)
                 if arrow:
+                    if not personal and not re.search(r"\((?:устойчива|шаткая|ненадёжна)\)", value):
+                        bad.append(f"{filename}: нет подписи устойчивости {topic}")
                     mark = "??" if "(ненадёжна)" in value else "?" if "(шаткая)" in value else ""
                     values.append(arrow[0] + mark)
                 else:
@@ -479,13 +477,32 @@ def c_owner_votes(src):
         titles = re.findall(r'<span title="([^"]*)">', cell)
         if len(titles) != 4 or any(not re.search(count, title) for title in titles):
             bad.append("бюллетень: нет четырёх подсказок со счётом")
-    if "— — нет позиции, фракция не голосовала или голосовала меньше трети (бойкот)" not in src["index.html"]:
+    if "— — нет позиции, фракция не голосовала или голосовала меньше трети; причины неучастия здесь не установлены" not in src["index.html"]:
         bad.append("нет легенды бойкота")
     return inspected, bad, f"{inspected} позиций с депутатским счётом"
 
 
+@check("методика соответствует источникам",
+       [("методика: исчезли перевороты Бернулли", lambda s: edit(s, "method.html", "Это перевороты по Бернулли", "Это фиксированная доля")),
+        ("методика: исчезли переводы", lambda s: edit(s, "method.html", "<h2>Переводы названий</h2>", "")),
+        ("методика: исчезла шпаргалка", lambda s: edit(s, "method.html", 'href="cheatsheet.html"', 'href="index.html"'))])
+def c_method(src):
+    from render_method import build, facts
+    from render_overview import data_periods
+    votes_period, budget_period = data_periods(ROOT / "data")
+    expected = build(facts()).replace('</h1>', '</h1>\n' + votes_period + '\n' + budget_period, 1)
+    actual = src.get("method.html", "")
+    bad = []
+    if text_of(actual) != text_of(expected):
+        bad.append("method.html: объяснение или числа расходятся с источниками")
+    if 'href="cheatsheet.html"' not in actual:
+        bad.append("method.html: нет ссылки на шпаргалку A4")
+    return 1, bad, "методика сверена с текущими входами"
+
+
 @check("лексика страниц партий",
        [("пропал раздел методики", lambda s: edit(s, "method.html", "<h2>Устойчивость стрелки</h2>", "")),
+        ("одна тема вместо четырёх", lambda s: edit(s, "index.html", "<h1>", "<p>Тема здесь одна</p><h1>")),
         ("старое состояние в методике", lambda s: edit(s, "method.html", "<h1>", "<p>мы сюда не дошли</p><h1>")),
         ("фракции названы строками", lambda s: edit(s, "index.html", "<h1>", "<p>пять-шесть строк бюллетеня из шестнадцати</p><h1>")),
         ("старые подписи примеров", lambda s: edit(s, "index.html", "<h1>", "<p>Примеры в плюс:</p><h1>")),
@@ -495,7 +512,8 @@ def c_lex(src):
     pp, bad = party(src), []
     method = src.get("method.html", "")
     for heading in ("Списки бюллетеня и фракции", "Как ставился знак закона",
-                    "Устойчивость стрелки", "Темы", "Деньги", "Чего нет"):
+                    "Устойчивость стрелки", "Темы", "Четыре закона владельца",
+                    "Переводы названий", "Деньги", "Чего нет"):
         if f"<h2>{heading}</h2>" not in method:
             bad.append(f"method.html: нет раздела «{heading}»")
     if "почему стрелки нет" in text_of(method).lower():
@@ -503,7 +521,7 @@ def c_lex(src):
     # v26: видимый текст всех страниц; CSS-комментарий остаётся допустимым.
     for n, page in src.items():
         visible = text_of(page).lower()
-        for stale in ("мы сюда не дошли", "примеры в плюс", "примеры в минус",
+        for stale in ("тема здесь одна", "на чём стояла бы", "законов темы приняты почти единогласно", "канал денег у этой строки пуст", "мы сюда не дошли", "примеры в плюс", "примеры в минус",
                       "сопоставление денежных обещаний с бюджетом не построено",
                       "строк бюллетеня в сборке", "по строкам бюллетеня",
                       "строка бюллетеня (голоса", "пять-шесть строк бюллетеня"):
@@ -560,7 +578,7 @@ def c_palette(src):
 def c_sem(src):
     bad = []
     overview = src["index.html"]
-    block = re.search(r'<details class="faction-details"><summary>Подробно по 16 фракциям нынешнего Кнессета \(для проверки\)</summary>(.*?)</details>', overview, re.S)
+    block = re.search(r'<details class="faction-details"><summary>Подробно по 16 записям о фракциях 25-го Кнессета \(включая прежние составы\)</summary>(.*?)</details>', overview, re.S)
     if not block or re.findall(r'<table class=["\']?([\w-]+)', block[1]) != ["owner-laws", "ov", "acts"]:
         bad.append("три фракционные таблицы должны быть в закрытом details в прежнем порядке")
     elif '<table class="ballot">' not in overview[:block.start()] or '<table class="ballot">' in block[1]:
@@ -661,9 +679,9 @@ def c_data_periods(src):
     votes = json.loads((ROOT / "data/votes_25.json").read_text())
     dates = [date.fromisoformat(v[:10]).strftime('%d.%m.%Y')
              for v in [*votes["window"], votes["at"]]]
-    expected_votes = (f'Голосования {votes["knesset"]}-го Кнессета с {dates[0]} по {dates[1]} '
-                      f'(снимок {dates[2]}); после этого сайт Кнессета закрыт для заходов '
-                      'не из Израиля, новых голосований нет')
+    expected_votes = (f'Голосования {votes["knesset"]}-го Кнессета с {dates[0]} до {dates[1]} '
+                      f'(не включая эту дату; снимок {dates[2]}); '
+                      'более поздние голосования в отчёт не загружены')
     budgets = []
     for name in ("budget_takanot_2021_2022.json", "budget_takanot.json"):
         snapshot = json.loads((ROOT / "data" / name).read_text())
@@ -743,7 +761,7 @@ def selftest(src):
                 snapshot = dict(years=[2018, 2020], fetched_at="2022-07-08")
             (data / name).write_text(json.dumps(snapshot))
         vote_line, budget_line = data_periods(data)
-        assert 'с 02.01.2020 по 04.03.2021 (снимок 06.05.2022)' in vote_line
+        assert 'с 02.01.2020 до 04.03.2021 (не включая эту дату; снимок 06.05.2022)' in vote_line
         assert budget_line.count('2018, 2020 (снимок 08.07.2022)') == 2
         changed = re.sub(r'<p class="data-period" data-source="votes_25.json">.*?</p>',
                          lambda m: vote_line, src["index.html"])

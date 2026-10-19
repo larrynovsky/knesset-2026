@@ -156,7 +156,7 @@ def page(data, names, split, digest):
     for x in changes:
         q = 'нет доли' if x['qdelta'] is None else f'{x["qdelta"] * 100:+.1f} п.п.'
         state = ('не проверяется: нет позиции в одном из кварталов' if x['qdelta'] is None else
-                 'сохраняется' if x['survives'] else 'артефакт сетки по этому правилу')
+                 'сохраняется' if x['survives'] else 'не подтвердилось при делении на кварталы')
         lines.append(f'<tr><th scope=row>{faction_name(names, x["fid"])}</th>'
                      f'<td data-l="Граница">{x["boundary"]}</td>'
                      f'<td data-l="Полугодия">{x["delta"] * 100:+.1f} п.п.</td>'
@@ -191,11 +191,11 @@ table.time tr{{margin-bottom:1rem}}}}
 по этим данным нельзя отличить неучастие от периода до её появления. Ноль сравнимых голосований
 показан прочерком, а не нулевой долей. Размеры знаменателей меняются; малые числа не скрыты.</p>
 <h2>Полугодия</h2>{matrix(half, names)}
-<h2>Проверка сменой сетки</h2>
-<p>Излом — изменение доли строго больше {BREAK_THRESHOLD * 100:g} процентных пунктов между
+<h2>Проверка делением на кварталы</h2>
+<p>Скачок доли — изменение строго больше {BREAK_THRESHOLD * 100:g} процентных пунктов между
 соседними полугодиями. Порог выбран для описания, не как статистическая значимость.
-Изломов на полугодиях: {len(changes)}; сохраняются на кварталах: {kept};
-артефакты сетки по этому правилу: {len(changes)-kept-unavailable}; не проверяются: {unavailable}.</p>
+Скачков между полугодиями: {len(changes)}; сохраняются на кварталах: {kept};
+не подтвердились при делении на кварталы: {len(changes)-kept-unavailable}; не проверяются: {unavailable}.</p>
 <p>Сохранение означает тот же знак и превышение того же порога между кварталами непосредственно
 по обе стороны той же границы. Например, граница 1 июля сравнивает апрель–июнь с июлем–сентябрём.
 Сдвиг внутри соседнего квартала этим строгим правилом не засчитывается. Дата в таблице — граница
@@ -204,9 +204,9 @@ table.time tr{{margin-bottom:1rem}}}}
 <th scope=col>Полугодия</th><th scope=col>Кварталы</th><th scope=col>Проверка</th></tr></thead>
 <tbody>{''.join(lines)}</tbody></table>
 <details><summary>Все квартальные доли и знаменатели</summary>{matrix(quarter, names)}</details>
-<p class=foot>Источник: data/votes_25.json; SHA-256: {digest}.
+<details><summary>Технические сведения об источниках</summary><p class=foot>Источник: data/votes_25.json; SHA-256: {digest}.
 Названия: criteria/faction_names_ru.yaml. Фракции — из cards/*-k25-votes.yaml.
-Полугодовые и квартальные доли рассчитаны из одного снимка.</p></body></html>'''
+Полугодовые и квартальные доли рассчитаны из одного снимка.</p></details></body></html>'''
     validate_page(doc)
     return doc, changes
 

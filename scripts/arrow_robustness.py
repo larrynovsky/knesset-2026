@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 from direction_confidence import arrow_rule, compose, sign_table
-from theme_arrows import THEMES, arrow_of, load_signs
+from theme_arrows import THEMES, arrow_of, load_signs, personal_votes
 from build_line_cards import RU, _arrow_split, axis_directions
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -26,8 +26,9 @@ def inputs_sha(root: Path = ROOT) -> str:
     paths = {root / p.relative_to(ROOT) for p in (ARROW, VOTES)}
     paths.update(root / "scripts" / name for name in (
         "arrow_robustness.py", "direction_confidence.py", "theme_arrows.py",
-        "build_line_cards.py", "validate_cards.py", "render_method.py"))
-    for pattern in ("criteria/theme_signs_*.json", "criteria/claude_tiebreak_signs_*.json",
+        "build_line_cards.py", "validate_cards.py", "render_method.py",
+        "fetch_votes.py", "render_landmark_table.py"))
+    for pattern in ("data/named_votes_cache/*.json", "criteria/theme_signs_*.json", "criteria/claude_tiebreak_signs_*.json",
                     "criteria/axis_second_reading_*.json", "criteria/declared_before_arrow_*.yaml",
                     "docs/reference/for_option_sign_*.json"):
         paths.update(root.glob(pattern))
@@ -112,6 +113,7 @@ def simulate(rows: list, signs: dict, table: dict, rule: dict,
 def build() -> dict:
     from render_method import ARROW, VOTES
     votes = json.loads(VOTES.read_text(encoding="utf-8"))
+    personal, _ = personal_votes(votes)
     axis, _ = axis_directions(ARROW)
     rule = dict(arrow_rule(), split_below=float(_arrow_split()))
     table = sign_table()
@@ -119,6 +121,9 @@ def build() -> dict:
     for topic in TITLES:
         topics[topic] = simulate(votes["rows"], axis if topic == "rule_of_law" else load_signs(topic),
                                  table, rule, min_acts=1 if topic == "rule_of_law" else 3)
+        topics[topic]["factions"].update(simulate(
+            personal["rows"], axis if topic == "rule_of_law" else load_signs(topic),
+            table, rule, min_acts=1 if topic == "rule_of_law" else 3)["factions"])
         print(f"{topic}: {len(topics[topic]['factions'])} фракций", flush=True)
     return {"runs": RUNS, "seed": SEED, "probabilities": list(PS),
             "algorithm": ALGORITHM,
@@ -144,10 +149,10 @@ def review(data: dict) -> str:
              "| Фракция | Тема | p | Сохранение | При p=0.10 |",
              "|---|---|---:|---:|---|"]
     for topic, values in data["topics"].items():
-        for fid, entry in sorted(values["factions"].items(), key=lambda x: int(x[0])):
+        for fid, entry in sorted(values["factions"].items(), key=lambda x: (not x[0].isdigit(), int(x[0]) if x[0].isdigit() else x[0])):
             for p, rate in entry["rates"].items():
                 value = "н/д" if rate is None else f"{100 * rate:.2f}%"
-                lines.append(f"| {RU.get(int(fid), entry['faction'])} ({fid}) | {TITLES[topic]} | {p} | {value} | {entry['label'] if p == '0.10' and entry['label'] else '—'} |")
+                lines.append(f"| {RU.get(int(fid), entry['faction']) if fid.isdigit() else 'Яшар! (личные голоса)'} ({fid}) | {TITLES[topic]} | {p} | {value} | {entry['label'] if p == '0.10' and entry['label'] else '—'} |")
     return "\n".join(lines) + "\n"
 
 
@@ -159,10 +164,11 @@ def selftest() -> None:
                 "criteria/theme_signs_economy.json", "criteria/theme_signs_religion_state.json",
                 "criteria/theme_signs_security.json", "criteria/claude_tiebreak_signs_test.json",
                 "criteria/axis_second_reading_test.json", "criteria/declared_before_arrow_test.yaml",
-                "docs/reference/for_option_sign_test.json"]
+                "docs/reference/for_option_sign_test.json", "data/named_votes_cache/1.json"]
     fixtures += ["scripts/" + name for name in (
         "arrow_robustness.py", "direction_confidence.py", "theme_arrows.py",
-        "build_line_cards.py", "validate_cards.py", "render_method.py")]
+        "build_line_cards.py", "validate_cards.py", "render_method.py",
+        "fetch_votes.py", "render_landmark_table.py")]
     with TemporaryDirectory() as directory:
         root = Path(directory)
         for name in fixtures:
@@ -178,7 +184,7 @@ def selftest() -> None:
         for name, value in (("ALGORITHM", "mutant"), ("RUNS", RUNS + 1), ("SEED", SEED + 1), ("PS", (.11, .17, .33))):
             with patch(__name__ + "." + name, value):
                 assert inputs_sha(root) != baseline, name
-        optional = root / "criteria/axis_second_reading_extra.json"
+        optional = root / "data/named_votes_cache/2.json"
         optional.write_text("1")
         assert inputs_sha(root) != baseline
         optional.unlink()

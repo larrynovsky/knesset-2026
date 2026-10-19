@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Обзор бюллетеня в ПРИНЯТОЙ форме (design/mockup_v5), заполненный тем, что есть.
+"""Обзор бюллетеня в ПРИНЯТОЙ форме, заполненный тем, что есть.
 
 Урок 13.08 (docs/explanation/why_design_was_invisible_2026-08-13.md): целевая
 форма была принята 01.08 и две недели оставалась невидимой. Здесь она впервые
@@ -46,8 +46,8 @@ def data_periods(data: Path) -> tuple[str, str]:
     if start > end or taken < end:
         raise Refuse("ОТКАЗ: противоречивые даты снимка голосований")
     vote_line = (f'Голосования {votes["knesset"]}-го Кнессета с {start:%d.%m.%Y} '
-                 f'по {end:%d.%m.%Y} (снимок {taken:%d.%m.%Y}); после этого сайт '
-                 'Кнессета закрыт для заходов не из Израиля, новых голосований нет')
+                 f'до {end:%d.%m.%Y} (не включая эту дату; снимок {taken:%d.%m.%Y}); '
+                 'более поздние голосования в отчёт не загружены')
     budgets = []
     # Те же два источника, что validate_cards.budget_index; не архив *_2022.
     for name in ("budget_takanot_2021_2022.json", "budget_takanot.json"):
@@ -82,10 +82,10 @@ def cell(kind: str, label: str, value: str | None = None) -> str:
 
 FRAME = """<div class=note id=frame data-frame=full>
 <p class=dim style="margin-top:0"><b>Темы выбрал автор.</b> Не данные подсказали,
-о чём говорить, — человек решил. Тема здесь одна: что фракция делала с судом,
-парламентом и свободами.</p>
-<p class=dim><b>Оценок здесь нет.</b> Ни баллов, ни звёзд, ни «лучшая-худшая».
-Партии стоят в порядке черновика преемственности. Мы рассказываем, что
+о чём говорить, — человек решил. Здесь четыре темы: суд, парламент и свободы;
+государство и религия; экономика; безопасность.</p>
+<p class=dim><b>Общего балла и рейтинга нет.</b> Здесь нет ярлыков «лучшая-худшая». Оценки направлений и их основания
+показаны отдельно. Порядок строк не означает предпочтения. Мы рассказываем, что
 произошло; вывод — ваш.</p>
 <p class=dim><b>Это первая, грубая итерация.</b> Направление посчитано по
 голосам фракций и знаку каждого закона; точность
@@ -211,7 +211,7 @@ def theme_table(m: dict | None, cards: dict | None) -> str:
     return ('<h2>Другие темы — первая грубая итерация</h2>'
             '<p>Стрелка по голосам фракции и знаку закона по теме; рядом — сколько '
             'законов в сторону плюса / минуса. Экономика: плюс — на стороне '
-            'производителя; государство и религия: ↑ — больше места религии в государстве, ↓ — меньше; безопасность: ↑ — норма расширяет полномочия армии и силовых структур, ↓ — сужает. Если нет стрелки и менее трёх законов с почти единогласными голосованиями — «мало законов (N)». Со всеми (N) — N законов темы приняты почти единогласно, фракции не различаются.</p>'
+            'производителя; государство и религия: ↑ — больше места религии в государстве, ↓ — меньше; безопасность: ↑ — норма расширяет полномочия армии и силовых структур, ↓ — сужает. Если нет стрелки и менее трёх законов с почти единогласными голосованиями — «мало законов (N)». Со всеми (N) — по N законопроектам были почти единогласные голосования; эти случаи не определяют направление стрелки.</p>'
             f'<table class=acts><thead><tr><th scope=col>Фракция</th>{heads}</tr></thead>'
             f'<tbody>{"".join(rows)}</tbody></table>')
 
@@ -265,7 +265,7 @@ def load_ballot(source: Path | None = None) -> dict:
     return ballot
 
 
-def robustness_note(fid: int | list[int], topic: str, arrow: str = "") -> str:
+def robustness_note(fid: int | str | list[int], topic: str, arrow: str = "") -> str:
     from arrow_robustness import label
     data = json.loads((ROOT / "data" / "arrow_robustness.json").read_text(encoding="utf-8"))
     fids = fid if isinstance(fid, list) else [fid]
@@ -362,8 +362,9 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None, *, compact: b
                 values = [[sym[personal["axis"].get("arrow")]]] + [[
                     sym[x["arrow"]] if x.get("arrow") else x.get("text", "мало законов (0)")]
                     for x in (personal["themes"][t] for t in themes)]
-                values = [[f'<span title="Устойчивость личной стрелки не оценивалась">{v}</span>'
-                           if v in ("↑", "↓", "↕") else v for v in value] for value in values]
+                values = [[robustness_note("yashar", topic, arrow=v)
+                           if v in ("↑", "↓", "↕") else v for v in value]
+                          for topic, value in zip(("rule_of_law",) + themes, values)]
             personal_attr = " data-personal=1" if personal else ""
             cells = "".join(
                 f'<td class="ballot-axis"{personal_attr} data-l="{esc(label)}">{" / ".join(dict.fromkeys(value))}</td>'
@@ -421,7 +422,7 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None, *, compact: b
             '<div>Экономика — ↑ на стороне производителя.</div>'
             '<div>Безопасность — ↑ расширяет полномочия армии, полиции и силовых; ↓ — усиливает гражданский контроль (комиссии по 7 октября, надзор за полицией).</div>'
             '<div>Деньги: N/M — для скольких денежных обещаний из коалиционного соглашения в бюджете нашлась статья; это не значит, что деньги выделены полностью</div>'
-            '<div>Со всеми (N) — N законов темы приняты почти единогласно, фракции не различаются.</div>'
+            '<div>Со всеми (N) — по N законопроектам были почти единогласные голосования; эти случаи не определяют направление стрелки.</div>'
             '<div>↕ — и туда и обратно; «—» — знаков нет.</div></div>'
             f'<p>Колонка «4 закона» — как фракции списка голосовали по четырём законам, которые ты пометил „недопустимо“; „за“ выделено; {OWNER_LEGEND}; «/» — расхождение фракций списка.</p>'
             f'<p>{LEGEND}</p>'
@@ -467,7 +468,7 @@ def party_names(matrix: dict, cards: dict) -> dict:
 
 
 OWNER_PARTICIPATION = 1 / 3
-OWNER_LEGEND = "— — нет позиции, фракция не голосовала или голосовала меньше трети (бойкот)"
+OWNER_LEGEND = "— — нет позиции, фракция не голосовала или голосовала меньше трети; причины неучастия здесь не установлены"
 
 
 def owner_law_positions(fids: list[str], personal: dict | None = None) -> list[dict]:
@@ -629,14 +630,14 @@ def build(m: dict, cards: dict | None = None,
 документ нужен для одного: вычеркнуть два-три из них и уметь объяснить себе
 почему — не «они мне не нравятся», а «вот закон, вот дата, вот как они
 проголосовали».</p>
-<p>Мы смотрим на поступки, а не на заявления. Слова перед выборами стоят ноль;
-голос в Кнессете записан поимённо и никуда не денется.</p>
+<p>Мы смотрим на поступки, а не на заявления. Голос в Кнессете
+проверяем по сохранённой поимённой записи.</p>
 {FRAME}
 {ballot_table(m, cards or {}, money_rows=body)}
-<details class="faction-details"><summary>Подробно по 16 фракциям нынешнего Кнессета (для проверки)</summary>
+<details class="faction-details"><summary>Подробно по 16 записям о фракциях 25-го Кнессета (включая прежние составы)</summary>
 {grounds_block(m, cards or {})}
 <h2>Сначала о том, чего мы не знаем</h2>
-<p>Клеток в таблице ниже — <b class=big>{total}</b>С итоговым выводом — {filled};
+<p>Клеток в таблице ниже — <b class=big>{total}</b>. С итоговым выводом — {filled};
 в {rev} показано покрытие обещаний бюджетными строками; в остальных {miss} нужный разбор не
 проведён или искомого не нашли — что именно, сказано на странице фракции.</p>
 <p>Это разные вещи, и подписаны они по-разному.
@@ -649,11 +650,11 @@ def build(m: dict, cards: dict | None = None,
 строка бюджета. Разбор каждого обещания — на странице фракции.
 Ни одно из этих состояний не значит «к этой партии вопросов нет». Пустая клетка
 рассказывает про нас, а не про партию.</p>
-<h2>Шестнадцать фракций нынешнего Кнессета</h2>
+<h2>Шестнадцать записей о фракциях 25-го Кнессета, включая прежние составы</h2>
 <p>Стрелка показывает, в какую сторону фракция двигала то, что написано в
 заголовке колонки, — а не «хорошо это или плохо». <b>↑</b> укрепляла,
 <b>↓</b> ослабляла, <b>↕</b> ходила и туда и обратно. Направление —
-по голосам фракции и знаку закона по большинству трёх моделей.</p>
+по голосам фракции и оценкам законов с последующей проверкой расхождений.</p>
 <table class=ov><thead><tr>
 <th scope=col class=who>фракция</th>
 <th scope=col class=c-inst>суд, парламент, свободы</th>
@@ -664,7 +665,7 @@ def build(m: dict, cards: dict | None = None,
 </details>
 {other_themes()}
 <div class=foot><p>Первая грубая итерация, 19.10.2026.
-Форма принята 01.08.2026 (design/mockup_v5). Снимок голосований:
+Форма принята 01.08.2026. Снимок голосований:
 {esc(str(m.get("source", {}).get("votes_at", "не объявлен"))[:10])}.</p></div>
 </body></html>"""
     return doc, total, filled
@@ -843,7 +844,16 @@ def selftest() -> int:
         assert all(f'href="f-{fid}.html"' in ballot_html for fid in entry.get("factions", []))
     yashar = next(r for r in re.findall(r'<tr data-ballot-list=.*?</tr>', ballot_html) if 'Яшар!' in r)
     assert 'href="f-1098.html"' in yashar and 'colspan=' not in yashar
-    assert 'title="Устойчивость личной стрелки не оценивалась"' in yashar
+    assert "не оценивалась" not in yashar
+    assert 'class="robustness"' in yashar
+    rates = json.loads((ROOT / "data/arrow_robustness.json").read_text())["topics"]
+    personal = personal_result()
+    for topic, result in [("rule_of_law", personal["axis"]), *personal["themes"].items()]:
+        measured = rates[topic]["factions"]["yashar"]
+        assert measured["arrow"] == result.get("arrow"), topic
+        assert all(measured[key] == result.get(key, 0) for key in ("up", "down")), topic
+        if result.get("arrow"):
+            assert robustness_note("yashar", topic, arrow={"up": "↑", "down": "↓", "both": "↕"}[result["arrow"]]) in yashar
     assert next(r for r in ballot_input["lists"] if r["ru"] == "Яшар!")["personal"] == ["Гади Айзенкот", "Хили Тропер"]
     # Личные клетки обязаны следовать личному расчёту, не стрелкам Ганца.
     sample = dict(personal_result(), axis={"arrow": "down"}, themes={
@@ -851,7 +861,7 @@ def selftest() -> int:
     with patch(__name__ + ".personal_result", return_value=sample):
         changed = ballot_table(live_matrix, live_cards)
     changed_row = next(r for r in re.findall(r'<tr data-ballot-list=.*?</tr>', changed) if 'Яшар!' in r)
-    assert [re.sub(r"<[^>]+>", "", c) for c in re.findall(r'data-personal=1 data-l="[^"]+">(.*?)</td>', changed_row)] == ["↓", "↑", "↕", "↓"]
+    assert [re.sub(r"<[^>]+>", "", c).rstrip("?") for c in re.findall(r'data-personal=1 data-l="[^"]+">(.*?)</td>', changed_row)] == ["↓", "↑", "↕", "↓"]
     details = re.search(r'<details><summary>Ещё 24 списка без мест в Кнессете</summary>(.*?)</details>', ballot_html).group(1)
     expected_small = "Amcha Yisrael|Achi Movement|Ani VeAta – Israel's People Party|Betach|Biblical Bloc Party|Black Color|Brit Olam|Electoral System Reform|Gan Eden|HaKahal|Israel First|Kol HaNashim|Lights of Dawn|Mishpat Tzedek|Partnership to All|Personal Safety|Seder Chadash|Sharshar for Love & Unity|Shma|Tekuma|The Haredi Public|The Pirates|Together We'll Make It|Tsomet".split('|')
     assert re.findall(r'<li>(.*?)</li>', details) == [esc(name) for name in expected_small]
@@ -1043,7 +1053,7 @@ def selftest() -> int:
                 fragment = re.search(rf'<p data-personal-theme="{key}">(.*?)</p>', page).group(1)
                 assert ({"up": "↑", "down": "↓", "both": "↕"}[value["arrow"]] if value.get("arrow")
                         else value.get("text", "мало законов (0)")) in fragment
-                assert f'{value.get("up", 0)} вверх, {value.get("down", 0)} вниз' in fragment
+                assert f'законопроектов в сторону плюса: {value.get("up", 0)}, в сторону минуса: {value.get("down", 0)}' in fragment
             assert 'Для сравнения:' in page and 'f-1098.html' in page
             for law in personal_result()["laws"]:
                 assert esc(law["positions"]["yashar"]) in page
@@ -1219,6 +1229,12 @@ def selftest() -> int:
            "name_he": "\u05d4\u05e6\u05e2\u05ea", "for_option_desc": "\u05dc\u05d4\u05e2\u05d1\u05d9\u05e8",
            "pos": "против 5"}]
     fp = faction_page(fcard, frow, fv)
+    old_reading = "Фракция фиксировала позицию практически всегда, и это не свойство выборки: в Кнессете 92% голосований электронные"
+    edited = faction_page(dict(fcard, readings=[{"type": "strengthening", "text": old_reading}]), frow, fv)
+    assert "92%" not in edited and "Участие фракции фиксировалось" in edited
+    assert "Описание участия по исходному снимку" in edited
+    counted = faction_page(dict(fcard, readings=[{"type": "strengthening", "text": "позиция зафиксирована 2 раз за период"}]), frow, fv)
+    assert "число записей об участии: 2 за период" in counted
     # R27-F09: у «за» русский смысл рядом с оригиналом
     assert "передать акт дальше<span class=he" in fp, "у опции голосования нет русского смысла"
     # R8-F10/F11: дата снимка — из карточки, исход поиска — по-русски
@@ -1430,6 +1446,8 @@ def selftest() -> int:
                  "«conclusion изменено»", "«поле coverage.why изменено»",
                  '"coverage.why"', "conclusion.PY"):
         assert reader_terms(keep) == keep, (keep, reader_terms(keep))
+    assert reader_terms("пересмотр и исполнение — нет") == "пересмотренный план и исполнение — ненулевые"
+    assert reader_terms("по title_level6") == "по названию родительского раздела"
     assert reader_terms("дубль noam-p2-79") == "дубль запись строки 79"
     # R18-F01/F02: ID и имена файлов в буквальных формах сохраняются целиком;
     # каждое семейство ID в прозе переводится. Ожидания записаны руками.
@@ -1611,6 +1629,11 @@ def votes_for(fid: int) -> list:
 # Журнал правок хранится как написан (§15), но читатель видит не ключи схемы,
 # а их названия (ревью 18.10, R8-F11, R10-F07). Перевод — только при показе.
 READER_TERMS = {
+    "raw_budget": "полная выгрузка бюджета", "budget_takanot": "бюджетные статьи",
+    "budget_changes": "изменения бюджета", "supports_data": "выплаты получателям субсидий",
+    "agreements_ocr": "распознанный текст соглашений",
+    "commitment_map": "извлечение обещаний из соглашения",
+    "government_sources": "материалы правительства", "web_holy_org": "сайт Центра святых мест",
     "coverage.why": "пояснение к охвату", "quote_ru": "русский перевод цитаты",
     "quote_he": "ивритская цитата", "duplicate_of": "пометка дубля",
     "not_budgetary": "«не денежное обязательство»",
@@ -1648,6 +1671,9 @@ def reader_terms(text: str) -> str:
 
 
 def _terms_prose(text: str) -> str:
+    text = text.replace("пересмотр и исполнение — нет", "пересмотренный план и исполнение — ненулевые")
+    text = text.replace("по title_level6", "по названию родительского раздела")
+    text = text.replace("в quote_he", "в ивритской цитате")
     # Только полный токен: часть составного имени (prefix-noam-p2-79-x) —
     # не ID записи (R18-F01).
     text = re.sub(r"(?<![\w.-])(?:shas|rz|yt|otzma|noam|uright)-p\d+-(\d+)(?![\w-])",
@@ -1751,7 +1777,7 @@ def leading_money(budgets: dict, data: Path | None = None) -> dict:
 
 def budget_block(cards: list, idx: dict, titles: list) -> str:
     """§11: проверка и подстановка читают один индекс; старый CLI не вызывается."""
-    out = []
+    out = ['<p class="dim">База в числах ниже — первоначальный бюджетный план; пересмотр — уточнённый план; исполнено — фактические расходы. «Носитель» — статья или группа статей, сопоставленная с обещанием; «ветка» — раздел бюджета. OCR — автоматически распознанный текст скана. Совпадение статьи с обещанием не доказывает, что расходы вызваны соглашением.</p>']
     full_idx, full_titles = idx, titles
     for card in cards:
         idx, titles = budget_scope(card, full_idx, full_titles)
@@ -1779,21 +1805,21 @@ def budget_block(cards: list, idx: dict, titles: list) -> str:
         dup_note = ("" if not parts else
                     f" Самостоятельных денежных обязательств {uniq}: " + "; ".join(parts) + ".")
         out.append(f'<section data-budget="{esc(card["period_id"])}">'
-                   f'<p>Период: {esc(card["period_id"])}. Разобрано '
+                   f'<p>Правительство {esc(str(card["period_id"]).split("gov")[-1])}. Разобрано '
                    f'{n} {plural_ru(n, "запись", "записи", "записей")} из '
                    f'{esc(total)}; {tail}.{esc(dup_note)}</p>')
         out.append('<p>Снимки источников: ' + esc(
-            "; ".join(f"{k} — {v}" for k, v in sorted(card["snapshots"].items()))) + '</p>')
+            "; ".join(f"{READER_TERMS.get(k, k)} — {v}" for k, v in sorted(card["snapshots"].items()))) + '</p>')
         for c in card.get("commitments") or []:
             amt = ("не указана" if c.get("amount_ils") is None
                    else money(c["amount_ils"]))
             out.append(f'<article id="{esc(c["id"])}"><p>Сумма в соглашении: '
                        f'{amt}</p>'
                        + render_commitment(c, idx, titles, []) + '</article>')
-        out.append('<p>Журнал исправлений:</p><ul>' + ''.join(
+        out.append('<details><summary>История исправлений — прежние формулировки</summary><p>Здесь сохранены прежние решения и причины их пересмотра. Текущий вывод находится выше.</p><ul>' + ''.join(
             f'<li>{esc(r["date"])} · версия {esc(r["version"])}: '
             f'{esc(reader_terms(str(r["what"])))} — {esc(reader_terms(str(r["why"])))}</li>'
-            for r in card.get("revisions") or []) + '</ul></section>')
+            for r in card.get("revisions") or []) + '</ul></details></section>')
     return "".join(out)
 
 
@@ -1966,7 +1992,7 @@ def _theme_lines(row: dict) -> str:
         out.append(f'<p data-theme="{t}"><b>{esc(title)}:</b> {direction} — '
                    f'{a["up"]} {plural_ru(a["up"], "закон", "закона", "законов")} в сторону плюса / {a["down"]} в сторону минуса'
                    f'{esc(note[t])}.</p>{examples}')
-    return "".join(out) + '<p class="dim">Со всеми (N) — N законов темы приняты почти единогласно, фракции не различаются.</p>'
+    return "".join(out) + '<p class="dim">Со всеми (N) — по N законопроектам были почти единогласные голосования; эти случаи не определяют направление стрелки.</p>'
 
 
 def faction_summary(row: dict, card: dict, money_text: str, laws: list[dict]) -> str:
@@ -2030,9 +2056,11 @@ def ballot_pages(matrix: dict, cards: dict, summaries: dict,
                     (t, label, personal["themes"][t]) for t, label in
                     (("religion_state", "Государство и религия"), ("economy", "Экономика"), ("security", "Безопасность"))]:
                 direction = sym[result["arrow"]] if result.get("arrow") else result.get("text", "мало законов (0)")
-                body += f'<p data-personal-theme="{key}"><b>{label}:</b> {direction} · {result.get("up", 0)} вверх, {result.get("down", 0)} вниз.</p>'
-            body += '<p>Устойчивость личных стрелок отдельно не оценивалась.</p><h2>4 закона владельца</h2>' + ''.join(
-                f'<p>{esc(law["name"])}: {esc(law["positions"]["yashar"])} ({law["date"]}); {esc(law["counts"]["yashar"])}</p>' for law in personal["laws"])
+                if result.get("arrow"):
+                    direction += robustness_note("yashar", "rule_of_law" if key == "institutions" else key)
+                body += f'<p data-personal-theme="{key}"><b>{label}:</b> {direction} · законопроектов в сторону плюса: {result.get("up", 0)}, в сторону минуса: {result.get("down", 0)}.</p>'
+            body += '<h2>4 закона владельца</h2>' + ''.join(
+                f'<p>{esc(law["name"])}: {esc(law["positions"]["yashar"])} ({law["date"][:10]}); {esc(law["counts"]["yashar"])}</p>' for law in personal["laws"])
             body += '<p>Расхождение или отсутствие одного из двоих исключает общую позицию. Если оба не голосовали, это показано отдельно и не влияет на стрелки. Последние стадии четырёх законов — те же, что для фракций.</p>'
             body += '<p>Наблюдаемые окна голосований (не юридические даты членства): ' + '; '.join(
                 f'{esc(name)}: {st["first"]} — {st["last"]}, {st["votes"]} голосований' for name, st in personal["stats"].items()) + '.</p>'
@@ -2211,8 +2239,8 @@ def main() -> int:
 
 
 # ────────────────────────────────────── страницы фракций (форма f-*.html)
-SHORT_FRAME = ('<p class=frame data-frame=short>Темы выбрал автор · оценок и '
-               'баллов нет · данные — поимённые голосования Кнессета · автор — '
+SHORT_FRAME = ('<p class=frame data-frame=short>Темы выбрал автор · общего '
+               'балла нет · источники — голосования, соглашения и бюджет · автор — '
                'частное лицо, без финансирования. '
                '<a href="index.html#frame">Полная рамка</a></p>')
 CERT = {"high": "⊕⊕⊕⊕ высокая", "medium": "⊕⊕⊕◯ средняя",
@@ -2221,9 +2249,9 @@ CERT = {"high": "⊕⊕⊕⊕ высокая", "medium": "⊕⊕⊕◯ сред�
 # тот про уверенность карточки целиком, этот — про одну клетку оси.
 CERT_GRADE = {"high": "⊕⊕⊕⊕ высокая", "moderate": "⊕⊕⊕◯ умеренная",
               "low": "⊕⊕◯◯ низкая", "very_low": "⊕◯◯◯ очень низкая"}
-READ_RU = {"weakening": "ослабляющее прочтение",
-           "strengthening": "усиливающее прочтение",
-           "reframing": "переформатирующее прочтение"}
+READ_RU = {"weakening": "что ограничивает вывод",
+           "strengthening": "что поддерживает вывод",
+           "reframing": "другое объяснение"}
 
 
 def det(summary: str, cert: str, inner: str, open_: bool = False) -> str:
@@ -2272,12 +2300,12 @@ def faction_page(card: dict, row: dict, votes: list, budget: str = "", summary: 
             "фракции значило бы угадать. Это другое состояние, чем «пока не "
             "разбирали»."), readings=[])
     if ax.get("arrow") in ("up", "down", "both"):
-        inner1 = (f'<p><b>что мы увидели</b> {esc(ax.get("text"))}</p>'
+        inner1 = (f'<p><b>что мы увидели</b> {esc((ax.get("text") or "").replace("по большинству трёх моделей", "по оценкам моделей с последующей проверкой расхождений"))}</p>'
                   f'<p><b>из чего</b> {esc(ax.get("acts"))} {plural_ru(ax["acts"], "акт", "акта", "актов")} из '
                   f'{esc(ax.get("theme_total"))}, в сторону ослабления '
                   f'{esc(ax.get("down"))}, в сторону укрепления '
                   f'{esc(ax.get("up"))}.</p>'
-              f'<p><b>на чём стояла бы</b> на {esc(cen.get("votes"))} '
+              f'<p><b>расчёт основан</b> на {esc(cen.get("votes"))} '
               f'{plural_ru(cen["votes"], "голосовании", "голосованиях", "голосованиях")} по {esc(cen.get("acts"))} {plural_ru(cen["acts"], "акту", "актам", "актам")}, {esc(cav)}, '
                   f'{esc(cen.get("from"))} — {esc(cen.get("to"))}. Актов темы без '
                   f'участия фракции: {esc(cen.get("acts_without_participation"))}.</p>')
@@ -2289,7 +2317,7 @@ def faction_page(card: dict, row: dict, votes: list, budget: str = "", summary: 
         inner1 = (f'<p><b>почему пусто</b> направление голосований мы считать '
                   f'пока не умеем: классификация встала на объявленном '
                   f'пороге. Пустота здесь про нас, а не про фракцию.</p>'
-                  f'<p><b>на чём стояла бы</b> на {esc(cen.get("votes"))} '
+                  f'<p><b>расчёт основан</b> на {esc(cen.get("votes"))} '
                   f'{plural_ru(cen["votes"], "голосовании", "голосованиях", "голосованиях")} по {esc(cen.get("acts"))} {plural_ru(cen["acts"], "акту", "актам", "актам")}, {esc(cav)}, '
                   f'{esc(cen.get("from"))} — {esc(cen.get("to"))}. Актов темы без '
                   f'участия фракции: {esc(cen.get("acts_without_participation"))}.</p>')
@@ -2327,9 +2355,24 @@ def faction_page(card: dict, row: dict, votes: list, budget: str = "", summary: 
         s2, c2 = (f'Деньги — <b class=tx-miss>{word}</b>',
                   "сопоставление обязательств не построено")
     cells.append(det(s2, c2, budget or f'<p>{esc(row["b"]["note"])}</p>'))
-    body = [f'<p class=lead>{esc(card.get("conclusion"))}</p>']
+    body = ['<h2>Описание участия по исходному снимку</h2><p>Ниже — оценка охвата голосований по теме правового государства. Она не заменяет приведённые выше разборы четырёх тем и денежных обещаний.</p>',
+            f'<p class=lead>{esc(card.get("conclusion"))}</p>']
     # v26: редакционная поправка; исходная карточка и её отпечаток сохранены.
     for r in card.get("readings") or []:
+        r = dict(r)
+        if "канал денег у этой строки пуст" in r.get("text", ""):
+            r["text"] = ("Отсутствие коалиционного соглашения в одном периоде не отменяет "
+                         "соглашений других правительств. Денежные обещания и их периоды разобраны выше.")
+        r["text"] = re.sub(r"[;,] (?:и это не свойство выборки: )?в Кнессете 92%.*",
+                           ". Запись о неучастии не раскрывает позицию по существу.", r.get("text", ""))
+        r["text"] = (re.sub(r"позиция зафиксирована (\d+) раз", r"число записей об участии: \1", r["text"])
+                     .replace("Фракция фиксировала позицию", "Участие фракции фиксировалось")
+                     .replace("фиксация позиции происходила", "участие фиксировалось")
+                     .replace("эта страница не говорит ничего", "эта исходная оценка участия ничего не говорит"))
+        if "пустота канала денег у этой строки" in r["text"]:
+            r["text"] = ("Здесь проверяются денежные обещания коалиционных соглашений. "
+                         "Если фракция не подписывала соглашения, отсутствие такого разбора "
+                         "не означает ни отсутствия проблем, ни обвинения в её адрес.")
         body.append(f'<p><b>{esc(READ_RU.get(r.get("type"), ""))}.</b> '
                     f'{esc(r.get("text", "").replace("пять-шесть строк бюллетеня из шестнадцати", "шесть фракций из шестнадцати"))}</p>')
     cs = card.get("counter_search") or {}
@@ -2337,11 +2380,11 @@ def faction_page(card: dict, row: dict, votes: list, budget: str = "", summary: 
                     for w in cs.get("searched_where") or [])
     body.append(f'<div class=note><p><b>Искали, чем это опровергнуть:</b> '
                 f'{esc(OUTCOME_RU.get(cs.get("outcome"), cs.get("outcome")))}</p><ul class=dim>{where}</ul>'
-                f'<p class=dim>{esc(cs.get("note", ""))}</p>'
-                f'<p><b>Уверенность:</b> {esc(CERT.get(card.get("confidence")))} — '
-                f'{esc(card.get("confidence_reason"))}</p>'
+                f'<p class=dim>{esc(cs.get("note", "").replace("Отдельные голосования не разбирались", "При исходной оценке охвата отдельные голосования не разбирались; текущий разбор выбранных законов приведён выше"))}</p>'
+                f'<p><b>Уверенность в исходном описании участия:</b> {esc(CERT.get(card.get("confidence")))} — '
+                f'{esc((card.get("confidence_reason") or "").replace("отдельные голосования не разбирались", "эта оценка охвата не включала разбор отдельных голосований"))}</p>'
                 f'<p><b>Чем это опровергается.</b> '
-                f'{esc(card.get("what_would_falsify"))}</p></div>')
+                f'{esc((card.get("what_would_falsify") or "").replace("статус not_exposed по каналу Б неверен, и пустота этого канала", "утверждение об отсутствии участия в правительстве неверно, и отсутствие разбора денежных обещаний"))}</p></div>' )
     acts = "".join(
         f'<tr><td data-l="дата">{esc(x["date"])}</td>'
         f'<td data-l="акт">{esc(x["name_ru"])}'

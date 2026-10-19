@@ -312,36 +312,37 @@ ul.frame{padding-left:1.1rem}ul.frame li{margin:.35rem 0}
 
 
 def render_commitment(c: dict, idx, titles, nulls) -> str:
+    from render_overview import reader_terms
     p = [f"<h3>{esc(c.get('quote_ru'))}</h3>"]
     p.append(f'<div class=q><div class=he lang=he dir=rtl>'
              f'<bdi>{esc(c.get("quote_he"))}</bdi></div>'
              f'<div class=he lang=he dir=rtl><bdi>{esc(c.get("heading_he"))}</bdi></div>'
              f'<div class=meta>{esc(c.get("heading_ru"))} · '
              f'страница {esc(c.get("page"))}, строка {esc(c.get("line"))}</div></div>')
-    p.append(f"<p>{substitute(c.get('conclusion') or '', idx, titles, nulls)}</p>")
+    p.append(f"<p>{substitute(reader_terms(c.get('conclusion') or ''), idx, titles, nulls)}</p>")
     # «Год плана и факта» снят: один plan_year не описывает пары лет, которые
     # сравнивает вывод (Ноам 78 — 2023/2024, РС 477 — 2025, Оцма 422 — вне
     # снимка); годы стоят при каждом числе (ревью 18.10, R8-F06).
     p.append(f'<p class=meta>Сопоставление: '
-             f'{esc(GRAN_RU.get(c.get("granularity"), c.get("granularity")))} · '
-             f'ветка {esc(c.get("branch"))}</p>')
+             f'{esc(GRAN_RU.get(c.get("granularity"), c.get("granularity")))}'
+             + (f' · раздел бюджета {esc(c["branch"])}' if c.get("branch") else "") + "</p>")
     for r in c.get("readings") or []:
         p.append(f'<p class=r><b>{esc(READING_RU.get(r.get("type")))} '
                  f'прочтение.</b> '
-                 f'{substitute(r.get("text") or "", idx, titles, nulls)}</p>')
+                 f'{substitute(reader_terms(r.get("text") or ""), idx, titles, nulls)}</p>')
     cs = c.get("counter_search") or {}
-    where = "".join(f"<li>{substitute(as_text(w), idx, titles, nulls)}</li>"
+    where = "".join(f"<li>{substitute(reader_terms(as_text(w)), idx, titles, nulls)}</li>"
                     for w in cs.get("searched_where") or [])
     p.append(f'<p class=r><b>Поиск опровержения.</b> '
              f'{esc(OUTCOME_RU.get(cs.get("outcome"), cs.get("outcome")))}.</p>'
              f'<ul class=meta>{where}</ul>')
     if cs.get("note"):
-        p.append(f'<p class=meta>{substitute(cs["note"], idx, titles, nulls)}</p>')
+        p.append(f'<p class=meta>{substitute(reader_terms(cs["note"]), idx, titles, nulls)}</p>')
     p.append(f'<p class=r><b>Уверенность:</b> '
              f'{esc(CONF_RU.get(c.get("confidence")))} — '
-             f'{substitute(c.get("confidence_reason") or "", idx, titles, nulls)}</p>')
+             f'{substitute(reader_terms(c.get("confidence_reason") or ""), idx, titles, nulls)}</p>')
     p.append(f'<p class=r><b>Чем это опровергается.</b> '
-             f'{substitute(c.get("what_would_falsify") or "", idx, titles, nulls)}</p>')
+             f'{substitute(reader_terms(c.get("what_would_falsify") or ""), idx, titles, nulls)}</p>')
     return "\n".join(p)
 
 
@@ -618,7 +619,7 @@ def selftest() -> int:
     c6["commitments"][0]["counter_search"]["searched_where"] = [
         {"источник": "raw_budget, дата 2026-07-30"}]
     h6 = build([("t", c6)], idx, titles)
-    if "raw_budget, дата 2026-07-30" not in h6 or "&#x27;источник&#x27;" in h6:
+    if "полная выгрузка бюджета, дата 2026-07-30" not in h6 or "&#x27;источник&#x27;" in h6:
         fails.append("область поиска отрендерена как python-repr, "
                      "а не как текст")
 
