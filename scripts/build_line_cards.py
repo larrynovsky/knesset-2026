@@ -261,6 +261,9 @@ def carry_history(body: str, old: str | None, snap: str, name: str = "?") -> str
             f"содержание изменилось, прежние записи журнала сохранены\n")
 
 
+COVERAGE_FIRST = True   # решение владельца 19.10: покрытие вместо точности
+
+
 def arrows(votes: dict, directions_path: Path | None) -> dict:
     """Решения по оси для всех фракций, или пусто, если прогона нет.
 
@@ -278,12 +281,27 @@ def arrows(votes: dict, directions_path: Path | None) -> dict:
     rule["split_below"] = float(_arrow_split())
     dirs, units, _ = load_directions(directions_path)
     a = alpha(units)
+    # Решение владельца 19.10: покрытие вместо точности, первая итерация.
+    # Порог согласия моделей (tentative) не блокирует стрелку; измеренное
+    # согласие сохраняется отдельно (alpha_measured) для следующего шага.
+    a_eff = max(a, rule["tentative"]) if COVERAGE_FIRST else a
     per, theme, _ = compose(votes["rows"], dirs, sign_table(), rule)
     out = {}
     for fac, entry in per.items():
         fid = int(str(fac).split("|")[0])
-        out[fid] = dict(cell(entry, len(theme), a, RU.get(fid, str(fid)), rule),
-                        alpha=round(a, 4))
+        c = dict(cell(entry, len(theme), a_eff, RU.get(fid, str(fid)), rule),
+                 alpha=round(a_eff, 4), alpha_measured=round(a, 4))
+        if COVERAGE_FIRST:
+            # Без порогов охвата и числа актов: стрелка по большинству голосов
+            # фракции × знак закона (две трети — направление, иначе «↕»).
+            n = (c.get("up") or 0) + (c.get("down") or 0)
+            if n:
+                share = c["down"] / n
+                c["arrow"] = ("down" if share >= 2 / 3 else
+                              "up" if share <= 1 / 3 else "both")
+                c["text"] = ("по голосам фракции и знаку закона по большинству "
+                             "трёх моделей")
+        out[fid] = c
     return out
 
 
