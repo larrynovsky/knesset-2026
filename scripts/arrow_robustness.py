@@ -14,6 +14,7 @@ from build_line_cards import RU, _arrow_split, axis_directions
 
 ROOT = Path(__file__).resolve().parent.parent
 RUNS, SEED = 2000, 35
+ALGORITHM = "v58: Бернулли"
 PS = (0.10, 0.17, 0.33)
 TITLES = {"rule_of_law": "Суд, парламент, свободы", **THEMES}
 LEGEND = "Устойчивость: ? — шаткая, ?? — ненадёжна (стрелка может смениться, если каждый десятый знак закона ошибочен)"
@@ -30,7 +31,7 @@ def inputs_sha(root: Path = ROOT) -> str:
                     "criteria/axis_second_reading_*.json", "criteria/declared_before_arrow_*.yaml",
                     "docs/reference/for_option_sign_*.json"):
         paths.update(root.glob(pattern))
-    digest = hashlib.sha256(json.dumps([RUNS, SEED, PS]).encode())
+    digest = hashlib.sha256(json.dumps([ALGORITHM, RUNS, SEED, PS]).encode())
     for path in sorted(paths):
         digest.update(path.relative_to(root).as_posix().encode() + b"\0")
         digest.update(hashlib.sha256(path.read_bytes()).digest())
@@ -86,14 +87,11 @@ def simulate(rows: list, signs: dict, table: dict, rule: dict,
         up, down = entry.get("up", 0), entry.get("down", 0)
         result[fac] = {"arrow": arrow_of(up, down, min_acts), "up": up, "down": down,
                        "retained": {}, "rates": {}}
-    flips = {}
     for p in PS:
         rng = random.Random(SEED)
-        count = int(len(population) * p + .5)
-        flips[f"{p:.2f}"] = count
         hits = dict.fromkeys(factions, 0)
         for _ in range(runs):
-            changed = flip(signs, rng.sample(population, count))
+            changed = flip(signs, [bid for bid in population if rng.random() < p])
             per, _, _ = compose(rows, changed, table, rule)
             for fac in factions:
                 entry = per.get(fac, {})
@@ -107,7 +105,7 @@ def simulate(rows: list, signs: dict, table: dict, rule: dict,
     for entry in result.values():
         rate = entry["rates"]["0.10"]
         entry["label"] = label(rate) if rate is not None else None
-    return {"signed_laws": len(population), "flips": flips,
+    return {"signed_laws": len(population), "expected_flips": {f"{p:.2f}": p * len(population) for p in PS},
             "factions": {fac.split("|", 1)[0]: dict(v, faction=fac) for fac, v in result.items()}}
 
 
@@ -123,14 +121,16 @@ def build() -> dict:
                                  table, rule, min_acts=1 if topic == "rule_of_law" else 3)
         print(f"{topic}: {len(topics[topic]['factions'])} фракций", flush=True)
     return {"runs": RUNS, "seed": SEED, "probabilities": list(PS),
-            "sampling": "uniform without replacement; round-half-up(p * signed laws in votes); shared across factions/readings",
+            "algorithm": ALGORITHM,
+            "sampling": "independent Bernoulli(p) per signed law in votes; shared across factions/readings",
             "topics": topics}
 
 
 def review(data: dict) -> str:
     lines = ["# v35 — устойчивость стрелок", "",
-             "2000 прогонов на тему и p; seed=35. В каждом прогоне равновероятно выбираются",
-             "round-half-up(p × N) разных законов со знаком ±1 и голосованиями в снимке.",
+             "алгоритм v58: Бернулли", "",
+             "2000 прогонов на тему и p; seed=35. В каждом прогоне каждый закон",
+             "со знаком ±1 и голосованиями в снимке независимо переворачивается с вероятностью p.",
              "Знак меняется у закона целиком, для всех чтений и фракций. Нули не меняются.",
              "Пересчёт — compose() и arrow_of(), порог 2/3; минимумы публикации: ось 1, темы 3 закона.",
              "Доля — сохранение исходной стрелки (включая ↕), а не вероятность правильности знака.",
@@ -139,7 +139,8 @@ def review(data: dict) -> str:
              "систематические и связанные ошибки; устойчивость не подтверждает истинность вывода.", "",
              "Синтетика: 100:0 (100 законов) — устойчива; 50:50 как доли (2:2 закона) — ненадёжна.",
              "При 50:50 законах (N=100) ↕ устойчива: равные доли сами по себе не означают ненадёжность.",
-             "Дополнительный контроль у границы направления: 67:33 (N=100) — ненадёжна.", "",
+             "Дополнительный контроль у границы направления: 68:32 (N=100) — ненадёжна.",
+             "При неизменных 18:6 у фракции и N темы 24 → 27 обе метки — шаткая.", "",
              "| Фракция | Тема | p | Сохранение | При p=0.10 |",
              "|---|---|---:|---:|---|"]
     for topic, values in data["topics"].items():
@@ -174,7 +175,7 @@ def selftest() -> None:
             path.write_text("0")
             assert inputs_sha(root) != baseline, f"вход исключён из хеша: {name}"
             path.write_text("1")
-        for name, value in (("RUNS", RUNS + 1), ("SEED", SEED + 1), ("PS", (.11, .17, .33))):
+        for name, value in (("ALGORITHM", "mutant"), ("RUNS", RUNS + 1), ("SEED", SEED + 1), ("PS", (.11, .17, .33))):
             with patch(__name__ + "." + name, value):
                 assert inputs_sha(root) != baseline, name
         optional = root / "criteria/axis_second_reading_extra.json"
@@ -210,6 +211,15 @@ def selftest() -> None:
         assert balanced["arrow"] == "both"
         assert edge["label"] == "ненадёжна" and small["rates"]["0.33"] < .8, "отключение переворотов не обнаружено"
         assert label(.95) == "устойчива" and label(.80) == "шаткая" and label(.7999) == "ненадёжна"
+    # Та же фракция 18:6; три новых закона есть только у другой фракции.
+    # Меняется N темы, но не наблюдаемый перевес проверяемой фракции.
+    padding = [{"bill_id": i, "vote_id": i, "for_option_desc": "test",
+                "by_faction": {"2|B": {"for": 10}}} for i in range(24, 27)]
+    signs = {i: 1 if i < 18 or i >= 24 else -1 for i in range(27)}
+    pair = [simulate(sample, signs, table, rule)["factions"]["1"]
+            for sample in (rows[:24], rows[:24] + padding)]
+    assert all((entry["up"], entry["down"]) == (18, 6) for entry in pair)
+    assert pair[0]["label"] == pair[1]["label"] == "шаткая", "скачок округления N=24 → 27"
     check()
     with patch(__name__ + ".flip", side_effect=lambda signs, selected: signs):
         try:
