@@ -54,6 +54,8 @@ robustness:
 	$(PY) scripts/arrow_robustness.py
 
 report: robustness selftest-code
+	# §24 локально, как на Studio: иначе MANIFEST отстаёт молча и Studio встаёт (19.10, 14:04–15:40)
+	$(PY) scripts/check_artifacts.py
 	$(PY) scripts/check_report_canon.py --build
 
 stamp:
