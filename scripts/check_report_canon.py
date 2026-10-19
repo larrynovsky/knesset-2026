@@ -32,7 +32,7 @@ import hashlib, shutil, subprocess, tempfile
 # ─────────────────────────────────────────────────────────────── канон отчёта
 # Решение владельца 19.10: в денежной клетке разрешено покрытие N из M.
 CLOSED = ["укрепляла", "ослабляла", "и туда и обратно",
-          "искали, не нашли", "мы сюда не дошли", "денежных обещаний пока не разбирали", "в бюджете нашлась строка под {n} из {m} обещаний"]
+          "искали, не нашли", "пока не разбирали", "денежных обещаний пока не разбирали", "в бюджете нашлась строка под {n} из {m} обещаний"]
 ARROW = {"укрепляла": "↑", "ослабляла": "↓", "и туда и обратно": "↕"}
 FORBIDDEN = [r"прогон", r"чек-?лист", r"кворум", r"размеч|размет", r"перепис",
              r"классификатор", r"валидатор", r"единиц[аеы]\s+наблюдения",
@@ -207,9 +207,22 @@ def c_digits(src):
     return len(tds), bad[:3], f"{len(tds)} клеток"
 
 @check("лексика страниц партий",
-       [("слово «валидатор» в прозе", lambda s: edit(s, party_page(s), "<h1>", "<p>Так решил валидатор.</p><h1>"))])
+       [("старое состояние в методике", lambda s: edit(s, "method.html", "<h1>", "<p>мы сюда не дошли</p><h1>")),
+        ("фракции названы строками", lambda s: edit(s, "index.html", "<h1>", "<p>пять-шесть строк бюллетеня из шестнадцати</p><h1>")),
+        ("старые подписи примеров", lambda s: edit(s, "index.html", "<h1>", "<p>Примеры в плюс:</p><h1>")),
+        ("старое денежное состояние", lambda s: edit(s, "index.html", "<h1>", "<p>сопоставление денежных обещаний с бюджетом не построено</p><h1>")),
+        ("слово «валидатор» в прозе", lambda s: edit(s, party_page(s), "<h1>", "<p>Так решил валидатор.</p><h1>"))])
 def c_lex(src):
     pp, bad = party(src), []
+    # v26: видимый текст всех страниц; CSS-комментарий остаётся допустимым.
+    for n, page in src.items():
+        visible = text_of(page).lower()
+        for stale in ("мы сюда не дошли", "примеры в плюс", "примеры в минус",
+                      "сопоставление денежных обещаний с бюджетом не построено",
+                      "строк бюллетеня в сборке", "по строкам бюллетеня",
+                      "строка бюллетеня (голоса", "пять-шесть строк бюллетеня"):
+            if stale in visible:
+                bad.append(f"{n}: устаревший текст «{stale}»")
     for n, s in pp.items():
         t = text_of(s).lower()
         for rule in FORBIDDEN:
@@ -251,12 +264,21 @@ def c_palette(src):
     return len(used), sorted(used - decl), f"{len(used)} красок"
 
 @check("семантика: thead/scope, details/summary, bdi",
-       [("таблица без thead", lambda s: edit(s, "index.html", "<thead>", "<tbody-x>")),
+       [("пример без списка", lambda s: edit(s, "index.html", "<h1>", "<p>в сторону ↑:</p><p>пример</p><h1>")),
+        ("два примера в одном пункте", lambda s: edit(s, "index.html", "<h1>", "<p>в сторону укрепления:</p><ul><li><bdi>один</bdi>; <bdi>два</bdi></li></ul><h1>")),
+        ("таблица без thead", lambda s: edit(s, "index.html", "<thead>", "<tbody-x>")),
         ("th без scope", lambda s: dict(s, **{"index.html": s["index.html"].replace("scope=col", "")})),
         ("RTL без bdi", lambda s: dict(s, **{k: v.replace("<bdi>", "").replace("</bdi>", "") for k, v in s.items()}))])
 def c_sem(src):
     bad = []
     for n, s in src.items():
+        for group in re.finditer(r"<p>в сторону (?:↑|↓|укрепления|ослабления):</p>(.*?)(?=<p|</section>)", s, re.S):
+            block = group[1]
+            if not re.fullmatch(r"<ul>(?:<li>.*?</li>)+</ul>", block, re.S):
+                bad.append(f"{n}: примеры без ul/li")
+            for item in re.findall(r"<li>(.*?)</li>", block, re.S):
+                if item != "нет" and (item.count("<bdi>") != 1 or not item.startswith("<bdi>") or not item.endswith("</bdi>")):
+                    bad.append(f"{n}: пример не отдельным пунктом")
         for table in re.findall(r"<table\b[^>]*>.*?</table>", s, flags=re.S):
             if "<thead" not in table: bad.append(f"{n}: таблица без thead")
             if any("scope=" not in th for th in re.findall(r"<th\b[^>]*>", table)):
@@ -274,7 +296,7 @@ def c_texture(src):
     # клетка обязана нести свою фактуру (R20-F03).
     s = src["index.html"]
     body = s[len(styles(s)):]
-    need = {"искали, не нашли": "tx-none", "мы сюда не дошли": "tx-miss",
+    need = {"искали, не нашли": "tx-none", "пока не разбирали": "tx-miss",
             "денежных обещаний пока не разбирали": "tx-miss"}
     seen, bad = 0, []
     for m in CELL_RX.finditer(body):

@@ -230,8 +230,8 @@ def build(marks: dict, votes: dict, names: dict, ru: dict, fids: list,
 </ul>
 <h2>По актам</h2>
 {sections}
-<h2>По строкам бюллетеня</h2>
-<p class=dim>Названия актов, не числа. Строки без фракции в 25-м Кнессете здесь
+<h2>По фракциям</h2>
+<p class=dim>Названия актов, не числа. Списки без фракции в 25-м Кнессете здесь
 отсутствуют: о них документ не может сказать ничего.</p>
 {per_line(marked, tables, fids, ru, names)}
 </body></html>"""
@@ -288,7 +288,7 @@ def selftest() -> int:
             assert f'id="a{b}"' not in page, f"допустимый акт {b} попал в основания"
     print(f"  OK: {len(marked)} помеченных актов на странице, допустимые — нет")
     # §13: ни одной ячейки таблицы с голым числом по строкам бюллетеня.
-    lines_part = page[page.find("По строкам бюллетеня"):]
+    lines_part = page[page.find("По фракциям"):]
     assert "<td>" not in lines_part and not re.search(r"<li>\d+</li>", lines_part), \
         "в разделе по строкам есть числовая ячейка — это рейтинг"
     print("  OK: по строкам — названия актов, не числа (§13)")

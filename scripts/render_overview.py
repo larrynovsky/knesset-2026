@@ -10,7 +10,7 @@
 и туда и обратно, искали-не-нашли, не дошли. Направления у нас почти нет:
 классификация встала на 15 сильных актах из 55, и только 2 из них имеют
 голосования наблюдаемых фракций. Поэтому почти все клетки честно получают
-«мы сюда не дошли» — состояние, для которого макет и завёл фактуру.
+«пока не разбирали» — состояние, для которого макет и завёл фактуру.
 
 Число заполненных клеток из 64 — это и есть замер. Базовая линия сегодня,
 прирост меряется тем же числом.
@@ -33,7 +33,7 @@ OUT = ROOT / "site" / "index.html"
 CELL = {"up": ("↑", "укрепляла", ""), "down": ("↓", "ослабляла", ""),
         "both": ("↕", "и туда и обратно", ""),
         "none": ("", "искали, не нашли", "tx-none"),
-        "miss": ("", "мы сюда не дошли", "tx-miss"),
+        "miss": ("", "пока не разбирали", "tx-miss"),
         "reviewed": ("", "в бюджете нашлась строка под {n} из {m} обещаний", "tx-rev")}
 
 
@@ -147,7 +147,7 @@ def rows(m: dict, cards: dict | None = None,
                if b == "observed" and k2 == "none" else
                "обязательства против бюджета")
         value = budgets.get(r["anchor_id"]) if k2 == "reviewed" else None
-        if k2 == "miss" and r["anchor_id"] in (1096, 1110, 1100, 1102, 1104):
+        if k2 == "miss" and b != "lineage_unresolved":
             value = "денежных обещаний пока не разбирали"
         c2 = cell(k2, lab, value)
         total += 1
@@ -646,8 +646,12 @@ def selftest() -> int:
             assert f'href="f-{fid}.html"' in page
         assert page.count('data-theme=') == 4 * len(entry["factions"])
         assert page.count('Деньги:</b>') == len(entry["factions"])
-        assert page.count('Примеры в плюс:') == 4 * len(entry["factions"])
-        assert page.count('Примеры в минус:') == 4 * len(entry["factions"])
+        assert page.count('в сторону укрепления:') == len(entry["factions"])
+        assert page.count('в сторону ↑:') == 3 * len(entry["factions"])
+        assert page.count('<ul>') == 9 * len(entry["factions"])
+        assert not re.search(r'<p[^>]*>[^<]*<ul>', page)
+        assert page.count('в сторону ослабления:') == len(entry["factions"])
+        assert page.count('в сторону ↓:') == 3 * len(entry["factions"])
         for law in laws:
             assert page.count(f'grounds.html#a{law["bill"]}') == len(entry["factions"])
         if not entry["factions"]:
@@ -828,7 +832,7 @@ def selftest() -> int:
     fp_u = faction_page(fcard_ax, unres, fv)
     assert MARK not in fp_u, \
         "страница фракции поставила стрелку строке без установленной связи"
-    assert "мы сюда не дошли" in fp_u, fp_u[:200]
+    assert "пока не разбирали" in fp_u, fp_u[:200]
     mk_m = lambda st: {"lines": [{"anchor_id": 1110, "line": "строка",
                                   "a": {"status": st}, "b": {"status": "observed"}}]}
     mu, _, fl_u = rows(mk_m("lineage_unresolved"), {1110: fcard_ax})
@@ -858,7 +862,7 @@ def selftest() -> int:
     _pg = lambda w: f"<summary>Деньги — <b class=tx-none>{w}</b></summary>"
     check_money_same(mz, _pg("искали, не нашли"), 1110)
     try:
-        check_money_same(mz, _pg("мы сюда не дошли"), 1110)
+        check_money_same(mz, _pg("пока не разбирали"), 1110)
     except Refuse:
         pass
     else:
@@ -955,7 +959,7 @@ def selftest() -> int:
     # что защищает.
     axis_cell = re.sub(r"<style>.*?</style>", " ", fp2, flags=re.S) \
         .split("</details>")[0]
-    assert "мы сюда не дошли" not in axis_cell, \
+    assert "пока не разбирали" not in axis_cell, \
         "клетка со стрелкой всё ещё говорит «не дошли»"
     assert "ослабляла" in axis_cell, "знак стрелки не дошёл до клетки оси"
     assert jargon(fp2) is None, "внутренний язык приехал вместе со стрелкой"
@@ -1122,7 +1126,7 @@ def load_cards(unit="faction_knesset") -> dict:
 
 
 ALIAS = {1097: 1105}   # строка бюллетеня → фракция с теми же голосами (владелец 19.10)
-ALIAS_RU = {1097: "Религиозный сионизм — строка бюллетеня (голоса фракции Смотрича)"}
+ALIAS_RU = {1097: "Религиозный сионизм (фракция 1097; голоса — как у фракции Смотрича)"}
 
 
 def votes_for(fid: int) -> list:
@@ -1296,7 +1300,7 @@ def _money_td(doc: str, fid: int) -> str:
 
 
 def _cell_word(html: str, where: str) -> str:
-    words = [w for w in [v[1] for v in CELL.values()] + ["денежных обещаний пока не разбирали"] if f"{w}<span class=lb>" in html
+    words = [w for w in [v[1] for v in CELL.values()] + ["денежных обещаний пока не разбирали"] if f">{w}<span class=lb>" in html
              or f">{w}</b>" in html]
     words += re.findall(r"в бюджете нашлась строка под [0-9]+ из [0-9]+ обещаний(?=<span class=lb>|</b>)", html)
     if len(words) != 1:
@@ -1328,11 +1332,11 @@ def check_overview_money(doc: str, reviewed: set | dict, lines: set | None = Non
 def check_money_same(doc: str, page: str, fid: int, unresolved: bool = False) -> None:
     """R19-F01: обзор и страница фракции отвечают одним значением. Строка
     без установленной связи (1097) денежной клетки на странице не имеет, а в
-    обзоре — «мы сюда не дошли» (R22: проверяется, а не пропускается)."""
+    обзоре — «пока не разбирали» (R22: проверяется, а не пропускается)."""
     a = _cell_word(_money_td(doc, fid), f"обзор {fid}")
     heads = _money_summaries(page)
     if unresolved:
-        if heads or a != "мы сюда не дошли":
+        if heads or a != "пока не разбирали":
             raise Refuse(f"f-{fid}: строка без связи получила денежный вывод")
         return
     if len(heads) != 1:
@@ -1411,12 +1415,12 @@ def _theme_lines(row: dict) -> str:
         a = _THEME_CACHE[t].get(fid, {"up": 0, "down": 0, "examples": {}})
         n = a["up"] + a["down"]
         direction = f"мало законов ({n})" if n < 3 else word[a["arrow"]]
-        examples = "; ".join(
-            label + ": " + ("; ".join("<bdi>" + esc(name) + "</bdi>" for name in a["examples"].get(side, [])) or "нет")
-            for side, label in (("up", "Примеры в плюс"), ("down", "Примеры в минус")))
+        examples = "".join(
+            "<p>" + label + ":</p><ul>" + ("".join("<li><bdi>" + esc(name) + "</bdi></li>" for name in a["examples"].get(side, [])) or "<li>нет</li>") + "</ul>"
+            for side, label in (("up", "в сторону ↑"), ("down", "в сторону ↓")))
         out.append(f'<p data-theme="{t}"><b>{esc(title)}:</b> {direction} — '
                    f'{a["up"]} законов в сторону плюса / {a["down"]} в сторону минуса'
-                   f'{esc(note[t])}. {examples}.</p>')
+                   f'{esc(note[t])}.</p>{examples}')
     return "".join(out)
 
 
@@ -1430,20 +1434,20 @@ def faction_summary(row: dict, card: dict, money_text: str, laws: list[dict]) ->
         direction = (f'{CELL[ax["arrow"]][0]} из {ax["acts"]} законов темы, по которым '
                      f'фракция голосовала, {ax["down"]} — в сторону ослабления, '
                      f'{ax["up"]} — в сторону укрепления')
-    positions = '; '.join(
-        f'<a href="grounds.html#a{law["bill"]}">{esc(law["name"])}</a>: '
-        f'<b>{esc(law["positions"][str(fid)])}</b> ({esc(law["date"])})' for law in laws)
+    positions = ''.join(
+        f'<li><a href="grounds.html#a{law["bill"]}">{esc(law["name"])}</a>: '
+        f'<b>{esc(law["positions"][str(fid)])}</b> ({esc(law["date"])})</li>' for law in laws)
     if not money_text:
         money_text = ("коалиционного соглашения не подписывала" if row["b"]["status"] == "not_exposed"
                       else "денежных обещаний не найдено" if row["b"].get("commitments") == 0
-                      else "сопоставление денежных обещаний с бюджетом не построено")
+                      else "денежных обещаний пока не разбирали")
     periods = load_periods(fid)
     dates = '; '.join(p["start"] + ' — ' + (p["finish"] if p["finish"] != "null" else "окончание не указано")
                       for p in periods)
     government = "да: " + dates if periods else "нет"
     return (f'<section class="faction-summary" aria-label="Коротко о фракции">'
             f'<p><b>Суд, парламент, свободы:</b> {esc(direction)}.</p>'
-            f'<p><b>Четыре закона владельца — последняя стадия:</b> {positions}.</p>'
+            f'<p><b>Четыре закона владельца — последняя стадия:</b></p><ul>{positions}</ul>'
             f'<p><b>Деньги:</b> {esc(money_text)}.</p>'
             f'<p><b>В правительстве в 25-м Кнессете:</b> {esc(government)}.</p>'
             f'{_theme_lines(row)}</section>')
@@ -1475,11 +1479,11 @@ def ballot_pages(matrix: dict, cards: dict, summaries: dict,
             if row["a"]["status"] == "observed" and ax.get("arrow"):
                 if any(ax.get(k) != current.get(k) for k in ("up", "down", "arrow")):
                     raise Refuse(f"суд: примеры и карточка фракции {fid} расходятся")
-                examples = "; ".join(label + ": " + ("; ".join(
-                    '<bdi>' + esc(translations[str(b)]["ru"]) + '</bdi>'
-                    for b in current[side + "_bills"][:2]) or "нет")
-                    for side, label in (("up", "Примеры в плюс"), ("down", "Примеры в минус")))
-                brief = brief.replace('.</p>', f'. {examples}.</p>', 1)
+                examples = "".join("<p>" + label + ":</p><ul>" + ("".join(
+                    '<li><bdi>' + esc(translations[str(b)]["ru"]) + '</bdi></li>'
+                    for b in current[side + "_bills"][:2]) or "<li>нет</li>") + "</ul>"
+                    for side, label in (("up", "в сторону укрепления"), ("down", "в сторону ослабления")))
+                brief = brief.replace('.</p>', f'.</p>{examples}', 1)
             brief = brief.replace('<p><b>Суд,', '<p data-theme="institutions"><b>Суд,', 1)
             brief = brief.replace('Четыре закона владельца', '4 закона владельца', 1)
             body += (f'<h2><a href="f-{fid}.html">{esc(names[fid])}</a></h2>'
@@ -1657,8 +1661,8 @@ def faction_page(card: dict, row: dict, votes: list, budget: str = "", summary: 
         card = dict(card, conclusion=(
             "кто стоит за этой строкой бюллетеня, мы не установили: "
             "преемственность не разрешена, и приписать ей поступки чьей-то "
-            "фракции значило бы угадать. Это другое состояние, чем «мы сюда "
-            "не дошли»."), readings=[])
+            "фракции значило бы угадать. Это другое состояние, чем «пока не "
+            "разбирали»."), readings=[])
     if ax.get("arrow") in ("up", "down", "both"):
         inner1 = (f'<p><b>что мы увидели</b> {esc(ax.get("text"))}</p>'
                   f'<p><b>из чего</b> {esc(ax.get("acts"))} актов из '
@@ -1682,7 +1686,7 @@ def faction_page(card: dict, row: dict, votes: list, budget: str = "", summary: 
                   f'{esc(cen.get("from"))} — {esc(cen.get("to"))}. Актов темы без '
                   f'участия фракции: {esc(cen.get("acts_without_participation"))}.</p>')
         head1 = ('Суд, парламент, свободы — '
-                 '<b class=tx-miss>мы сюда не дошли</b>')
+                 '<b class=tx-miss>пока не разбирали</b>')
         cert1 = "насколько мы в этом уверены: значения нет"
     # Путь к разбору: без него страница решения не находится ниоткуда, а
     # именно там сказано, сколько голосований отсеялось и каким правилом.
@@ -1711,15 +1715,15 @@ def faction_page(card: dict, row: dict, votes: list, budget: str = "", summary: 
                   'коалиционного соглашения не подписывала. Это не результат '
                   'проверки, не выявившей проблем, и не обвинение.</p>')
     else:
-        word = ("денежных обещаний пока не разбирали" if row["anchor_id"] in
-                (1096, 1110, 1100, 1102, 1104) else "мы сюда не дошли")
+        word = "денежных обещаний пока не разбирали"
         s2, c2 = (f'Деньги — <b class=tx-miss>{word}</b>',
                   "сопоставление обязательств не построено")
     cells.append(det(s2, c2, budget or f'<p>{esc(row["b"]["note"])}</p>'))
     body = [f'<p class=lead>{esc(card.get("conclusion"))}</p>']
+    # v26: редакционная поправка; исходная карточка и её отпечаток сохранены.
     for r in card.get("readings") or []:
         body.append(f'<p><b>{esc(READ_RU.get(r.get("type"), ""))}.</b> '
-                    f'{esc(r.get("text"))}</p>')
+                    f'{esc(r.get("text", "").replace("пять-шесть строк бюллетеня из шестнадцати", "шесть фракций из шестнадцати"))}</p>')
     cs = card.get("counter_search") or {}
     where = "".join(f"<li>{esc(w.get('источник') if isinstance(w, dict) else w)}</li>"
                     for w in cs.get("searched_where") or [])
