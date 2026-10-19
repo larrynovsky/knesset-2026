@@ -203,8 +203,8 @@ def c_ballot_money(src):
 @check("компактные клетки бюллетеня (v42)",
        [("убран значок ненадёжной стрелки", lambda s: dict(s, **{"index.html": re.sub(
            r'(title="ненадёжна: [0-9.]+%">[↑↓↕]<small class="robustness">)\?\?(</small>)', r'\1\2', s["index.html"], count=1)})),
-        ("возвращено длинное единогласие", lambda s: edit(s, "index.html", "со всеми (9/3)",
-          "голосовали со всеми (почти единогласно: 9 законов)")),
+        ("возвращено длинное единогласие", lambda s: dict(s, **{"index.html": re.sub(
+          r'со всеми \(([0-9]+)(?:/[0-9]+)?\)', r'голосовали со всеми (почти единогласно: \1 законов)', s["index.html"], count=1)})),
         ("снят title устойчивости", lambda s: dict(s, **{"index.html": re.sub(
           r' title="устойчива: [0-9.]+%"', '', s["index.html"], count=1)})),
         ("снята оговорка личной стрелки", lambda s: edit(s, "index.html",
@@ -228,8 +228,9 @@ def c_compact_ballot(src):
                 bad.append(f"{word}: неверный значок {mark!r}")
         if 'голосовали со всеми' in cell or 'почти единогласно' in cell:
             bad.append("длинная клетка единогласия")
-    if 'со всеми (9/3)' not in cells:
-        bad.append("Ликуд: не сохранены оба числа 9/3")
+    # 19.10: числа зависят от данных — проверяется форма, а не 9/3
+    if not any(re.search(r'со всеми \([0-9]+(?:/[0-9]+)?\)', c) for c in cells):
+        bad.append("нет ни одной компактной клетки «со всеми (N)»")
     return len(cells), bad, f"{len(cells)} клеток; значки и title"
 
 

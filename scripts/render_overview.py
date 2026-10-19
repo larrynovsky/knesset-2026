@@ -599,6 +599,16 @@ def build(m: dict, cards: dict | None = None,
 .ballot-laws{{display:flex;gap:4px;align-items:flex-start}}
 .ballot-laws>span{{flex:1;white-space:nowrap;hyphens:none;border:1px solid var(--rule);padding:2px;text-align:center;font-weight:400}}
 .ballot .norec{{display:block;font-size:12px;color:var(--dim)}}
+/* 19.10, владелец: при прокрутке шапка уезжала и колонки становились безымянными */
+.ballot thead th{{position:sticky;top:0;z-index:2;background:var(--bg);box-shadow:0 2px 0 var(--rule)}}
+.ballot .norec{{border:0;padding:0;margin:1px 0;font-size:11px;line-height:1.35}}
+.ballot tbody tr:nth-child(even){{background:var(--panel)}}
+.ballot-laws{{counter-reset:law}}
+.ballot-laws>span::before{{counter-increment:law;content:"закон " counter(law);display:block;font-size:9px;color:var(--dim);font-weight:400}}
+@media(min-width:601px){{
+ .ballot td.ballot-axis::before,.ballot td[data-l="Деньги"]::before{{content:attr(data-l);display:block;font-size:9px;color:var(--dim);text-transform:lowercase}}
+ .ballot td.ballot-axis,.ballot td[data-l="Деньги"]{{font-size:15px;text-align:center}}
+}}
 @media(max-width:600px){{
  .ballot,.ballot tbody,.ballot tr{{display:block;width:100%}}
  .ballot thead{{display:none}} .ballot tr{{margin:1rem 0}}
