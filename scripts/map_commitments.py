@@ -1011,9 +1011,8 @@ def build_map(text: str, sha: str, agreement: dict, lines: list[str],
 
 
 def ca36_summary(n: int, status: str) -> str:
-    noun = ("денежное обещание" if n % 10 == 1 and n % 100 != 11 else
-            "денежных обещания" if n % 10 in (2, 3, 4) and n % 100 not in (12, 13, 14)
-            else "денежных обещаний")
+    from build_report import plural_ru
+    noun = plural_ru(n, "денежное обещание", "денежных обещания", "денежных обещаний")
     count = (f"{n} {noun}" if n else
              "0 — правило извлечения ничего не нашло; это не значит, что обещаний нет")
     return f"в соглашении 2021 года найдено {count}; {status}"

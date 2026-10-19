@@ -8,6 +8,7 @@ criteria/theme_signs_<theme>.json (ставят Claude/Codex), голоса — 
 build_line_cards.arrows.
 """
 from __future__ import annotations
+from build_report import plural_ru
 import json, sys
 from pathlib import Path
 
@@ -73,7 +74,7 @@ def theme_arrows(theme: str, votes: dict | None = None) -> dict:
         consensus = len(consensus_bills.get(fac, set()) - retained)
         out[fid] = {"arrow": arrow_of(up, down), "up": up, "down": down,
                     "consensus": consensus,
-                    "text": (f"голосовали со всеми ({consensus} законов приняты почти единогласно)"
+                    "text": (f"голосовали со всеми (почти единогласно: {consensus} {plural_ru(consensus, 'закон', 'закона', 'законов')})"
                              if consensus >= 3 else f"мало законов ({up + down})"),
                     "examples": {side: [names[b] for b in entry.get(side + "_bills", [])[:2]]
                                  for side in ("up", "down")}}
@@ -125,7 +126,7 @@ def selftest() -> int:
             assert agreed[1]["consensus"] == agreed[2]["consensus"] == 3
             assert 3 not in agreed
             assert agreed[1]["arrow"] is None and agreed[1]["up"] == agreed[1]["down"] == 0
-            text = "голосовали со всеми (3 законов приняты почти единогласно)"
+            text = "голосовали со всеми (почти единогласно: 3 закона)"
             assert agreed[1]["text"] == text
             # Проходим настоящие рендеры, а не проверяем только поле данных.
             import render_overview as view

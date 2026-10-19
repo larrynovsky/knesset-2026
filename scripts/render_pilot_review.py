@@ -17,6 +17,7 @@
 """
 from __future__ import annotations
 
+from build_report import plural_ru
 import collections
 import html
 import json
@@ -213,7 +214,7 @@ table{{border-collapse:collapse;font-size:14px}} td,th{{border:1px solid #ddd;pa
 {f'<p>Объявлено ДО прогона: <b>{exp}</b>. Вышло <b>{len(dis_sign)}</b>.</p>' if exp is not None else ''}
 <p><b>Локализация цитат</b> (проверки, которой не было в прежней версии):
 найдено дословно {q_exact}, не найдено или взято из названия <b>{q_bad}</b>.
-Токенов: вход {tok['in']:,}, выход {tok['out']:,} на {len(rows)} строк —
+Токенов: вход {tok['in']:,}, выход {tok['out']:,} на {len(rows)} {plural_ru(len(rows), 'строку', 'строки', 'строк')} —
 экстраполяция на ядро {CORE}: вход ~{int(tok['in'] * CORE / max(len(rows), 1)):,},
 выход ~{int(tok['out'] * CORE / max(len(rows), 1)):,}.</p>
 
@@ -258,7 +259,7 @@ table{{border-collapse:collapse;font-size:14px}} td,th{{border:1px solid #ddd;pa
     print(f"  цитат вне текста: {len(suspect)} строк · расхождений по знаку: {len(dis_sign)}")
     print(f"  расхождений по числу норм: {len(dis_norms)} · по сильнейшей: {len(dis_strong)}")
     print(f"  оракул с промахом или отказом: {len(orc_bad)}")
-    print(f"  токены: вход {tok['in']:,} выход {tok['out']:,} на {len(rows)} строк")
+    print(f"  токены: вход {tok['in']:,} выход {tok['out']:,} на {len(rows)} {plural_ru(len(rows), 'строку', 'строки', 'строк')}")
     return 0
 
 

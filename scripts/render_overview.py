@@ -21,7 +21,7 @@ from pathlib import Path
 from html.parser import HTMLParser
 from urllib.parse import unquote, urlsplit
 
-from build_report import esc, fingerprint, render_commitment, money, Refuse, OUTCOME_RU
+from build_report import esc, fingerprint, render_commitment, money, Refuse, OUTCOME_RU, plural_ru
 from validate_cards import budget_index, budget_scope
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -730,7 +730,7 @@ def selftest() -> int:
     # ── ЧИСЛИТЕЛЬНОЕ СОГЛАСУЕТСЯ С ЧИСЛОМ ────────────────────────────────
     # «2 обязательств» и «остальные не разобраны» при полном разборе — язык
     # сборщика, а не документа; страница Оцма (2 из 2) показала оба 10.10.
-    assert [ru_plural(n, "о", "а", "в") for n in (1, 2, 5, 11, 13, 21, 22)] == \
+    assert [plural_ru(n, "о", "а", "в") for n in (1, 2, 5, 11, 13, 21, 22)] == \
         ["о", "а", "в", "в", "в", "о", "а"], "склонение «обязательство» сломано"
     # ── ДУБЛЬ НЕ СЧИТАЕТСЯ ОБЯЗАТЕЛЬСТВОМ ───────────────────────────────
     # Пометка duplicate_of в записи обязана доехать до счётчика: иначе
@@ -1243,14 +1243,6 @@ def votes_for(fid: int) -> list:
     return out
 
 
-def ru_plural(n: int, one: str, few: str, many: str) -> str:
-    """1 обязательство, 2–4 обязательства, 5+ обязательств (и 11–14 — many)."""
-    n = abs(int(n))
-    if n % 10 == 1 and n % 100 != 11:
-        return one
-    if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14:
-        return few
-    return many
 
 
 # Журнал правок хранится как написан (§15), но читатель видит не ключи схемы,
@@ -1313,7 +1305,7 @@ def budget_counts(cards: list) -> tuple[int, int]:
 
 def budget_summary(cards: list) -> str:
     found, total = budget_counts(cards)
-    return CELL["reviewed"][1].format(n=found, m=total)
+    return CELL["reviewed"][1].format(n=found, m=total).replace('обещаний', plural_ru(total, 'обещания', 'обещаний', 'обещаний'))
 
 
 def leading_money(budgets: dict, data: Path | None = None) -> dict:
@@ -1363,7 +1355,7 @@ def leading_money(budgets: dict, data: Path | None = None) -> dict:
         if gov == 37 and {c["period_id"] for c in reviewed} != periods:
             raise Refuse("CA37: отсутствует разбор обещаний партнёра")
         found, independent = budget_counts(reviewed)
-        text = (f"подписала как вторая сторона {total} денежных обещаний партнёрам "
+        text = (f"подписала как вторая сторона {total} {plural_ru(total, 'денежное обещание', 'денежных обещания', 'денежных обещаний')} партнёрам "
                 f"в соглашениях правительства {gov}")
         if gov == 37:
             text += (f"; самостоятельных обещаний после разбора: {independent}; "
@@ -1416,16 +1408,16 @@ def budget_block(cards: list, idx: dict, titles: list) -> str:
         uniq = n - len(dups) - len(nonmoney)
         parts = []
         if dups:
-            parts.append(f"{len(dups)} {ru_plural(len(dups), 'запись', 'записи', 'записей')} — "
+            parts.append(f"{len(dups)} {plural_ru(len(dups), 'запись', 'записи', 'записей')} — "
                          "продолжение другого пункта (помечено в самой записи)")
         if nonmoney:
-            parts.append(f"{len(nonmoney)} {ru_plural(len(nonmoney), 'запись', 'записи', 'записей')} — "
+            parts.append(f"{len(nonmoney)} {plural_ru(len(nonmoney), 'запись', 'записи', 'записей')} — "
                          "без собственной суммы (разобрано, но денег не обещает)")
         dup_note = ("" if not parts else
                     f" Самостоятельных денежных обязательств {uniq}: " + "; ".join(parts) + ".")
         out.append(f'<section data-budget="{esc(card["period_id"])}">'
                    f'<p>Период: {esc(card["period_id"])}. Разобрано '
-                   f'{n} {ru_plural(n, "запись", "записи", "записей")} из '
+                   f'{n} {plural_ru(n, "запись", "записи", "записей")} из '
                    f'{esc(total)}; {tail}.{esc(dup_note)}</p>')
         out.append('<p>Снимки источников: ' + esc(
             "; ".join(f"{k} — {v}" for k, v in sorted(card["snapshots"].items()))) + '</p>')
@@ -1592,7 +1584,7 @@ def _theme_lines(row: dict) -> str:
             "<p>" + label + ":</p><ul>" + ("".join("<li><bdi>" + esc(name) + "</bdi></li>" for name in a["examples"].get(side, [])) or "<li>нет</li>") + "</ul>"
             for side, label in (("up", "в сторону ↑"), ("down", "в сторону ↓")))
         out.append(f'<p data-theme="{t}"><b>{esc(title)}:</b> {direction} — '
-                   f'{a["up"]} законов в сторону плюса / {a["down"]} в сторону минуса'
+                   f'{a["up"]} {plural_ru(a["up"], "закон", "закона", "законов")} в сторону плюса / {a["down"]} в сторону минуса'
                    f'{esc(note[t])}.</p>{examples}')
     return "".join(out)
 
@@ -1604,7 +1596,7 @@ def faction_summary(row: dict, card: dict, money_text: str, laws: list[dict]) ->
     ax = card.get("axis_institutions") or {}
     direction = "направление не установлено"
     if row["a"]["status"] == "observed" and ax.get("arrow") in ("up", "down", "both") and alpha_ok(ax):
-        direction = (f'{CELL[ax["arrow"]][0]} из {ax["acts"]} законов темы, по которым '
+        direction = (f'{CELL[ax["arrow"]][0]} из {ax["acts"]} {plural_ru(ax["acts"], "закона", "законов", "законов")} темы, по которым '
                      f'фракция голосовала, {ax["down"]} — в сторону ослабления, '
                      f'{ax["up"]} — в сторону укрепления')
     positions = ''.join(
@@ -1873,12 +1865,12 @@ def faction_page(card: dict, row: dict, votes: list, budget: str = "", summary: 
             "разбирали»."), readings=[])
     if ax.get("arrow") in ("up", "down", "both"):
         inner1 = (f'<p><b>что мы увидели</b> {esc(ax.get("text"))}</p>'
-                  f'<p><b>из чего</b> {esc(ax.get("acts"))} актов из '
+                  f'<p><b>из чего</b> {esc(ax.get("acts"))} {plural_ru(ax["acts"], "акт", "акта", "актов")} из '
                   f'{esc(ax.get("theme_total"))}, в сторону ослабления '
                   f'{esc(ax.get("down"))}, в сторону укрепления '
                   f'{esc(ax.get("up"))}.</p>'
               f'<p><b>на чём стояла бы</b> на {esc(cen.get("votes"))} '
-              f'голосованиях по {esc(cen.get("acts"))} актам, {esc(cav)}, '
+              f'{plural_ru(cen["votes"], "голосовании", "голосованиях", "голосованиях")} по {esc(cen.get("acts"))} {plural_ru(cen["acts"], "акту", "актам", "актам")}, {esc(cav)}, '
                   f'{esc(cen.get("from"))} — {esc(cen.get("to"))}. Актов темы без '
                   f'участия фракции: {esc(cen.get("acts_without_participation"))}.</p>')
         head1 = (f'Суд, парламент, свободы — '
@@ -1890,7 +1882,7 @@ def faction_page(card: dict, row: dict, votes: list, budget: str = "", summary: 
                   f'пока не умеем: классификация встала на объявленном '
                   f'пороге. Пустота здесь про нас, а не про фракцию.</p>'
                   f'<p><b>на чём стояла бы</b> на {esc(cen.get("votes"))} '
-                  f'голосованиях по {esc(cen.get("acts"))} актам, {esc(cav)}, '
+                  f'{plural_ru(cen["votes"], "голосовании", "голосованиях", "голосованиях")} по {esc(cen.get("acts"))} {plural_ru(cen["acts"], "акту", "актам", "актам")}, {esc(cav)}, '
                   f'{esc(cen.get("from"))} — {esc(cen.get("to"))}. Актов темы без '
                   f'участия фракции: {esc(cen.get("acts_without_participation"))}.</p>')
         head1 = ('Суд, парламент, свободы — '
@@ -1952,7 +1944,7 @@ def faction_page(card: dict, row: dict, votes: list, budget: str = "", summary: 
         f'<span class=he lang=he dir=rtl>'
         f'<bdi>{esc(x["for_option_desc"])}</bdi></span></td>'
         f'<td data-l="фракция">{esc(x["pos"])}</td></tr>' for x in votes)
-    body.append(det(f"Все {len(votes)} голосований этой фракции — {esc(cav)}",
+    body.append(det(f"{plural_ru(len(votes), 'Всё', 'Все', 'Все')} {len(votes)} {plural_ru(len(votes), 'голосование', 'голосования', 'голосований')} этой фракции — {esc(cav)}",
                     "здесь все голосования, которые мы учли; "
                     "внутри темы мы ничего не отбирали",
                     '<table class=acts><thead><tr><th scope=col>дата</th>'

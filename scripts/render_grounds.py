@@ -14,6 +14,7 @@ grounds: для каждого акта с пометкой «недопусти
 """
 from __future__ import annotations
 
+from build_report import plural_ru
 import json
 import sys
 from html import escape as E
@@ -203,7 +204,7 @@ def build(marks: dict, votes: dict, names: dict, ru: dict, fids: list,
 <nav class=crumbs><a href="index.html">Все фракции</a> · Основания</nav>
 {SHORT_FRAME}
 <h1>Основания</h1>
-<p class=lead>Владелец прочитал {len(marks)} актов, не видя, кто как голосовал,
+<p class=lead>Владелец прочитал {len(marks)} {plural_ru(len(marks), 'акт', 'акта', 'актов')}, не видя, кто как голосовал,
 и пометил {len(marked)} как недопустимые. Ниже — кто за эти акты голосовал,
 на каждой стадии, где «за» двигало акт. Документ не говорит «вычеркнуть»:
 он говорит «проголосовали за акт, который ты прочитал и пометил». Сколько

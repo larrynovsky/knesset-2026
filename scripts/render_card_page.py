@@ -18,6 +18,7 @@
     python3 scripts/render_card_page.py --selftest
     python3 scripts/render_card_page.py
 """
+from build_report import plural_ru
 import json
 import sys
 from pathlib import Path
@@ -169,10 +170,10 @@ def page(card: dict, buckets: dict, names: dict) -> str:
 <a href="f-{fid}.html">странице фракции</a>. Здесь только разбор по
 правилам — списку хватает одного места.</p>
 </div>
-<h2>Как из {total} голосований остаётся {usable}</h2>
+<h2>Как из {total} {plural_ru(total, 'голосования', 'голосований', 'голосований')} остаётся {usable}</h2>
 {body}
-<div class=foot><p>Учтено: {esc(cen.get("votes"))} голосований по
-{esc(cen.get("acts"))} актам, {esc(cen.get("from"))} — {esc(cen.get("to"))}.
+<div class=foot><p>Учтено: {esc(cen.get("votes"))} {plural_ru(cen['votes'], 'голосование', 'голосования', 'голосований')} по
+{esc(cen.get("acts"))} {plural_ru(cen['acts'], 'акту', 'актам', 'актам')}, {esc(cen.get("from"))} — {esc(cen.get("to"))}.
 Актов темы без участия фракции: {esc(cen.get("acts_without_participation"))}.
 Отпечаток данных: {esc(card.get("data_fingerprint"))}. Правила отсева —
 criteria/declared_before_arrow_2026-10-07.yaml, арифметика —

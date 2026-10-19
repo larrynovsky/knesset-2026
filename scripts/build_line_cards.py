@@ -17,6 +17,7 @@
       | python3 scripts/build_line_cards.py --apply
 """
 from __future__ import annotations
+from build_report import plural_ru
 import json, re, sys, collections
 from datetime import date
 from pathlib import Path
@@ -177,8 +178,8 @@ holdout_checked:
     отрезке времени, в который до этого не смотрели
 
 conclusion: >-
-  Фракция участвовала в {cen['votes']} голосованиях {CAV},
-  охватив {cen['acts']} актов из {cen['acts_in_theme_total']}.
+  Фракция участвовала в {cen['votes']} {plural_ru(cen['votes'], 'голосовании', 'голосованиях', 'голосованиях')} {CAV},
+  охватив {cen['acts']} {plural_ru(cen['acts'], 'акт', 'акта', 'актов')} из {cen['acts_in_theme_total']}.
   Что означало «за» в каждом случае, читается из поля смысла опции, а не
   предполагается. Направление — в блоке «Суд, парламент, свободы» выше.
   Деньги: {bnote}. Должности: данных пока нет — это наша недоработка, к

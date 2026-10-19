@@ -37,6 +37,7 @@
 """
 from __future__ import annotations
 
+from build_report import plural_ru
 import html
 import inspect
 import json
@@ -104,7 +105,7 @@ border-radius:6px;white-space:pre-wrap;font-size:15px}}
 .ans{{border:1px dashed #aaa;padding:10px;border-radius:6px;margin-top:10px}}
 pre{{white-space:pre-wrap;font:13px/1.5 ui-monospace,Menlo,monospace;background:#f7f7f5;padding:12px;border-radius:6px}}
 </style>
-<h1>Чтение вслепую: {len(batch)} актов</h1>
+<h1>Чтение вслепую: {len(batch)} {plural_ru(len(batch), 'акт', 'акта', 'актов')}</h1>
 <div class=note><b>Что от вас нужно.</b> Для каждого акта — один знак по оси
 «сдержки исполнительной власти»: <b>−1</b> ослабляет, <b>0</b> не меняет,
 <b>+1</b> усиливает. Если по тексту сказать нельзя — так и напишите:
@@ -237,7 +238,7 @@ def main() -> int:
                   " — состав набора разошёлся с файлом переводов")
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(page(batch, checklist_text(), ru), encoding="utf-8")
-    print(f"отобрано {len(batch)} актов, групп {len({a['group'] for a in batch})}")
+    print(f"отобрано {len(batch)} {plural_ru(len(batch), 'акт', 'акта', 'актов')}, групп {len({a['group'] for a in batch})}")
     for a in batch:
         print(f"   {a['bill']}  {a['group']:<28} {a['chars']:>5} знаков  {a['name'][:40]}")
     print(f"\n{OUT}\n{BATCH}")

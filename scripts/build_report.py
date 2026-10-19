@@ -101,6 +101,17 @@ class Refuse(Exception):
 
 
 # ------------------------------------------------------------------ разметка
+
+def plural_ru(n: int, one: str, few: str, many: str) -> str:
+    """Форма для целого счётчика; падеж задаёт вызывающий (из: закона/законов/законов)."""
+    n = abs(int(n))
+    if n % 10 == 1 and n % 100 != 11:
+        return one
+    if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14:
+        return few
+    return many
+
+
 def esc(s) -> str:
     s = str(s if s is not None else "")
     bad = sorted({hex(ord(c)) for c in s if ord(c) in BIDI})
@@ -385,8 +396,8 @@ def render_votes(card: dict) -> str:
     cen = v.get("census") or {}
     rows = votes_of(v["faction_id"])
     p = [f'<div class=cov><b>Перепись голосований — {esc(cav)}.</b> '
-         f'{esc(cen.get("votes"))} голосований по {esc(cen.get("acts"))} актам '
-         f'из {esc(cen.get("acts_in_theme_total"))} актов темы, '
+         f'{esc(cen.get("votes"))} {plural_ru(cen["votes"], "голосование", "голосования", "голосований")} по {esc(cen.get("acts"))} {plural_ru(cen["acts"], "акту", "актам", "актам")} '
+         f'из {esc(cen.get("acts_in_theme_total"))} {plural_ru(cen["acts_in_theme_total"], "акта", "актов", "актов")} темы, '
          f'{esc(cen.get("from"))} — {esc(cen.get("to"))}. '
          f'Актов темы без участия фракции: {esc(cen.get("acts_without_participation"))}. '
          f'Отбор внутри темы не производился: показаны все.</div>']
@@ -538,6 +549,12 @@ def write_site(doc: str) -> None:
 def selftest() -> int:
     """Работает БЕЗ выгрузки: данные подкладываются. Иначе проверка не
     вызывалась бы на той машине, где стоит pre-commit."""
+    for n, expected in [(0, "many"), (1, "one"), (2, "few"), (4, "few"),
+                        (5, "many"), (11, "many"), (12, "many"), (14, "many"),
+                        (21, "one"), (24, "few"), (111, "many"), (131, "one")]:
+        assert plural_ru(n, "one", "few", "many") == expected, n
+    assert plural_ru(131, "закона", "законов", "законов") == "закона"
+    assert plural_ru(5, "обещания", "обещаний", "обещаний") == "обещаний"
     idx = {("0022010213", 2023): {"net_allocated": 1000, "net_executed": 500},
            ("0022010212", 2023): {"net_allocated": None}}
     titles = ["הקמת מוסדות דת שוטף", "פיתוח בתי עלמין", 'תמיכה בבתי חב"ד']

@@ -20,6 +20,7 @@
     python3 scripts/render_axes.py --selftest
     python3 scripts/render_axes.py
 """
+from build_report import plural_ru
 import json
 import sys
 from pathlib import Path
@@ -85,7 +86,7 @@ def axis_state(axis: dict, counts: dict) -> tuple[str, str]:
                     "голосований на месте нет — числа сказать не из чего. "
                     "Это про нас, а не про ноль действий")
         return ("считаем", f"отобрано {counts['acts']} парламентских действий "
-                           f"и {counts['votes']} поимённых голосований; "
+                           f"и {counts['votes']} {plural_ru(counts['votes'], 'поимённое голосование', 'поимённых голосования', 'поимённых голосований')}; "
                            f"направление по ним считается сейчас")
     if axis.get("signed") is False:
         return ("знака нет",

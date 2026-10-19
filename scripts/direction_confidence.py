@@ -708,7 +708,7 @@ def level(a: float, coverage: float, rule: dict) -> str:
 THEME_CAVEAT = "по вопросам правового государства"
 
 SAY = {"high": "{party} {theme}: {move}",
-       "moderate": "вероятно {move} {theme}; у нас {n} актов из {m}",
+       "moderate": "вероятно {move} {theme}; у нас {n} {acts_word} из {m}",
        "low": "свидетельства расходятся; что мы видим — {move} {theme}, "
               "и мы в этом не уверены",
        "very_low": "сказать нечего: {why}"}
@@ -722,7 +722,8 @@ def say(lvl: str, mv: str, party: str, n: int, m: int, why: str) -> str:
     Шаблон выбирается уровнем, а не автором: иначе формулировка поползёт к
     уверенной при любом замере, и поползёт незаметно.
     """
-    return SAY[lvl].format(party=party, move=MOVE[mv], n=n, m=m, why=why,
+    from build_report import plural_ru
+    return SAY[lvl].format(acts_word=plural_ru(n, "акт", "акта", "актов"), party=party, move=MOVE[mv], n=n, m=m, why=why,
                            theme=THEME_CAVEAT)
 
 
