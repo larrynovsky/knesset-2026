@@ -826,6 +826,7 @@ def load_cards(unit="faction_knesset") -> dict:
 
 
 ALIAS = {1097: 1105}   # строка бюллетеня → фракция с теми же голосами (владелец 19.10)
+ALIAS_RU = {1097: "Религиозный сионизм — строка бюллетеня (голоса фракции Смотрича)"}
 
 
 def votes_for(fid: int) -> list:
@@ -1179,7 +1180,9 @@ def main() -> int:
         if src and src in cards:
             srow = next(x for x in m["lines"] if x["anchor_id"] == src)
             r["a"], r["b"] = dict(srow["a"]), dict(srow["b"])
-            cards[r["anchor_id"]] = cards[src]
+            # своё имя строки бюллетеня, а не «(Смотрич)» второй раз
+            cards[r["anchor_id"]] = dict(cards[src], party_ru=ALIAS_RU.get(r["anchor_id"], cards[src].get("party_ru")),
+                                          party_he=r["line"])
             if budgets.get(src):
                 budgets[r["anchor_id"]] = budgets[src]
     summaries = {fid: budget_summary(bc) for fid, bc in budgets.items() if bc}
