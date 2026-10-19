@@ -137,7 +137,7 @@ def selftest() -> int:
                  patch.object(view, "load_ballot", return_value={"unmapped_factions": {}, "lists": [{
                      "factions": [1096], "absent": [], "ru": "test", "he": "test", "leaders": "test"}]}), \
                  patch.object(view, "owner_law_positions", return_value=[{
-                     "name": "test", "positions": {view._al(1096): "нет позиции", view._al(1108): "нет позиции"}}] * 4):
+                     "name": "test", "labels": {view._al(1096): "нет позиции", view._al(1108): "нет позиции"}, "counts": {view._al(1096): "за 0", view._al(1108): "за 0"}, "positions": {view._al(1096): "нет позиции", view._al(1108): "нет позиции"}}] * 4):
                 assert text in view._theme_lines({"anchor_id": 1096})
                 assert f"<td>{text}</td>" in view.theme_table(matrix, {})
                 assert text in view.ballot_table(matrix, {})

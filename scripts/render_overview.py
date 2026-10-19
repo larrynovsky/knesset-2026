@@ -276,9 +276,10 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
         law_marks = []
         for law in laws:
             positions = dict.fromkeys("—" if law["positions"][_al(fid)] == "нет позиции"
-                                      else law["positions"][_al(fid)] for fid in fids)
+                                      else law.get("labels", law["positions"])[_al(fid)] for fid in fids)
             label = "/".join("<b>за</b>" if pos == "за" else esc(pos) for pos in positions)
-            law_marks.append(f'<span title="{esc(law["name"])}">{label}</span>')
+            detail = "; ".join(f'{names[fid]}: {law.get("counts", {}).get(_al(fid), "")}' for fid in fids)
+            law_marks.append(f'<span title="{esc(law["name"] + "; " + detail)}">{label}</span>')
         law_cell = ('<td data-l="4 закона владельца"><span class="ballot-laws">' +
                     "".join(law_marks) + '</span></td>') if fids else '<td data-l="4 закона владельца">—</td>'
         if not fids:
@@ -317,7 +318,7 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
             '<div>Безопасность — ↑ расширяет полномочия армии и силовых.</div>'
             '<div>Со всеми (N) — N законов темы приняты почти единогласно, фракции не различаются.</div>'
             '<div>↕ — и туда и обратно; «—» — знаков нет.</div></div>'
-            '<p>Колонка «4 закона» — как фракции списка голосовали по четырём законам, которые ты пометил „недопустимо“; „за“ выделено; «—» — нет позиции или фракция не голосовала; «/» — расхождение фракций списка.</p>'
+            f'<p>Колонка «4 закона» — как фракции списка голосовали по четырём законам, которые ты пометил „недопустимо“; „за“ выделено; {OWNER_LEGEND}; «/» — расхождение фракций списка.</p>'
             f'<p>{LEGEND}</p>'
             '<table class="ballot"><thead><tr><th scope=col>Список и лидеры</th>'
             '<th scope=col>4 закона</th>'
@@ -360,21 +361,71 @@ def party_names(matrix: dict, cards: dict) -> dict:
                              or by_he.get(r["line"], r["line"])) for r in matrix["lines"]}
 
 
+OWNER_PARTICIPATION = 1 / 3
+OWNER_LEGEND = "— — нет позиции, фракция не голосовала или голосовала меньше трети (бойкот)"
+
+
 def owner_law_positions(fids: list[str]) -> list[dict]:
-    """Единые последние стадии и позиции для обзора и сводок фракций."""
+    """Последняя стадия; нижняя оценка состава по однозначным участникам дня (v43)."""
+    from collections import defaultdict, Counter
     from render_grounds import MARKS, read_marks, load_all, act_votes, vote_table
     votes, names, _, _, table, split = load_all()
     marked = [b for b, mark in read_marks(MARKS).items() if mark["mark"] == "недопустимо"]
-    latest = {}
+    members = defaultdict(set)
+    for r in json.loads((ROOT / "data/KNS_PersonToPosition_54.json").read_text()):
+        if r["KnessetNum"] == 25:
+            members[r["PersonID"]].add(str(r["FactionID"]))
+    result = []
     for bill in marked:
         vs = act_votes(votes["rows"], bill, table)
         if not vs:
             raise Refuse(f"акт {bill}: нет последней стадии")
-        latest[bill] = vote_table(vs[-1], table, {}, fids, split)
-    return [dict(bill=b, name=names[str(b)]["ru"], date=latest[b]["date"],
-                 positions={fid: "за" if _al(fid) in latest[b]["groups"]["for"] else
-                            "против" if _al(fid) in latest[b]["groups"]["against"] else
-                            "нет позиции" for fid in fids}) for b in marked]
+        final = vs[-1]
+        candidates, caches = {}, {}
+        for r in votes["rows"]:
+            if r["date"][:10] != final["date"][:10]:
+                continue
+            raw = json.loads((ROOT / f'data/named_votes_cache/{r["vote_id"]}.json').read_text())
+            rr = raw["rows"]
+            if (raw["vote_id"] != r["vote_id"] or len(rr) != r["named_total"]
+                    or len({x["MkId"] for x in rr}) != len(rr)
+                    or any(x["VoteID"] != r["vote_id"] or x["ResultDesc"] not in
+                           {"בעד", "נגד", "נמנע", "נוכח"} for x in rr)):
+                raise Refuse(f'поимённый кеш {r["vote_id"]}: неполнота или неверные голоса')
+            caches[r["vote_id"]] = rr
+            active = {k.split("|", 1)[0] for k in r["by_faction"]}
+            for x in rr:
+                person = x["MkId"]
+                candidates[person] = candidates.get(person, members[person]) & active
+        if not all(candidates.values()):
+            raise Refuse(f'акт {bill}: противоречивые членства за день')
+        mapping = {p: next(iter(fs)) for p, fs in candidates.items() if len(fs) == 1}
+        counts = defaultdict(Counter)
+        trans = {"בעד": "for", "נגד": "against", "נמנע": "abstain", "נוכח": "present"}
+        for x in caches[final["vote_id"]]:
+            if x["MkId"] not in mapping:
+                raise Refuse(f'акт {bill}: неоднозначная фракция участника')
+            counts[mapping[x["MkId"]]][trans[x["ResultDesc"]]] += 1
+        aggregate = {k.split("|", 1)[0]: c for k, c in final["by_faction"].items()}
+        if dict(counts) != aggregate:
+            raise Refuse(f'акт {bill}: поимённый счёт расходится с агрегатом')
+        last = vote_table(final, table, {}, list(dict.fromkeys(_al(f) for f in fids)), split)
+        positions, details, labels = {}, {}, {}
+        for fid in fids:
+            source = _al(fid)
+            c = counts[source]
+            seen = sum(f == source for f in mapping.values())
+            participated = c["for"] + c["against"] + c["abstain"]
+            boycott = bool(seen and participated < OWNER_PARTICIPATION * seen)
+            pos = ("не голосовали" if boycott else "за" if source in last["groups"]["for"]
+                   else "против" if source in last["groups"]["against"] else "нет позиции")
+            positions[fid] = pos
+            labels[fid] = pos + (f' ({c["for"]} за / {c["against"]} против)' if boycott else "")
+            details[fid] = (f'за {c["for"]}, против {c["against"]}, воздержались {c["abstain"]}; '
+                            f'не голосовали ≥{seen - participated}')
+        result.append(dict(bill=bill, name=names[str(bill)]["ru"], date=last["date"],
+                           positions=positions, labels=labels, counts=details))
+    return result
 
 
 def _al(fid) -> str:
@@ -391,13 +442,13 @@ def grounds_block(matrix: dict, cards: dict) -> str:
     rows = []
     for r in matrix["lines"]:
         fid = str(r["anchor_id"])
-        cells = [f'<td>{law["positions"][fid]}</td>' for law in laws]
+        cells = [f'<td title="{esc(law["counts"][fid])}">{esc(law["labels"][fid])}</td>' for law in laws]
         # владелец 19.10: партии на двух языках
         rows.append(f'<tr data-owner-fid="{fid}"><th scope=row><a href="f-{fid}.html">{esc(ru[r["anchor_id"]])}</a>'
                     f' <span class=he lang=he dir=rtl><bdi>{esc(r["line"])}</bdi></span></th>{"".join(cells)}</tr>')
     return ('<h2 id="grounds">Фракции и четыре закона владельца</h2>'
             '<p>Четыре акта, помеченные владельцем «недопустимо». Позиция на последней стадии; '
-            '<a href="grounds.html">все стадии и основания</a>.</p>'
+            f'<a href="grounds.html">все стадии и основания</a>. {OWNER_LEGEND}. Доля участия оценена по депутатам фракции, отмеченным в голосованиях того же дня; ≥ — нижняя оценка неучастия.</p>'
             '<div class="table-scroll" tabindex="0" role="region" aria-label="Фракции и четыре закона"><table class="owner-laws"><thead><tr><th scope=col>Фракция</th>' + heads +
             '</tr></thead><tbody>' + ''.join(rows) + '</tbody></table></div>')
 
@@ -559,12 +610,12 @@ def selftest() -> int:
     live_matrix = json.loads(MATRIX.read_text(encoding="utf-8"))
     live_cards = load_cards()
     owner = grounds_block(live_matrix, live_cards)
-    assert owner.count('data-owner-fid=') == 16 and owner.count('<td>') == 64
+    assert owner.count('data-owner-fid=') == 16 and owner.count('<td title=') == 64
     assert '<td>раскол</td>' not in owner and '<td>воздержались</td>' not in owner
     assert 'grounds.html#a2199044' not in owner
     # У Еш Атид на последней стадии 2207472 позиции нет, прежнее «против» не наследуем.
     ya = re.search(r'<tr data-owner-fid="1102">(.*?)</tr>', owner).group(1)
-    assert re.findall(r'<td>(.*?)</td>', ya) == ['против', 'нет позиции', 'нет позиции', 'против']
+    assert re.findall(r'<td[^>]*>(.*?)</td>', ya) == ['не голосовали (0 за / 1 против)', 'не голосовали (0 за / 0 против)', 'не голосовали (0 за / 0 против)', 'против']
     assert 'Религиозный сионизм' in owner and 'Ликуд' in owner
     live_doc, _, _ = build(live_matrix, live_cards)
     assert live_doc.index('data-frame=full') < live_doc.index('class="owner-laws"') < live_doc.index('Сначала о том')
@@ -603,13 +654,13 @@ def selftest() -> int:
             assert '4 закона владельца' in str(e)
         else:
             raise AssertionError("пустой owner_law_positions не обнаружен")
-    fake_laws = [dict(name='Закон "пример"', positions={'1096': 'за', '1108': 'против'})] * 4
+    fake_laws = [dict(name='Закон "пример"', positions={'1096': 'за', '1108': 'против'}, labels={'1096': 'за', '1108': 'против'}, counts={'1096': 'за 1', '1108': 'против 1'})] * 4
     with patch(__name__ + '.owner_law_positions', return_value=fake_laws):
         with patch(__name__ + '._al', side_effect=lambda fid: '1096' if int(fid) != 1108 else '1108'):
             split_laws = ballot_table(live_matrix, live_cards)
     likud = next(r for r in re.findall(r'<tr data-ballot-list=.*?</tr>', split_laws) if 'Ликуд' in r)
     assert likud.count('<b>за</b>/против') == 4 and '<b>против</b>' not in likud
-    assert 'title="Закон &quot;пример&quot;"' in likud
+    assert 'title="Закон &quot;пример&quot;; ' in likud
     fake_laws[0]['positions']['1108'] = 'нет позиции'
     with patch(__name__ + '.owner_law_positions', return_value=fake_laws):
         with patch(__name__ + '._al', side_effect=lambda fid: '1096' if int(fid) != 1108 else '1108'):
@@ -691,7 +742,7 @@ def selftest() -> int:
             assert [re.sub(r'<[^>]+>', '', c) for c in axis_cells] == [expected] * 4, "v44: стрелки/устойчивость"
             assert all('ненадёжна: 75.00%' in c for c in axis_cells)
             law_cell = re.search(r'<span class="ballot-laws">(.*?)</td>', rendered).group(1)
-            assert re.findall(r'<span title="Пример">(.*?)</span>', law_cell) == [
+            assert re.findall(r'<span title="Пример[^"]*">(.*?)</span>', law_cell) == [
                 '<b>за</b>' if second == "down" else '<b>за</b>/против'] * 4, "v44: позиции законов"
 
     check_v44(ballot_table)
@@ -723,13 +774,26 @@ def selftest() -> int:
     # Оракул сводки: все 16 строк, 64 позиции и непосредственное место под h1.
     laws = owner_law_positions([str(r["anchor_id"]) for r in live_matrix["lines"]])
     assert len(live_matrix["lines"]) == 16 and len(laws) == 4
+    control = next(law for law in laws if law["bill"] == 2201200)
+    assert control["positions"]["1102"] == "не голосовали"
+    assert control["positions"]["1096"] == "за"
+    assert control["counts"]["1102"] == "за 0, против 1, воздержались 0; не голосовали ≥22"
+    with patch(__name__ + ".OWNER_PARTICIPATION", 0):
+        mutant = next(law for law in owner_law_positions(["1102", "1096"]) if law["bill"] == 2201200)
+    try:
+        assert mutant["positions"]["1102"] == "не голосовали"
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("мутант порога 0 выжил")
+    print("ЗЕЛЁНЫЙ v45: Еш Атид — не голосовали (0/1, ≥22); Ликуд — за; порог 0 краснеет")
     for row in live_matrix["lines"]:
         fid = row["anchor_id"]
         card = live_cards.get(fid, {})
         brief = faction_summary(row, card, "покрытие для проверки", laws)
         assert brief.count('<p>') >= 4
         assert re.findall(r'data-theme="([^"]+)"', brief) == ["economy", "religion_state", "security"]
-        expected = re.findall(r'<td>(.*?)</td>', re.search(
+        expected = re.findall(r'<td[^>]*>(.*?)</td>', re.search(
             rf'<tr data-owner-fid="{fid}">(.*?)</tr>', owner).group(1))
         assert re.findall(r': <b>(.*?)</b>', brief) == expected
         assert 'Деньги:</b> покрытие для проверки' in brief
@@ -1689,7 +1753,7 @@ def faction_summary(row: dict, card: dict, money_text: str, laws: list[dict]) ->
                      f'{ax["up"]} — в сторону укрепления'))
     positions = ''.join(
         f'<li><a href="grounds.html#a{law["bill"]}">{esc(law["name"])}</a>: '
-        f'<b>{esc(law["positions"][str(fid)])}</b> ({esc(law["date"])})</li>' for law in laws)
+        f'<b>{esc(law["labels"][str(fid)])}</b> ({esc(law["counts"][str(fid)])}) ({esc(law["date"])})</li>' for law in laws)
     if not money_text:
         money_text = ("коалиционного соглашения не подписывала" if row["b"]["status"] == "not_exposed"
                       else "денежных обещаний не найдено" if row["b"].get("commitments") == 0

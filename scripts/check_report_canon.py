@@ -263,6 +263,46 @@ def c_digits(src):
         _h.unescape(re.sub(r"<[^>]+>", "", t))))]
     return len(tds), bad[:3], f"{len(tds)} клеток"
 
+@check("v45: четыре закона — участие и счёт депутатов",
+       [("бойкот подменён голосом одного", lambda s: edit(s, "index.html", "не голосовали (0 за / 1 против)", "против")),
+        ("потерян счёт", lambda s: edit(s, "index.html", "не голосовали ≥22", "не голосовали неизвестно")),
+        ("потерян счёт в списке", lambda s: edit(s, "l-2.html", "не голосовали ≥22", "не голосовали неизвестно"))])
+def c_owner_votes(src):
+    bad, inspected = [], 0
+    count = r"за [0-9]+, против [0-9]+, воздержались [0-9]+; не голосовали ≥[0-9]+"
+    rows = re.findall(r'<tr data-owner-fid="([0-9]+)">(.*?)</tr>', src["index.html"])
+    if len(rows) != 16:
+        bad.append("нет 16 фракций четырёх законов")
+    for fid, row in rows:
+        cells = re.findall(r'<td title="([^"]*)">(.*?)</td>', row)
+        inspected += len(cells)
+        if len(cells) != 4 or any(not re.fullmatch(count, title) for title, _ in cells):
+            bad.append(f"фракция {fid}: нет четырёх счетов")
+        if fid in ("1102", "1096") and cells:
+            expected = "не голосовали (0 за / 1 против)" if fid == "1102" else "за"
+            if cells[0][1] != expected:
+                bad.append(f"фракция {fid}: неверная позиция 2201200")
+    for name, page in src.items():
+        if re.fullmatch(r"[lf]-[0-9]+\.html", name):
+            items = re.findall(r'<li><a href="grounds.html#a[0-9]+">.*?</li>', page)
+            inspected += len(items)
+            if any(not re.search(r"\(" + count + r"\)", item) for item in items):
+                bad.append(f"{name}: нет текстового счёта")
+    for row in re.findall(r'<tr data-ballot-list=.*?</tr>', src["index.html"]):
+        if 'href="f-1102.html"' in row:
+            cell = re.search(r'<span class="ballot-laws">(.*?)</span></td>', row)
+            if not cell or not re.search(r'<span title="[^"]*">не голосовали \(0 за / 1 против\)</span>', cell[1]):
+                bad.append("Беяхад: бойкот Еш Атид потерян")
+    ballot = re.findall(r'<span class="ballot-laws">(.*?)</span></td>', src["index.html"])
+    for cell in ballot:
+        titles = re.findall(r'<span title="([^"]*)">', cell)
+        if len(titles) != 4 or any(not re.search(count, title) for title in titles):
+            bad.append("бюллетень: нет четырёх подсказок со счётом")
+    if "— — нет позиции, фракция не голосовала или голосовала меньше трети (бойкот)" not in src["index.html"]:
+        bad.append("нет легенды бойкота")
+    return inspected, bad, f"{inspected} позиций с депутатским счётом"
+
+
 @check("лексика страниц партий",
        [("пропал раздел методики", lambda s: edit(s, "method.html", "<h2>Устойчивость стрелки</h2>", "")),
         ("старое состояние в методике", lambda s: edit(s, "method.html", "<h1>", "<p>мы сюда не дошли</p><h1>")),
@@ -576,8 +616,9 @@ def reproduce(root):
             shutil.copytree(root / name, snapshot / name,
                             ignore=shutil.ignore_patterns("__pycache__"))
         (snapshot / "data").mkdir()
-        for name in ("coverage_matrix.json", "votes_25.json", "budget_takanot.json", "budget_takanot_2021_2022.json", "direction_arrow_2026-10-07.json", "arrow_robustness.json"):
+        for name in ("coverage_matrix.json", "votes_25.json", "KNS_PersonToPosition_54.json", "budget_takanot.json", "budget_takanot_2021_2022.json", "direction_arrow_2026-10-07.json", "arrow_robustness.json"):
             shutil.copyfile(root / "data" / name, snapshot / "data" / name)
+        shutil.copytree(root / "data/named_votes_cache", snapshot / "data/named_votes_cache")
         shutil.copytree(root / "data/agreements_ocr", snapshot / "data/agreements_ocr")
         shutil.copyfile(root / "data/agreements_ocr_report_ca36.json",
                         snapshot / "data/agreements_ocr_report_ca36.json")
@@ -644,7 +685,7 @@ def selftest_reproduce():
         for name in ("scripts", "cards", "criteria", "docs/reference", "data"):
             (fixture / name).mkdir(parents=True)
         shutil.copytree(ROOT / "design/mockup_v5", fixture / "design/mockup_v5")
-        for name in ("coverage_matrix.json", "votes_25.json", "budget_takanot.json", "budget_takanot_2021_2022.json", "direction_arrow_2026-10-07.json", "arrow_robustness.json"):
+        for name in ("coverage_matrix.json", "votes_25.json", "KNS_PersonToPosition_54.json", "budget_takanot.json", "budget_takanot_2021_2022.json", "direction_arrow_2026-10-07.json", "arrow_robustness.json"):
             (fixture / "data" / name).write_text("{}")
         # Общий build_site вызывает все генераторы; здесь проверяется обёртка.
         for module in ("render_axes", "render_card_page"):
