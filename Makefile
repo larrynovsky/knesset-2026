@@ -1,7 +1,7 @@
 # §14: детерминированность локальной сборки, не восстановление источников.
 PY ?= python3
 
-.PHONY: help check check-net fetch fetch-report validate report stamp reproduce layout selftest repro-selftest
+.PHONY: help check check-net fetch fetch-report validate report selftest-code stamp reproduce layout selftest repro-selftest
 
 help:
 	@echo "check      — самопроверки без сети (валидатор карточки, генератор, §3, §24)"
@@ -35,7 +35,20 @@ fetch-report:
 validate:
 	$(PY) scripts/validate_cards.py
 
-report:
+# Решение владельца 19.10 (вопрос 2, вариант А): красная самопроверка
+# останавливает публикацию. До этого самопроверки гонялись только руками, и
+# 18.10 самопроверка обзора была красной, пока доставка печатала «зелёное».
+# Без браузера, ~1 с. Самопроверка канона идёт внутри --build на свежей
+# сборке, до замены site/.
+selftest-code:
+	$(PY) scripts/validate_cards.py --selftest
+	$(PY) scripts/build_report.py --selftest
+	$(PY) scripts/render_overview.py --selftest
+	$(PY) scripts/render_method.py --selftest
+	$(PY) scripts/build_line_cards.py --selftest
+	$(PY) scripts/render_card_page.py --selftest
+
+report: selftest-code
 	$(PY) scripts/check_report_canon.py --build
 
 stamp:
@@ -52,8 +65,9 @@ layout:
 # проверки печатают одинаковое зелёное.
 #
 # Это КОМАНДА, а не хук: механизм, срабатывающий лишь при вызове, защищает
-# вызов (§24). В post-receive не вставлена намеренно — check_layout поднимает
-# браузер. Названо вслух, чтобы не считалось сторожем.
+# вызов (§24). Целиком в post-receive не вставлена — check_layout поднимает
+# браузер. С 19.10 всё, кроме check_layout, входит в `make report`
+# (selftest-code + самопроверка канона внутри --build).
 selftest:
 	$(PY) scripts/validate_cards.py --selftest
 	$(PY) scripts/render_overview.py --selftest

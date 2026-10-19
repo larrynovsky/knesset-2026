@@ -601,6 +601,11 @@ if __name__ == "__main__":
             with tempfile.TemporaryDirectory(prefix=".site-build-", dir=ROOT) as tmp:
                 output = pathlib.Path(tmp) / "site"
                 build_site(ROOT, output)
+                # Решение владельца 19.10 (вопрос 2, А): подложенные нарушения на
+                # СВЕЖЕЙ сборке, до замены site/ — красное оставляет прежний сайт.
+                fresh = {f.name: f.read_text(encoding="utf-8") for f in sorted(output.glob("*.html"))}
+                if selftest(fresh):
+                    raise ValueError("самопроверка канона на свежей сборке красная — site/ НЕ заменён")
                 target = ROOT / "site"
                 if target.is_symlink():
                     raise ValueError("ОТКАЗ: site/ — символическая ссылка")
