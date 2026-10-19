@@ -399,6 +399,8 @@ def _frame_after(src):
 def c_frame(src):
     bad = []
     for n, s in src.items():
+        if n == "cheatsheet.html":   # владелец 19.10: на печатном листе служебные строки не нужны
+            continue
         m = re.search(r'data-frame=["\']?(full|short)', s)
         if not m:
             bad.append(f"{n}: маркера нет"); continue
@@ -612,7 +614,6 @@ def c_focus(src):
            r'<tr data-ballot-list=.*?</tr>', '', s['cheatsheet.html'], count=1)})),
         ("пропали буквы шпаргалки", lambda s: dict(s, **{"cheatsheet.html": re.sub(
            r'(<span class="ballot-letters"[^>]*>).*?(</span>)', r'\1\2', s['cheatsheet.html'], count=1)})),
-        ("шпаргалка без рамки", lambda s: edit(s, "cheatsheet.html", "data-frame", "data-xxxxx")),
         ("шпаргалка без noindex", lambda s: edit(s, "cheatsheet.html", "noindex", "index")),
         ("JS в шпаргалке", lambda s: edit(s, "cheatsheet.html", "</body>", "<script>1</script></body>"))])
 def c_cheatsheet(src):
@@ -632,7 +633,7 @@ def c_cheatsheet(src):
             bad.append(f"шпаргалка: не четыре закона {item['ru']}")
         if 'class="crossout"' not in row or item['leaders'] not in _h.unescape(row):
             bad.append(f"шпаргалка: нет квадрата или лидеров {item['ru']}")
-    for guard in (c_frame, c_noindex, c_js):
+    for guard in (c_noindex, c_js):
         bad.extend(guard({'cheatsheet.html': page})[1])
     if 'href="cheatsheet.html"' not in src.get('index.html', '').split('data-frame=full')[0]:
         bad.append("шпаргалка: нет ссылки в шапке обзора")
@@ -645,10 +646,10 @@ def c_cheatsheet(src):
 @check("период данных на каждой странице из исходных снимков (v54)",
        [("удалена строка голосований", lambda s: dict(s, **{"index.html": re.sub(
            r'<p class="data-period" data-source="votes_25.json">.*?</p>', '', s["index.html"])})),
-        ("дата голосований из бюджета", lambda s: dict(s, **{"cheatsheet.html": re.sub(
+        ("дата голосований из бюджета", lambda s: dict(s, **{"l-2.html": re.sub(
            r'(data-source="votes_25.json">.*?снимок )[^)]+',
            lambda m: m[1] + date.fromisoformat(json.loads((ROOT / "data/budget_takanot.json").read_text())["fetched_at"][:10]).strftime('%d.%m.%Y'),
-           s["cheatsheet.html"])})),
+           s["l-2.html"])})),
         ("удалена строка бюджета", lambda s: dict(s, **{"l-1.html": re.sub(
            r'<p class="data-period" data-source="budget_takanot">.*?</p>', '', s["l-1.html"])})),
         ("бюджет со снимком голосований", lambda s: dict(s, **{"index.html": re.sub(
@@ -672,6 +673,8 @@ def c_data_periods(src):
     expected_budget = 'Бюджет: ' + '; '.join(budgets) + '.'
     bad = []
     for name, page in src.items():
+        if name == "cheatsheet.html":   # владелец 19.10: на печатном листе служебные строки не нужны
+            continue
         page = strip_comments(page)
         required = [("votes_25.json", expected_votes)]
         if name in ("index.html", "method.html") or name.startswith(("l-", "f-")) or '₪' in page:
@@ -890,6 +893,8 @@ def build_site(root, destination):
     from render_overview import data_periods
     votes_period, budget_period = data_periods(root / "data")
     for path in destination.rglob("*.html"):
+        if path.name == "cheatsheet.html":   # владелец 19.10: на печатном листе служебные строки не нужны
+            continue
         page = path.read_text(encoding="utf-8")
         periods = votes_period
         if path.name in ("index.html", "method.html") or path.name.startswith(("l-", "f-")) or '₪' in page:

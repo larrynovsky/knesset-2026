@@ -2157,7 +2157,10 @@ def main() -> int:
         return 1
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(doc, encoding="utf-8")
-    (OUT.parent / "cheatsheet.html").write_text(ballot_table(m, cards, compact=True), encoding="utf-8")
+    import render_cheatsheet
+    sheet = render_cheatsheet.build(m, cards)
+    render_cheatsheet.selftest(sheet)
+    (OUT.parent / "cheatsheet.html").write_text(sheet, encoding="utf-8")
     laws = owner_law_positions([str(r["anchor_id"]) for r in m["lines"]])
     # CSS бюллетеня подписывает клетки законов по порядку (nth-child) — порядок обязан совпасть
     for law, key in zip(laws, ("поправка № 4", "поправка № 3", "105", "юридического советника")):
