@@ -436,6 +436,40 @@ def c_focus(src):
     bad = [n for n, s in src.items() if ":focus-visible" not in s]
     return len(src), bad, ""
 
+@check("шпаргалка: 14 списков с буквами и четырьмя законами (v51)",
+       [("пропала строка шпаргалки", lambda s: dict(s, **{"cheatsheet.html": re.sub(
+           r'<tr data-ballot-list=.*?</tr>', '', s['cheatsheet.html'], count=1)})),
+        ("пропали буквы шпаргалки", lambda s: dict(s, **{"cheatsheet.html": re.sub(
+           r'(<span class="ballot-letters"[^>]*>).*?(</span>)', r'\1\2', s['cheatsheet.html'], count=1)})),
+        ("шпаргалка без рамки", lambda s: edit(s, "cheatsheet.html", "data-frame", "data-xxxxx")),
+        ("шпаргалка без noindex", lambda s: edit(s, "cheatsheet.html", "noindex", "index")),
+        ("JS в шпаргалке", lambda s: edit(s, "cheatsheet.html", "</body>", "<script>1</script></body>"))])
+def c_cheatsheet(src):
+    import json
+    page = src.get("cheatsheet.html", "")
+    expected = json.loads((pathlib.Path(__file__).resolve().parent.parent / "criteria/ballot_2026.json").read_text())["lists"]
+    rows = re.findall(r'<tr data-ballot-list="([^"]+)">(.*?)</tr>', page, re.S)
+    bad = []
+    if len(rows) != 14 or [_h.unescape(name) for name, _ in rows] != [row['he'] for row in expected]:
+        bad.append("шпаргалка: потеряны или переставлены списки")
+    for (_, row), item in zip(rows, expected):
+        letters = re.search(r'<span class="ballot-letters"[^>]*>(.*?)</span>', row)
+        if not letters or text_of(letters[1]) != item['letters']:
+            bad.append(f"шпаргалка: буквы {item['ru']}")
+        laws = re.search(r'<span class="ballot-laws">(.*?)</span></td>', row)
+        if not laws or len(re.findall(r'<span(?:\s[^>]*)?>', laws[1])) != 4:
+            bad.append(f"шпаргалка: не четыре закона {item['ru']}")
+        if 'class="crossout"' not in row or item['leaders'] not in _h.unescape(row):
+            bad.append(f"шпаргалка: нет квадрата или лидеров {item['ru']}")
+    for guard in (c_frame, c_noindex, c_js):
+        bad.extend(guard({'cheatsheet.html': page})[1])
+    if 'href="cheatsheet.html"' not in src.get('index.html', '').split('data-frame=full')[0]:
+        bad.append("шпаргалка: нет ссылки в шапке обзора")
+    if '@media print' not in page or 'size:A4 portrait' not in page:
+        bad.append("шпаргалка: нет стилей A4")
+    return len(rows), bad, f"{len(rows)} строк"
+
+
 # ───────────────────────────────────────────────────────────────── прогон
 def run(src):
     rows = []

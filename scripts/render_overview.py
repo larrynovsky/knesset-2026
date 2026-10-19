@@ -271,7 +271,7 @@ def personal_result():
             "laws": owner_law_positions(["yashar"], votes)}
 
 
-def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
+def ballot_table(m: dict, cards: dict, source: Path | None = None, *, compact: bool = False) -> str:
     """Списки владельца 19.10; стрелки принадлежат указанным фракциям."""
     from theme_arrows import THEMES, theme_arrows
     from arrow_robustness import LEGEND
@@ -303,7 +303,7 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
         law_marks = []
         for law in (personal["laws"] if personal else laws):
             positions = dict.fromkeys("—" if law["positions"][_al(fid)] == "нет позиции"
-                                      else law.get("labels", law["positions"])[_al(fid)] for fid in (["yashar"] if personal else fids))
+                                      else (law.get("labels", law["positions"])[_al(fid)].split(" (")[0] if compact else law.get("labels", law["positions"])[_al(fid)]) for fid in (["yashar"] if personal else fids))
             label = "/".join("<b>за</b>" if pos == "за" else esc(pos) for pos in positions)
             detail = "; ".join(f'{names[fid]}: {law.get("counts", {}).get(_al(fid), "")}' for fid in fids)
             if personal:
@@ -342,7 +342,21 @@ def ballot_table(m: dict, cards: dict, source: Path | None = None) -> str:
             cells = "".join(
                 f'<td class="ballot-axis"{personal_attr} data-l="{esc(label)}">{" / ".join(dict.fromkeys(value))}</td>'
                 for label, value in zip(["Суд", "Религия", "Экономика", "Безопасность"], values))
+        if compact:
+            if not fids and not personal:
+                law_cell = '<td><span class="ballot-laws">' + '<span>—</span>' * 4 + '</span></td>'
+                cells = '<td>—</td>'
+            else:
+                cells = re.search(r'<td.*?</td>', cells)[0]
+            cells += '<td><span class="crossout" aria-label="вычеркнуть"></span></td>'
         body.append(f'<tr data-ballot-list="{esc(row["he"])}">{who}{law_cell}{cells}</tr>')
+    if compact:
+        from datetime import date
+        template = (MOCK.parent / "cheatsheet.html").read_text(encoding="utf-8")
+        law_key = " · ".join(f'{i}. {esc(law["name"])}' for i, law in enumerate(laws, 1))
+        return (template.replace("{{FRAME}}", SHORT_FRAME)
+                .replace("{{ROWS}}", "".join(body)).replace("{{LAWS}}", law_key)
+                .replace("{{DATE}}", date.today().isoformat()))
     heads = "".join(f'<th scope=col>{label}</th>' for label in ("Религия", "Экономика", "Безопасность"))
     small_lists = "".join(f"<li>{esc(name)}</li>" for name in SMALL_BALLOT_LISTS)
     unmapped = "<br>".join(esc(note) for note in ballot["unmapped_factions"].values())
@@ -561,6 +575,7 @@ def build(m: dict, cards: dict | None = None,
 }}
 </style></head><body>
 <h1>Что фракции делали на самом деле</h1>
+<nav><a href="cheatsheet.html">Шпаргалка для печати · A4</a></nav>
 <p class=lead>27 октября голосуют за списки бюллетеня. Этот
 документ нужен для одного: вычеркнуть два-три из них и уметь объяснить себе
 почему — не «они мне не нравятся», а «вот закон, вот дата, вот как они
@@ -1443,7 +1458,7 @@ def selftest() -> int:
     with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
         site = Path(tmp)
         (site / "index.html").write_text(doc, encoding="utf-8")
-        for name in ("f-1.html", "f-2.html", "f-3.html", "axes.html", "grounds.html", "time.html", "method.html"):
+        for name in ("f-1.html", "f-2.html", "f-3.html", "axes.html", "grounds.html", "time.html", "method.html", "cheatsheet.html"):
             (site / name).write_text(state, encoding="utf-8")
         n = check_index_links(site)
         (site / "index.html").write_text(doc.replace(
@@ -2071,6 +2086,7 @@ def main() -> int:
         return 1
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(doc, encoding="utf-8")
+    (OUT.parent / "cheatsheet.html").write_text(ballot_table(m, cards, compact=True), encoding="utf-8")
     laws = owner_law_positions([str(r["anchor_id"]) for r in m["lines"]])
     pages = 0
     for r in m["lines"]:
