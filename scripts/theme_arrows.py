@@ -28,7 +28,7 @@ def load_signs(theme: str) -> dict:
     if USE_FULL and full.exists():
         for k, v in json.loads(full.read_text(encoding="utf-8"))["signs"].get(theme, {}).items():
             out.setdefault(int(k), int(v))
-    return econ2_filter(out) if theme == "economy" and USE_FULL else out
+    return reread_filter(theme, out) if USE_FULL else out
 
 
 def econ2_filter(signs: dict) -> dict:
@@ -38,6 +38,18 @@ def econ2_filter(signs: dict) -> dict:
         return signs
     removed = set(json.loads(p.read_text(encoding="utf-8"))["removed"])
     return {b: (0 if b in removed else v) for b, v in signs.items()}
+
+
+def reread_filter(theme: str, signs: dict) -> dict:
+    """Второе прочтение по полным текстам: экономика — econ2 (d750f6d), суд/религия/безопасность — перепись 20.10
+    (criteria/census_second_reading_2026-10-20.json, правило c6114fe). Снятые знаки → 0. Нет файла — нет эффекта."""
+    if theme == "economy":
+        return econ2_filter(signs)
+    p = ROOT / "criteria" / "census_second_reading_2026-10-20.json"
+    if not p.exists():
+        return signs
+    removed = set(json.loads(p.read_text(encoding="utf-8"))["removed"].get(theme, []))
+    return {b: (0 if int(b) in removed else v) for b, v in signs.items()}
 
 
 def arrow_of(up: int, down: int, min_acts: int = 3) -> str | None:

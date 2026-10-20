@@ -116,8 +116,8 @@ def full_signs(k: str) -> dict:
     d = json.loads(p.read_text(encoding="utf-8"))["signs"]
     old = old_signs_any()
     out = {th: {int(b): old[th].get(int(b), int(v)) for b, v in d.get(th, {}).items()} for th in THEMES4}
-    from theme_arrows import econ2_filter          # второе прочтение экономики (criteria d750f6d)
-    out["economy"] = econ2_filter(out["economy"])
+    from theme_arrows import reread_filter         # второе прочтение: экономика d750f6d, перепись трёх тем c6114fe
+    out = {th: reread_filter(th, m) for th, m in out.items()}
     return out
 
 
