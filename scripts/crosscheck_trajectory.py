@@ -267,7 +267,7 @@ def expected_cell(line, k, th, up, down):
         elif consensus >= 3:
             word = f'со всеми ({consensus})'
         elif n or consensus:
-            word = f'мало законов ({n})'
+            word = f'мало законов ({n + consensus})'
         else:
             word = 'по теме не голосовали'
         prefix = {'gov': 'коал.', 'opp': 'опп.', 'trans': 'переход'}[p['role']] + ': '
@@ -465,7 +465,14 @@ def selftest():
     line['points'] = [dict(k='20', role='opp', themes={'economy': x})]
     assert expected_cell(line, '20', 'economy', 'up', 'down') == 'опп.: по теме не голосовали'
     x['consensus'] = 2
-    assert expected_cell(line, '20', 'economy', 'up', 'down') == 'опп.: мало законов (0)'
+    assert expected_cell(line, '20', 'economy', 'up', 'down') == 'опп.: мало законов (2)'
+    x.update(up=1, consensus=1)
+    assert expected_cell(line, '20', 'economy', 'up', 'down') == 'опп.: мало законов (2)'
+    x.update(up=0, down=1, consensus=1)
+    assert expected_cell(line, '20', 'economy', 'up', 'down') == 'опп.: мало законов (2)'
+    x.update(down=0, consensus=1)
+    assert expected_cell(line, '20', 'economy', 'up', 'down') == 'опп.: мало законов (1)'
+    print('PASS v95: few-laws N includes up, down and consensus')
     x['consensus'] = 3
     assert expected_cell(line, '20', 'economy', 'up', 'down') == 'опп.: со всеми (3)'
     forged = copy.deepcopy(line)

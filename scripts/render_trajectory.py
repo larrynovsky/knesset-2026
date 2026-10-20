@@ -236,7 +236,7 @@ def piece_word(x: dict, up: str, dn: str) -> str:
         return "по теме не голосовали"
     if c >= 3:
         return f"со всеми ({c})"
-    return f"мало законов ({n})"
+    return f"мало законов ({n + c})"   # все законы темы в куске, включая единогласные (criteria 777b615)
 
 
 def knesset_cell(line: dict, k: str, th: str, up: str, dn: str) -> str:
