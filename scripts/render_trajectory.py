@@ -18,10 +18,10 @@ TH = [("rule_of_law", "Суд и права", "укреплял", "ослабл�
       ("economy", "Экономика", "легче бизнесу", "строже к бизнесу"), ("security", "Безопасность", "шире силовикам", "уже силовикам")]
 ROLE = {"gov": "в коалиции", "opp": "в оппозиции", "trans": "переход: правительство ещё не присягнуло"}
 CSS = """
-.tj svg{width:100%;height:auto;display:block}.tj svg.vc{max-width:34rem}.tj .sc{overflow-x:auto}
+.tj svg{width:100%;height:auto;display:block;max-width:40rem}.tj svg.vc{max-width:34rem}.tj .sc{overflow-x:auto}
 .tj .g{fill:var(--ink)}.tj .o{fill:var(--bg);stroke:var(--ink)}.tj .t{fill:var(--panel);stroke:var(--dim);stroke-dasharray:3 2}.tj .m{fill:var(--rule);stroke:var(--ink)}
 .tj .lg{fill:var(--bg)}.tj .lo,.tj .lt,.tj .lm{fill:var(--ink)}.tj .ax{stroke:var(--rule)}.tj .mid{stroke:var(--dim);stroke-dasharray:2 3}
-.tj .ar{stroke:var(--dim);stroke-width:1.4;fill:none}.tj .ah{fill:var(--dim)}.tj text{fill:var(--ink)}.tj .w{fill:var(--dim)}
+.tj .ar{stroke:var(--dim);stroke-width:1.4;fill:none}.tj .ah{fill:var(--dim)}.tj text{fill:var(--ink)}.tj .nm{paint-order:stroke;stroke:var(--bg);stroke-width:3px}.tj .w{fill:var(--dim)}
 .tj .how{border:1px solid var(--rule);background:var(--panel);padding:.6rem .8rem;font-size:.9rem}
 .tj ul.v{list-style:none;padding:0;margin:.3rem 0}.tj ul.v li{margin:.15rem 0}.tj .n{color:var(--dim);font-size:.78rem}
 .tj table{width:100%;border-collapse:collapse;font-size:.78rem}.tj th,.tj td{padding:.25rem .3rem;border-bottom:1px solid var(--rule);text-align:left;vertical-align:top}
@@ -107,27 +107,31 @@ def plotted(line, th):
 
 # ───────────── горизонтальный ряд (обзор по темам)
 def hchart(rows, up, dn):
-    W, X0, X1, RH, top = 660, 200, 640, 40, 40
+    """Ширина под телефон (вылета нет): имя списка над своей дорожкой, шкала во всю ширину."""
+    W, X0, X1, RH, top = 400, 16, 384, 62, 62
     g = []
     for p, t, anc in ((0, f"только «{dn}»", "start"), (.5, "поровну", "middle"), (1, f"только «{up}»", "end")):
-        g.append(f'<text class=w x="{X0+(X1-X0)*p:.0f}" y="16" font-size="11" text-anchor="{anc}">{esc(t)}</text>')
-    H = top + len(rows) * RH
+        g.append(f'<text class=w x="{X0+(X1-X0)*p:.0f}" y="14" font-size="10.5" text-anchor="{anc}">{esc(t)}</text>')
+    H = top + (len(rows) - 1) * RH + 22
     for p in (0, .5, 1):
-        g.append(f'<line class="{"mid" if p == .5 else "ax"}" x1="{X0+(X1-X0)*p:.0f}" x2="{X0+(X1-X0)*p:.0f}" y1="24" y2="{H-14}"/>')
+        g.append(f'<line class="{"mid" if p == .5 else "ax"}" x1="{X0+(X1-X0)*p:.0f}" x2="{X0+(X1-X0)*p:.0f}" y1="20" y2="{H-4}"/>')
     for r, (label, href, line, th) in enumerate(rows):
         y = top + r * RH
-        name = f'<a href="{href}"><text x="0" y="{y+4}" font-size="12">{esc(label)}</text></a>' if href else f'<text x="0" y="{y+4}" font-size="12">{esc(label)}</text>'
-        g.append(name + f'<line class=ax x1="{X0}" x2="{X1}" y1="{y}" y2="{y}"/>')
+        name = f'<text class=nm x="{X0}" y="{y-24}" font-size="11.5">{esc(label)}</text>'
+        names = (f'<a href="{href}">{name}</a>' if href else name)
+        g.append(f'<line class=ax x1="{X0}" x2="{X1}" y1="{y}" y2="{y}"/>')
         pts = plotted(line, th) if line else []
-        ys = [y + (j - (len(pts) - 1) / 2) * 6 for j in range(len(pts))]
+        st = min(5, 24 / max(1, len(pts) - 1))          # лесенка не выше подписи
+        ys = [y + (j - (len(pts) - 1) / 2) * st for j in range(len(pts))]
         xs = [X0 + (X1 - X0) * share(p, th) for p in pts]
         chain = [j for j, p in enumerate(pts) if p["role"] != "trans"]   # переход — без стрелок, только точка
         for a, b in zip(chain, chain[1:]):
             g.append(seg(xs[a], ys[a], xs[b], ys[b]))
-        g.append(marks([(p["k"], x, yy, p["role"], ttl(p, th, up, dn)) for p, x, yy in zip(pts, xs, ys)], X0 - 14, W - 2))
+        g.append(marks([(p["k"], x, yy, p["role"], ttl(p, th, up, dn)) for p, x, yy in zip(pts, xs, ys)], 2, W - 2))
+        g.append(names)                                  # имя поверх точек, с ореолом фона
         if not pts:
-            g.append(f'<text class=w x="{X0}" y="{y+4}" font-size="11">законов с ясным направлением нет</text>')
-    return f'<div class=sc><svg viewBox="0 0 {W} {H}" style="min-width:520px" role="img" aria-label="траектории">{"".join(g)}</svg></div>'
+            g.append(f'<text class=w x="{X0+4}" y="{y+4}" font-size="10">законов с ясным направлением нет</text>')
+    return f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="траектории">{"".join(g)}</svg>'
 
 
 # ───────────── вертикальные колонки (обзор по партиям, страница списка)
@@ -192,7 +196,7 @@ def how_h(d) -> str:
     return HOW_H.replace("{EX}", f'Например, Ликуд в 25-м в коалиции по суду: {x["up"]} законов «укреплял» из {x["up"] + x["down"]} — точка почти у левого края. ')
 
 
-HOW_H = ('<div class=how><b>Как читать.</b> Строка — список, точка — кусок Кнессета, когда фракция была в одной роли. '
+HOW_H = ('<div class=how><b>Как читать.</b> Дорожка — список (имя над ней), точка — кусок Кнессета, когда фракция была в одной роли. '
          'Чем правее точка, тем чаще фракция голосовала «вверх» по теме; у левого края — только «вниз», посередине — поровну. '
          '{EX}'
          'Залитая точка — в коалиции, пустая — в оппозиции, серая с пунктиром — переход: Кнессет уже присягнул, правительство ещё нет '
