@@ -42,13 +42,13 @@ lessons:
         Указатель в списке не доказывает, что макет прочитан.
     status: adopted
     adopted_on: '2026-08-14'
-    change: 'git:191a23df5328017f0e5d8490ea1a49e3174590b9'
+    change: 'git:61419696d62437a230117bfac158fad51c3a2663'
     evidence:
       - docs/explanation/why_design_was_invisible_2026-08-13.md
       - plans/ACCEPTANCE_mockup_v5_2026-08-01.md
       - design/mockup_v5/index.html
       - CLAUDE.md
-      - git:191a23df5328017f0e5d8490ea1a49e3174590b9
+      - git:61419696d62437a230117bfac158fad51c3a2663
     owner: Сопровождающий формы отчёта
 
   - id: KNS-L002
@@ -57,12 +57,12 @@ lessons:
     event: >-
       Введённый 01.08 гейт fetch_votes требовал вердикты содержательных
       расхождений связи голосование→акт и потерь, иначе возвращал 1.
-      Первый файл вердиктов появился 07.10. Коммит 226577c фиксирует отсутствие
+      Первый файл вердиктов появился 07.10. Коммит 2bf7bd9 фиксирует отсутствие
       успешной выгрузки с 01.08 и использование прежних данных от 31.07.
     cost: >-
       Два месяца заблокирован штатный вход. В старой выгрузке было 144 акта
       и 212 поимённых голосований против 277 и 1809 при восстановлении входа
-      (числа из 226577c). Недобор связан также со старой сшивкой по имени
+      (числа из 2bf7bd9). Недобор связан также со старой сшивкой по имени
       и горизонтом, а не только с возрастом данных.
     cause: >-
       Отказ защищал новый запуск, но потребление старого результата не
@@ -83,10 +83,10 @@ lessons:
         восстановленный запуск не доказывает правильность всех связей.
     status: adopted
     adopted_on: '2026-10-07'
-    change: 'git:226577ccf6359af92f50165a966ab48a0852b8ed'
+    change: 'git:2bf7bd90fbbccb79bd8bf2bb35bdffac5d22b2ed'
     evidence:
-      - git:8075c21
-      - git:226577ccf6359af92f50165a966ab48a0852b8ed
+      - git:c578b8c
+      - git:2bf7bd90fbbccb79bd8bf2bb35bdffac5d22b2ed
       - scripts/fetch_votes.py
       - criteria/declared_before_divergence_2026-08-01.yaml
       - criteria/vote_link_adjudication_2026-10-07.yaml
@@ -98,7 +98,7 @@ lessons:
     event: >-
       01.08 предупреждение об отсутствии budget_takanot.json на MacBook
       проскроллили 13 раз: сверка бюджетных чисел не работала всю сессию (§21).
-      07.10 в 226577c зафиксирован родственный дефект: проверка состава
+      07.10 в 2bf7bd9 зафиксирован родственный дефект: проверка состава
       требовала имена примеров макета вместо видов страниц по сущностям.
       В макете четыре f-страницы и одна c-страница с примерными именами.
     cost: >-
@@ -122,13 +122,13 @@ lessons:
         общего контроля исполнения §21 по-прежнему нет.
     status: adopted
     adopted_on: '2026-10-07'
-    change: 'git:226577ccf6359af92f50165a966ab48a0852b8ed'
+    change: 'git:2bf7bd90fbbccb79bd8bf2bb35bdffac5d22b2ed'
     evidence:
       - CLAUDE.md
       - scripts/check_report_canon.py
       - design/mockup_v5/f-likud.html
       - design/mockup_v5/c-likud-inst-in.html
-      - git:226577ccf6359af92f50165a966ab48a0852b8ed
+      - git:2bf7bd90fbbccb79bd8bf2bb35bdffac5d22b2ed
     owner: Сопровождающий проверок отчёта
 
   - id: KNS-L004
@@ -157,9 +157,9 @@ lessons:
         в этих уликах не предъявлено.
     status: adopted
     adopted_on: '2026-10-07'
-    change: 'git:226577ccf6359af92f50165a966ab48a0852b8ed'
+    change: 'git:2bf7bd90fbbccb79bd8bf2bb35bdffac5d22b2ed'
     evidence:
-      - git:226577ccf6359af92f50165a966ab48a0852b8ed
+      - git:2bf7bd90fbbccb79bd8bf2bb35bdffac5d22b2ed
       - scripts/guarded_fetch.py
       - scripts/fetch_votes.py
     owner: Сопровождающий сетевой выгрузки
@@ -305,7 +305,7 @@ lessons:
     evidence:
       - reviews/codex_review_v14_rest.md
       - reviews/codex_review_v14_round4.md
-      - git:4126f0b29c13a5ffa77233302175ed28cb013f7c
+      - git:fed7fcaf1a882691199de7d27ffc02099861b368
     owner: Сопровождающий канала Б
 
   - id: KNS-L009
@@ -338,7 +338,7 @@ lessons:
     status: observation
     evidence:
       - reviews/crosscheck_owner_laws_v68.md
-      - git:4ff929b
+      - git:bc3ccc8
     owner: Claude (сопровождающий сайта)
   - id: KNS-L010
     date: '2026-10-19'
@@ -367,10 +367,10 @@ lessons:
         «сайт пересобран» в выводе push.
     status: adopted
     adopted_on: '2026-10-19'
-    change: 'git:834223f'
+    change: 'git:f3bf3b1'
     evidence:
       - reviews/backlog.md
-      - git:834223f
+      - git:f3bf3b1
     owner: Claude (сопровождающий сайта)
   - id: KNS-L011
     date: '2026-10-19'
@@ -399,7 +399,7 @@ lessons:
     status: observation
     evidence:
       - reviews/backlog.md
-      - git:da20ceb
+      - git:95defd0
     owner: Claude (сопровождающий сайта)
   - id: KNS-L012
     date: '2026-10-20'
@@ -426,7 +426,7 @@ lessons:
     evidence:
       - reviews/task_check_v93.md
       - reviews/task_check_v95.md
-      - git:ff23e29
+      - git:11ec91c
     owner: Claude (сопровождающий сайта)
   - id: KNS-L013
     date: '2026-10-20'
@@ -451,7 +451,7 @@ lessons:
     status: observation
     evidence:
       - reviews/task_check_v92.md
-      - git:932b97d
+      - git:73e0ca0
     owner: Claude (сопровождающий сайта)
   - id: KNS-L014
     date: '2026-10-20'
@@ -482,5 +482,5 @@ lessons:
     evidence:
       - reviews/REPORT_v94.md
       - criteria/economy_second_reading_2026-10-20.json
-      - git:149ce1f
+      - git:cf74823
     owner: Claude (сопровождающий сайта)
