@@ -151,6 +151,8 @@ def check(root):
     for theme in THEMES:
         for bill, value in additions[theme].items():
             signs[theme].setdefault(int(bill), signed(value))
+    for bill in load('criteria/economy_second_reading_2026-10-20.json')['removed']:
+        signs['economy'][int(bill)] = 0
     # v93 amendment: full-text disagreement also removes a new title-only sign.
     for bill, value in load('criteria/axis_second_reading_2026-10-19.json')['signs'].items():
         if value is not None and int(bill) in axis and signed(value) != axis[int(bill)]:
@@ -232,6 +234,7 @@ def selftest():
             put(f'criteria/theme_signs_{th}.json', {'signs': {'1': 1}})
         full_signs = {'signs': {th: {'1': -1, '2': 1} for th in THEMES}}
         put('criteria/full_signs_K25.json', full_signs)
+        put('criteria/economy_second_reading_2026-10-20.json', {'removed': []})
         put('criteria/declared_before_arrow_2026-10-07.yaml', 'cleaning:\n  drop_lopsided_below: 0.025\nfaction_position:\n  split_below: 0.5\n')
         put('docs/reference/for_option_sign_test.json', {'options': {'yes': {'sign': 'carries'}}})
         actual = {'bins': [['2023-01-01', '2023-07-01'], ['2023-07-01', '2024-01-01']],
@@ -245,6 +248,15 @@ def selftest():
                 raise AssertionError(label + '\n' + result.stdout + result.stderr)
             print(f'PASS selftest {label}: CLI exit {result.returncode}')
         run('baseline (duplicate law counted once per half)', 0)
+        put('criteria/economy_second_reading_2026-10-20.json', {'removed': [2]})
+        run('removed economy sign surviving full-sign merge', 1)
+        economy_filtered = deepcopy(actual)
+        for series in economy_filtered['series'].values():
+            series['economy'][1] = [0, 0]
+        put('data/dynamics_25.json', economy_filtered)
+        run('removed economy sign zeroed after full-sign merge', 0)
+        put('criteria/economy_second_reading_2026-10-20.json', {'removed': []})
+        put('data/dynamics_25.json', actual)
         put('criteria/axis_second_reading_2026-10-19.json', {'signs': {'2': -1}})
         run('new axis sign conflicting with full text cannot survive', 1)
         filtered = deepcopy(actual)

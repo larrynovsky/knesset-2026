@@ -188,7 +188,7 @@ def lineage_checks(tracks, lineage, factions):
     return errors
 
 
-def merge_signs(old, new, second=None):
+def merge_signs(old, new, second=None, economy_removed=()):
     """A legacy sign from ANY Knesset outranks a new one, including zero."""
     legacy = {th: {} for th in THEMES}
     for k in sorted(old):
@@ -205,6 +205,9 @@ def merge_signs(old, new, second=None):
                 raise ValueError(f'invalid second-reading sign: {sign!r}')
             if int(bid) in axis and sign != axis[int(bid)]:
                 axis[int(bid)] = 0
+    for k in merged:
+        for bid in economy_removed:
+            merged[k]['economy'][int(bid)] = 0
     return merged
 
 
@@ -365,7 +368,8 @@ def check(root, data, allow_partial=False):
                for entries in additions[k].values() for s in entries.values()):
             raise ValueError(f'invalid full signs K{k}')
     signs = merge_signs(signs, additions,
-                       load(root / 'criteria/axis_second_reading_2026-10-19.json')['signs'])
+                       load(root / 'criteria/axis_second_reading_2026-10-19.json')['signs'],
+                       load(root / 'criteria/economy_second_reading_2026-10-20.json')['removed'])
     person = personal(votes[25], load, data)
     coverage = {}
     for k, dump in dumps.items():
@@ -448,6 +452,11 @@ def selftest():
     new[25]['economy'] = {1: 1, 2: 1, 3: 1}
     merged = merge_signs(old, new)
     assert merged[25]['economy'] == {1: -1, 2: 0, 3: 1}
+    filtered = merge_signs(old, new, economy_removed=[1, 3])
+    assert all(filtered[k]['economy'][1] == filtered[k]['economy'][3] == 0 for k in old)
+    assert filtered[25]['economy'][2] == 0 and new[25]['economy'][3] == 1
+    assert differences(filtered, merged)
+    print('PASS v96: removed economy signs cannot survive in any Knesset after merge')
     forged = copy.deepcopy(merged)
     forged[25]['economy'][1] = 1
     assert differences(merged, forged)
