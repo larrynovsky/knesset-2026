@@ -283,8 +283,14 @@ def axis_directions(directions_path: Path) -> tuple[dict, list]:
         # конвейере, получают знак полной разметки по названиям (criteria/declared_before_site_full_2026-10-20.yaml).
         full = ROOT / "criteria" / "full_signs_K25.json"
         if USE_FULL and full.exists():
+            added = {}
             for bill, sg in json.loads(full.read_text(encoding="utf-8"))["signs"]["rule_of_law"].items():
-                dirs.setdefault(int(bill), int(sg))
+                if int(bill) not in dirs:
+                    added[int(bill)] = int(sg)
+            # Перепись 20.10 (criteria/census_second_reading_2026-10-20.json, правило c6114fe): снятые знаки
+            # полной разметки → 0. Касается только законов, добавленных из полной разметки, не решающей оси.
+            from theme_arrows import reread_filter
+            dirs.update(reread_filter("rule_of_law", added))
     # Фаза точности 19.10: второе независимое прочтение по полному тексту
     # (Codex v32/v39). Где оно прямо расходится со знаком большинства — знак снят
     # (отказ второго чтения — null — не считается доводом против):

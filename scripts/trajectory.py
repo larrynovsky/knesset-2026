@@ -68,7 +68,8 @@ def verdict(points: list) -> tuple[str, int]:
     roles = {r for _, r in clear}
     if len(dirs) == 1:
         if roles == {"gov", "opp"}:
-            return "steady", len(clear)
+            # владелец 20.10 (031ca87): одно направление, но были сроки «и так, и так» — «разнонаправленно»
+            return ("mixed_dir" if any(a == "both" for a, _ in points) else "steady"), len(clear)
         other = {"gov", "opp"} - roles
         if any(a == "both" and r in other for a, r in points):
             return "holds_" + next(iter(roles)), len(clear)
@@ -217,6 +218,7 @@ def compute() -> dict:
 
 def selftest() -> int:
     assert verdict([("down", "gov"), ("down", "opp")]) == ("steady", 2)
+    assert verdict([("down", "gov"), ("both", "gov"), ("down", "opp")]) == ("mixed_dir", 2)
     assert verdict([("down", "gov"), ("both", "opp"), ("down", "gov")]) == ("holds_gov", 2)
     assert verdict([("down", "gov"), ("down", "gov")]) == ("one_role_gov", 2)
     assert verdict([("down", "gov"), ("up", "opp"), ("down", "gov")]) == ("by_role", 3)

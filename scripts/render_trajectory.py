@@ -27,6 +27,7 @@ CSS = """
 .tj table{width:100%;border-collapse:collapse;font-size:.78rem}.tj table.why{table-layout:fixed}.tj table.why th:first-child{width:2.6rem}.tj th,.tj td{padding:.25rem .3rem;border-bottom:1px solid var(--rule);text-align:left;vertical-align:top}
 """
 VERD = {"steady": "одна линия — «{d}» — и в коалиции, и в оппозиции",
+        "mixed_dir": "разнонаправленно: в основном «{d}» и в коалиции, и в оппозиции, но были сроки «и так, и так»",
         "holds_gov": "в коалиции одна линия — «{d}»; в оппозиции — и так, и так",
         "holds_opp": "в оппозиции одна линия — «{d}»; в коалиции — и так, и так",
         "one_role_gov": "одна линия — «{d}», но только в коалиции: позицию от обязательства не отличить",
