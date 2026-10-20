@@ -87,6 +87,18 @@ if [ -n "$ADDR" ]; then
   exit 1
 fi
 
+# ---- §16/§18d: почта автора коммита -----------------------------------------
+# 20.10.2026 два коммита ушли на GitHub с личной почтой из ~/.gitconfig: блок
+# §18c смотрит только содержимое, а почта живёт в метаданных. Нашёл независимый
+# клон с GitHub, не этот хук. В репозитории user.email = noreply GitHub.
+AUTHOR=$(git var GIT_AUTHOR_IDENT 2>/dev/null; git var GIT_COMMITTER_IDENT 2>/dev/null)
+if printf '%s\n' "$AUTHOR" | grep -qv 'users\.noreply\.github\.com'; then
+  echo "ОТКАЗ (CLAUDE.md §16/§18): почта автора или коммиттера не noreply GitHub." >&2
+  printf '%s\n' "$AUTHOR" | sed 's/>.*/>/' >&2
+  echo "  git config user.email 218382290+larrynovsky@users.noreply.github.com" >&2
+  exit 1
+fi
+
 # ---- §3: критерии раньше данных -------------------------------------------
 if [ -f scripts/check_criteria_order.py ]; then
   PY=$(command -v python3 || echo /opt/homebrew/bin/python3.11)
