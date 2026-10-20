@@ -92,9 +92,17 @@ WINDOWS = {
 }
 
 
-def use_knesset(n: int) -> None:
-    """Переключить модуль на Кнессет n. 25 — прежнее поведение байт в байт."""
-    global SCAN, OUT, K25_START, K25_END, K25_NUM, NAMED_CACHE
+FULL = False
+
+
+def use_knesset(n: int, full: bool = False) -> None:
+    """Переключить модуль на Кнессет n. 25 — прежнее поведение байт в байт.
+
+    full (владелец 20.10: «качай всё, кроме законопроектов без голосований»): чек-лист —
+    все законопроекты, голосовавшиеся в пленуме (data/bills_scan_full_<n>.json из
+    probe_voted_bills), выход data/votes_full_<n>.json, отдельный кэш поимённых —
+    прежние votes_<n>.json и их кэши не трогаются (arrow_robustness хеширует кэш 25-го)."""
+    global SCAN, OUT, K25_START, K25_END, K25_NUM, NAMED_CACHE, FULL
     if n not in WINDOWS:
         raise SystemExit(f"Кнессет {n} вне WINDOWS {sorted(WINDOWS)}")
     K25_START, K25_END = WINDOWS[n]
@@ -105,6 +113,11 @@ def use_knesset(n: int) -> None:
         # Отдельный кэш: arrow_robustness хеширует data/named_votes_cache/* как вход
         # 25-го, и выгрузка срезов, пишущая туда, роняла бы его кэш и make report.
         NAMED_CACHE = ROOT / "data" / "named_votes_cache_slices"
+    FULL = full
+    if full:
+        SCAN = ROOT / "data" / f"bills_scan_full_{n}.json"
+        OUT = ROOT / "data" / f"votes_full_{n}.json"
+        NAMED_CACHE = ROOT / "data" / "named_votes_cache_full"
 
 
 def load_bills() -> dict[str, dict]:
@@ -495,10 +508,12 @@ def main() -> int:
     ap.add_argument("--dump-divergences", action="store_true",
                     help="напечатать сами расхождения и выйти: материал для "
                          "вердиктов, которых требует гейт §3. Ничего не решает.")
+    ap.add_argument("--full", action="store_true",
+                    help="все голосовавшиеся законопроекты (bills_scan_full_<n>.json), выход votes_full_<n>.json")
     ap.add_argument("--knesset", type=int, default=25,
                     help="номер Кнессета (срезы 20–24); по умолчанию 25")
     a = ap.parse_args()
-    use_knesset(a.knesset)
+    use_knesset(a.knesset, full=a.full)
 
     bills = load_bills()                      # контроль: по имени
     bills_by_id = load_bills_by_id()          # основной путь: по идентификатору
@@ -559,7 +574,7 @@ def main() -> int:
     verdicts = load_adjudication(ROOT)
     need = [t for t in cls3["содержательное"] + cls3["потеря"]
             if t[0] not in verdicts]
-    if need and K25_NUM != 25:
+    if need and (K25_NUM != 25 or FULL):
         # §3-exempt: срезы 20–24. Вердикты по расхождениям прямого ключа и имени
         # писались для 25-го; для срезов владелец 19.10 поставил покрытие выше
         # точности. Основной путь — прямой ключ (7299/7300 на 25-м); расхождения
