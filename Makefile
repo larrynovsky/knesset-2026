@@ -56,6 +56,9 @@ selftest-code:
 	$(PY) scripts/dynamics.py --selftest
 	$(PY) scripts/crosscheck_slices.py --selftest
 	$(PY) scripts/crosscheck_dynamics.py --selftest
+	$(PY) scripts/trajectory.py --selftest
+	$(PY) scripts/render_trajectory.py
+	$(PY) scripts/crosscheck_trajectory.py --selftest
 
 robustness:
 	$(PY) scripts/arrow_robustness.py
@@ -64,6 +67,8 @@ slices:
 	# срезы 20–24: data/slices.json нужен selftest рендера — считается до него
 	$(PY) scripts/slice_arrows.py
 	$(PY) scripts/dynamics.py
+	# траектория 20→25 (владелец 20.10): роль по дате голосования
+	$(PY) scripts/trajectory.py
 
 report: robustness slices selftest-code
 	# §24 локально, как на Studio: иначе MANIFEST отстаёт молча и Studio встаёт (19.10, 14:04–15:40)
@@ -73,6 +78,8 @@ report: robustness slices selftest-code
 	$(PY) scripts/crosscheck_owner_laws.py
 	$(PY) scripts/crosscheck_slices.py
 	$(PY) scripts/crosscheck_dynamics.py
+	# траектория 20→25 (владелец 20.10): независимая сверка Codex v87/v88
+	$(PY) scripts/crosscheck_trajectory.py --data data
 
 stamp:
 	$(PY) scripts/build_report.py --stamp

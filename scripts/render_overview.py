@@ -758,7 +758,7 @@ def build(m: dict, cards: dict | None = None,
 }}
 </style></head><body>
 <h1>Что фракции делали на самом деле</h1>
-<nav><a href="cheatsheet.html">Шпаргалка для печати · A4</a></nav>
+<nav><a href="cheatsheet.html">Шпаргалка для печати · A4</a> · <a href="trajectory.html">Как менялись списки: Кнессеты 20→25</a></nav>
 <p class=lead>27 октября голосуют за списки бюллетеня. Этот
 документ нужен для одного: вычеркнуть два-три из них и уметь объяснить себе
 почему — не «они мне не нравятся», а «вот закон, вот дата, вот как они
@@ -1702,7 +1702,7 @@ def selftest() -> int:
     with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
         site = Path(tmp)
         (site / "index.html").write_text(doc, encoding="utf-8")
-        for name in ("f-1.html", "f-2.html", "f-3.html", "axes.html", "grounds.html", "time.html", "method.html", "cheatsheet.html"):
+        for name in ("f-1.html", "f-2.html", "f-3.html", "axes.html", "grounds.html", "time.html", "method.html", "cheatsheet.html", "trajectory.html"):
             (site / name).write_text(state, encoding="utf-8")
         n = check_index_links(site)
         (site / "index.html").write_text(doc.replace(
@@ -2414,6 +2414,7 @@ def ballot_pages(matrix: dict, cards: dict, summaries: dict,
                  laws: list[dict], source: Path | None = None,
                  leaders: dict | None = None) -> dict[str, str]:
     """Досье списка: данные каждой фракции отдельно, без общей стрелки."""
+    from render_trajectory import CSS as traj_css, list_block as traj_block
     from build_line_cards import arrows
     from render_method import ARROW, VOTES
     from theme_arrows import names_ru_path
@@ -2544,10 +2545,11 @@ def ballot_pages(matrix: dict, cards: dict, summaries: dict,
 .spk .ln{{fill:none;stroke-width:1.6}} .t-rule_of_law{{stroke:var(--ax-inst);fill:var(--ax-inst)}} .t-religion_state{{stroke:var(--ax-rel);fill:var(--ax-rel)}}
 .t-economy{{stroke:var(--ax-econ);fill:var(--ax-econ)}} .t-security{{stroke:var(--ax-sec);fill:var(--ax-sec)}}
 .dyn-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.6rem 1rem}} .dyn-fig{{margin:0}} .dyn-fig figcaption{{font-size:.78rem}} .dyn-fig small{{display:block;color:var(--dim)}} .list-dyn h3{{font-size:1rem;margin:1rem 0 .3rem}} .slice-spark{{max-width:11rem}} .dyn-axis{{font-size:.78rem;color:var(--dim)}}
+{traj_css}
 </style></head><body>
 <nav class=crumbs><a href="index.html#ballot">Все списки</a></nav>
 <h1><span class="ballot-letters" lang="he" dir="rtl" title="буквы на бюллетене">{esc(entry["letters"])}</span> {esc(entry["ru"])} <span lang=he dir=rtl><bdi>{esc(entry["he"])}</bdi></span></h1>
-<p class=lead>{esc(entry["leaders"])}</p>{short}{dyn_block(entry, names)}{slice_block(entry["letters"], ru=entry["ru"])}
+<p class=lead>{esc(entry["leaders"])}</p>{short}{traj_block(entry["letters"])}{dyn_block(entry, names)}{slice_block(entry["letters"], ru=entry["ru"])}
 <p class="letters-source">{esc(ballot["letters_source"])}</p>
 <h2>Подробности</h2><p>«Не уверены» — вывод может смениться, если смысл каждого десятого закона прочитан с ошибкой.</p>{body}<footer>{SHORT_FRAME}</footer>
 </body></html>'''
@@ -2684,6 +2686,10 @@ def main() -> int:
         pages += 1
     lists = ballot_pages(m, cards, summaries, laws, leaders=leaders)
     for name, page in lists.items():
+        (OUT.parent / name).write_text(page, encoding="utf-8")
+    # траектория 20→25 (владелец 20.10): два обзора; блок на страницах списков — в ballot_pages
+    import render_trajectory
+    for name, page in render_trajectory.pages(css_from_mockup(), f"<footer>{SHORT_FRAME}</footer>").items():
         (OUT.parent / name).write_text(page, encoding="utf-8")
     print(f"обзор + {pages} страниц фракций + {len(lists)} страниц списков -> {OUT.parent}")
     rev = doc.count('tx-rev">')   # клетки, не легенда (R22-F05)
