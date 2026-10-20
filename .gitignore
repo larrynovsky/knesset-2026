@@ -22,3 +22,18 @@ site/
 # журналы запусков агентов — большие и воспроизводимые; отчёты и задачи остаются
 reviews/*_run.log
 .shots/
+
+# reviews/ — рабочий стол агентов (задания, отчёты, логи). Решение владельца 20.10.2026:
+# в публичный репозиторий не входит. Исключения — файлы, которые читает сборка
+# (замер 20.10: audit-hook на open() во время `make report` на Studio).
+reviews/*
+!reviews/axis_audit_v32.json
+!reviews/axis_reread_v39A.json
+!reviews/axis_reread_v39B.json
+!reviews/economy_fullscan_v56.json
+!reviews/religion_fullscan_v55.json
+!reviews/security_fullscan_v57.json
+!reviews/tiebreak_crosscheck_v29.md
+!reviews/translation_audit_v48.md
+!reviews/vote_names_ru_fixes_v48.json
+!reviews/arrow_robustness_v35.md

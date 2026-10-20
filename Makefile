@@ -117,4 +117,5 @@ repro-selftest:
 
 # §16/§21: внешняя проверка выкладки на Hetzner (pull). Только на Studio, где site/.
 hosted-check:
-	$(PY) scripts/check_hosted.py https://knesset.SITE_HOST site
+	@test -s $(HOME)/.knesset_secrets/site_url || { echo 'нет ~/.knesset_secrets/site_url — адрес сайта вне репозитория (§16, §18)'; exit 1; }
+	$(PY) scripts/check_hosted.py "$$(cat $(HOME)/.knesset_secrets/site_url)" site

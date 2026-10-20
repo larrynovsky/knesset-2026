@@ -6,7 +6,7 @@
 Плюс: X-Robots-Tag noindex на каждом ответе, HSTS, robots.txt без Disallow,
 служебные пути отдают 404. Запуск на Studio, где лежит site/ (§21).
 
-    python3 scripts/check_hosted.py https://knesset.SITE_HOST site
+    python3 scripts/check_hosted.py "$(cat ~/.knesset_secrets/site_url)" site
     python3 scripts/check_hosted.py --selftest
 """
 import hashlib, sys, urllib.error, urllib.request
