@@ -30,7 +30,7 @@ def inputs_sha(root: Path = ROOT) -> str:
         "fetch_votes.py", "render_landmark_table.py"))
     for pattern in ("data/named_votes_cache/*.json", "criteria/theme_signs_*.json", "criteria/claude_tiebreak_signs_*.json",
                     "criteria/axis_second_reading_*.json", "criteria/declared_before_arrow_*.yaml",
-                    "docs/reference/for_option_sign_*.json", "criteria/full_signs_K25.json"):
+                    "docs/reference/for_option_sign_*.json", "criteria/full_signs_K25.json", "criteria/economy_second_reading_2026-10-20.json"):
         paths.update(root.glob(pattern))
     digest = hashlib.sha256(json.dumps([ALGORITHM, RUNS, SEED, PS]).encode())
     for path in sorted(paths):

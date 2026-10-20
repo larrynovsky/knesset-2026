@@ -1,0 +1,3425 @@
+{
+ "ГРАНИЦА_§3": "ВИДЕЛ до записи: знаки по названиям (full_signs), выводы траектории по экономике (16/19 «ясной линии нет») и отчёт Codex v94. НЕ ВИДЕЛ: эффекта этого файла на стрелки и траекторию — правило снятия объявлено до выгрузки текстов (d750f6d); читатели не видели знака по названию.",
+ "rule": "criteria/declared_before_economy_reread_2026-10-20.yaml",
+ "counts": {
+  "kept": 512,
+  "removed": 32,
+  "flipped": 9,
+  "kept_unread": 4,
+  "kept_notext": 4
+ },
+ "universe": 561,
+ "agree_numeric": 500,
+ "both_numeric": 517,
+ "removed": [
+  563046,
+  567670,
+  568136,
+  569864,
+  570723,
+  573610,
+  579299,
+  1045865,
+  2006948,
+  2008869,
+  2009615,
+  2009673,
+  2010032,
+  2013189,
+  2023326,
+  2024528,
+  2073208,
+  2143782,
+  2156102,
+  2157697,
+  2157929,
+  2161100,
+  2161143,
+  2164591,
+  2167562,
+  2169640,
+  2193180,
+  2195309,
+  2197704,
+  2198381,
+  2198712,
+  2198903,
+  2199030,
+  2199807,
+  2200327,
+  2202462,
+  2202485,
+  2202866,
+  2203203,
+  2203951,
+  2205959
+ ],
+ "bills": {
+  "543184": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "550456": {
+   "title": -1,
+   "claude": -1,
+   "codex": null,
+   "result": "kept"
+  },
+  "550666": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "550668": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "556162": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "558219": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "558321": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "558326": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "559336": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "562224": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "562302": {
+   "title": 1,
+   "claude": null,
+   "codex": 1,
+   "result": "kept"
+  },
+  "562432": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "562459": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "562513": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "562597": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "562734": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "562806": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "562815": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "562831": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "562850": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "562928": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "562935": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "563046": {
+   "title": -1,
+   "claude": 0,
+   "codex": 0,
+   "result": "removed"
+  },
+  "563061": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "563062": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "563069": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "563096": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "563123": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "563141": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "563208": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "563327": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "563340": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "563468": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "563489": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "563491": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "563569": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "563572": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "563579": {
+   "title": -1,
+   "claude": -1,
+   "codex": null,
+   "result": "kept"
+  },
+  "563655": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "563675": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "563748": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "563806": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "563871": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "563951": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "563955": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "563976": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "564042": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "564050": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "564055": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "564069": {
+   "title": -1,
+   "claude": -1,
+   "codex": null,
+   "result": "kept"
+  },
+  "564083": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "564177": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "564257": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "564309": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "564381": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "564416": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "564783": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "564982": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "564985": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "565149": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "565262": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "565367": {
+   "title": -1,
+   "claude": -1,
+   "codex": null,
+   "result": "kept"
+  },
+  "565679": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "565738": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "565764": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "565834": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "566000": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "566037": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "566120": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "566181": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "566459": {
+   "title": 1,
+   "claude": null,
+   "codex": 1,
+   "result": "kept"
+  },
+  "566482": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "566582": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "567007": {
+   "title": -1,
+   "claude": -1,
+   "codex": null,
+   "result": "kept"
+  },
+  "567031": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "567171": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "567670": {
+   "title": 1,
+   "claude": 0,
+   "codex": 1,
+   "result": "removed"
+  },
+  "567814": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "567956": {
+   "title": -1,
+   "claude": -1,
+   "codex": null,
+   "result": "kept"
+  },
+  "568132": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "568136": {
+   "title": -1,
+   "claude": 1,
+   "codex": 1,
+   "result": "flipped"
+  },
+  "568141": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "568284": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "568297": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "568352": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "568435": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "568446": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "568552": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "568817": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "568883": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "569394": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "569400": {
+   "title": -1,
+   "claude": -1,
+   "codex": null,
+   "result": "kept"
+  },
+  "569793": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "569864": {
+   "title": 1,
+   "claude": 1,
+   "codex": 0,
+   "result": "removed"
+  },
+  "570024": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "570028": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "570555": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "570723": {
+   "title": -1,
+   "claude": 1,
+   "codex": null,
+   "result": "removed"
+  },
+  "570918": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "571313": {
+   "title": -1,
+   "claude": -1,
+   "codex": null,
+   "result": "kept"
+  },
+  "571496": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "572171": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "572233": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "572594": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "572903": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "573335": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "573610": {
+   "title": 1,
+   "claude": 0,
+   "codex": 1,
+   "result": "removed"
+  },
+  "573676": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "574728": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "574791": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "574799": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "575158": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "575278": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "575754": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "575986": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "576454": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "576668": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "576941": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "577147": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "577511": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "577623": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "577875": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "578057": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "578498": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "579103": {
+   "title": -1,
+   "claude": -1,
+   "codex": null,
+   "result": "kept"
+  },
+  "579299": {
+   "title": 1,
+   "claude": 0,
+   "codex": 0,
+   "result": "removed"
+  },
+  "1042100": {
+   "title": 1,
+   "claude": 1,
+   "codex": null,
+   "result": "kept"
+  },
+  "1043724": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "1045865": {
+   "title": 1,
+   "claude": 0,
+   "codex": 0,
+   "result": "removed"
+  },
+  "1046091": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "1046189": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "1056937": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "1056982": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2003234": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2003942": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2004367": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2004519": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2004682": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2004737": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2005775": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2005780": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2005876": {
+   "title": 1,
+   "claude": 1,
+   "codex": null,
+   "result": "kept"
+  },
+  "2006317": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2006578": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2006828": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2006948": {
+   "title": 1,
+   "claude": -1,
+   "codex": null,
+   "result": "removed"
+  },
+  "2007017": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2007272": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2007273": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2007474": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2007766": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2008461": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2008869": {
+   "title": -1,
+   "claude": 1,
+   "codex": 1,
+   "result": "flipped"
+  },
+  "2009220": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2009615": {
+   "title": -1,
+   "claude": 1,
+   "codex": 1,
+   "result": "flipped"
+  },
+  "2009673": {
+   "title": -1,
+   "claude": 1,
+   "codex": 1,
+   "result": "flipped"
+  },
+  "2009828": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2009960": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2010032": {
+   "title": 1,
+   "claude": 0,
+   "codex": 0,
+   "result": "removed"
+  },
+  "2010635": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2011061": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2011126": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2011838": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2013189": {
+   "title": 1,
+   "claude": -1,
+   "codex": null,
+   "result": "removed"
+  },
+  "2013379": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2013552": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2013582": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2013755": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2013878": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2013888": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2013942": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2014255": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2014259": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2014624": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2014720": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2014757": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2014915": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2014983": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2015115": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2015304": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2015817": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2015885": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2016679": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2016774": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2017029": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2017242": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2017411": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2017706": {
+   "title": -1,
+   "claude": -1,
+   "codex": null,
+   "result": "kept"
+  },
+  "2017726": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2018034": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2018208": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2018609": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2018801": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2019053": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2019135": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2019445": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2019564": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2019787": {
+   "title": 1,
+   "claude": 1,
+   "codex": null,
+   "result": "kept"
+  },
+  "2020098": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2020521": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2020642": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2020668": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2020715": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2021476": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2021558": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2021837": {
+   "title": 1,
+   "claude": 1,
+   "codex": null,
+   "result": "kept"
+  },
+  "2022000": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2022302": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2022438": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2023149": {
+   "title": 1,
+   "claude": null,
+   "codex": null,
+   "result": "kept_unread"
+  },
+  "2023326": {
+   "title": 1,
+   "claude": -1,
+   "codex": -1,
+   "result": "flipped"
+  },
+  "2023921": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2024342": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2024528": {
+   "title": -1,
+   "claude": 1,
+   "codex": 1,
+   "result": "flipped"
+  },
+  "2024789": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2024852": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2024855": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2024932": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2063289": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2063688": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2064129": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2064301": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2064411": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2064728": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2065188": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2065621": {
+   "title": 1,
+   "claude": null,
+   "codex": null,
+   "result": "kept_notext"
+  },
+  "2066183": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2066442": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2066602": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2066722": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2066791": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2066792": {
+   "title": 1,
+   "claude": 1,
+   "codex": null,
+   "result": "kept"
+  },
+  "2066876": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2068873": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2069733": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2069825": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2070566": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2070799": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2071197": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2071267": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2072241": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2073178": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2073208": {
+   "title": 1,
+   "claude": 0,
+   "codex": 1,
+   "result": "removed"
+  },
+  "2073416": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2073723": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2073729": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2073823": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2073841": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2074552": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2075455": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2085644": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2085677": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2085747": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2086006": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2086292": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2086315": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2086329": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2086624": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2086669": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2087051": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2087212": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2087842": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2088300": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2140118": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2140134": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2140184": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2140634": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2141099": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2141149": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2141252": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2141255": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2141583": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2142529": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2142569": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2142766": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2142987": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2143727": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2143782": {
+   "title": -1,
+   "claude": 1,
+   "codex": null,
+   "result": "removed"
+  },
+  "2143784": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2144079": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2147677": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2149085": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2151842": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2151997": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2152001": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2156071": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2156075": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2156102": {
+   "title": 1,
+   "claude": 0,
+   "codex": 1,
+   "result": "removed"
+  },
+  "2156141": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2156148": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2156172": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2156238": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2156240": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2156361": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2156392": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2156714": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2156865": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2156970": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2157023": {
+   "title": 1,
+   "claude": null,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2157056": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2157155": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2157307": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2157317": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2157511": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2157661": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2157667": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2157697": {
+   "title": 1,
+   "claude": 0,
+   "codex": 1,
+   "result": "removed"
+  },
+  "2157929": {
+   "title": -1,
+   "claude": -1,
+   "codex": 0,
+   "result": "removed"
+  },
+  "2158713": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2158863": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2158881": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2158950": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2158997": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2159023": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2159045": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2159079": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2159156": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2159487": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2159554": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2159721": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2159996": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2160157": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2160538": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2160646": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2160845": {
+   "title": 1,
+   "claude": null,
+   "codex": null,
+   "result": "kept_unread"
+  },
+  "2160969": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2160997": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2160998": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2160999": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2161001": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2161100": {
+   "title": -1,
+   "claude": 0,
+   "codex": -1,
+   "result": "removed"
+  },
+  "2161143": {
+   "title": -1,
+   "claude": 0,
+   "codex": 0,
+   "result": "removed"
+  },
+  "2161145": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2161234": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2161876": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2161900": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2162000": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2162440": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2162550": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2162970": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2163235": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2163568": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2163680": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2163904": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2164463": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2164492": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2164591": {
+   "title": 1,
+   "claude": 0,
+   "codex": 0,
+   "result": "removed"
+  },
+  "2164596": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2164664": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2164943": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2165107": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2166124": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2166444": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2166531": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2166693": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2166720": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2166734": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2166736": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2166987": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2167470": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2167562": {
+   "title": 1,
+   "claude": 0,
+   "codex": 0,
+   "result": "removed"
+  },
+  "2167622": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2167842": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2168048": {
+   "title": -1,
+   "claude": -1,
+   "codex": null,
+   "result": "kept"
+  },
+  "2168605": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2168606": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2168847": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2169513": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2169567": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2169640": {
+   "title": -1,
+   "claude": 0,
+   "codex": -1,
+   "result": "removed"
+  },
+  "2169967": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2189517": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2189756": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2189890": {
+   "title": -1,
+   "claude": -1,
+   "codex": null,
+   "result": "kept"
+  },
+  "2190689": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2191855": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2193180": {
+   "title": -1,
+   "claude": 0,
+   "codex": 0,
+   "result": "removed"
+  },
+  "2195286": {
+   "title": 1,
+   "claude": 1,
+   "codex": null,
+   "result": "kept"
+  },
+  "2195287": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2195309": {
+   "title": 0,
+   "claude": -1,
+   "codex": -1,
+   "result": "removed"
+  },
+  "2195837": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2195963": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2196065": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2196116": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2196356": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2196539": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2196672": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2196689": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2196694": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2196781": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2196821": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2196835": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2196887": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2197036": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2197069": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2197084": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2197190": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2197195": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2197232": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2197259": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2197419": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2197441": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2197442": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2197659": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2197660": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2197669": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2197680": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2197704": {
+   "title": 1,
+   "claude": 0,
+   "codex": 1,
+   "result": "removed"
+  },
+  "2197743": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2197882": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2197974": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2197997": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2198049": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2198143": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2198168": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2198381": {
+   "title": 1,
+   "claude": 0,
+   "codex": 1,
+   "result": "removed"
+  },
+  "2198601": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2198712": {
+   "title": 1,
+   "claude": 1,
+   "codex": 0,
+   "result": "removed"
+  },
+  "2198721": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2198747": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2198753": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2198763": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2198769": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2198770": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2198794": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2198805": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2198814": {
+   "title": -1,
+   "claude": -1,
+   "codex": null,
+   "result": "kept"
+  },
+  "2198838": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2198893": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2198898": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2198903": {
+   "title": 1,
+   "claude": -1,
+   "codex": -1,
+   "result": "flipped"
+  },
+  "2198977": {
+   "title": -1,
+   "claude": -1,
+   "codex": null,
+   "result": "kept"
+  },
+  "2199030": {
+   "title": 1,
+   "claude": 1,
+   "codex": -1,
+   "result": "removed"
+  },
+  "2199054": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2199055": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2199056": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2199169": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2199215": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2199323": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2199540": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2199807": {
+   "title": -1,
+   "claude": -1,
+   "codex": 0,
+   "result": "removed"
+  },
+  "2200251": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2200261": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2200327": {
+   "title": -1,
+   "claude": 0,
+   "codex": 0,
+   "result": "removed"
+  },
+  "2200332": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2200336": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2200510": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2200722": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2200794": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2200841": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2201190": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2201411": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2201610": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2201638": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2201735": {
+   "title": -1,
+   "claude": -1,
+   "codex": null,
+   "result": "kept"
+  },
+  "2202462": {
+   "title": -1,
+   "claude": 0,
+   "codex": -1,
+   "result": "removed"
+  },
+  "2202485": {
+   "title": -1,
+   "claude": 1,
+   "codex": 1,
+   "result": "flipped"
+  },
+  "2202517": {
+   "title": -1,
+   "claude": null,
+   "codex": null,
+   "result": "kept_unread"
+  },
+  "2202787": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2202827": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2202866": {
+   "title": 1,
+   "claude": 0,
+   "codex": 1,
+   "result": "removed"
+  },
+  "2202905": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2203203": {
+   "title": 1,
+   "claude": 1,
+   "codex": -1,
+   "result": "removed"
+  },
+  "2203246": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2203292": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2203427": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2203688": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2203717": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2203727": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2203809": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2203915": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2203951": {
+   "title": 1,
+   "claude": -1,
+   "codex": -1,
+   "result": "flipped"
+  },
+  "2204149": {
+   "title": 1,
+   "claude": 1,
+   "codex": null,
+   "result": "kept"
+  },
+  "2204190": {
+   "title": 1,
+   "claude": null,
+   "codex": null,
+   "result": "kept_notext"
+  },
+  "2204920": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2205642": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2205959": {
+   "title": 1,
+   "claude": 0,
+   "codex": 0,
+   "result": "removed"
+  },
+  "2207037": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2207234": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2207260": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2207881": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2208263": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2208312": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2209258": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2209485": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2209493": {
+   "title": -1,
+   "claude": null,
+   "codex": null,
+   "result": "kept_unread"
+  },
+  "2210752": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2211110": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2211470": {
+   "title": 1,
+   "claude": 1,
+   "codex": null,
+   "result": "kept"
+  },
+  "2211746": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2212785": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2213094": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2213122": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2213142": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2213308": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2213335": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2213778": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2213797": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2213836": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2213956": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2214049": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2214303": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2214308": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2214872": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2215899": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2216043": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2216747": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2216839": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2217079": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2217187": {
+   "title": 1,
+   "claude": 1,
+   "codex": null,
+   "result": "kept"
+  },
+  "2218572": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2218999": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2219672": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2220281": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2220831": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2220950": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2221505": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2221538": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2222111": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2223234": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2223566": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2223787": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2223834": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2223948": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2224160": {
+   "title": 1,
+   "claude": 1,
+   "codex": null,
+   "result": "kept"
+  },
+  "2224224": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2224644": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2224774": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2225065": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2225121": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2225556": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2225783": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2226063": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2226372": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2226689": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2227059": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2227427": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2227682": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2227993": {
+   "title": 1,
+   "claude": null,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2228371": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2229858": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2229916": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2230441": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2230549": {
+   "title": 1,
+   "claude": 1,
+   "codex": null,
+   "result": "kept"
+  },
+  "2230601": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2230841": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2231205": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2231913": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2232198": {
+   "title": 1,
+   "claude": null,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2232225": {
+   "title": 1,
+   "claude": 1,
+   "codex": null,
+   "result": "kept"
+  },
+  "2232274": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2234065": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2235479": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2235850": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2237182": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2237452": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2238654": {
+   "title": 1,
+   "claude": 1,
+   "codex": 1,
+   "result": "kept"
+  },
+  "2240463": {
+   "title": -1,
+   "claude": null,
+   "codex": null,
+   "result": "kept_notext"
+  },
+  "2240506": {
+   "title": 1,
+   "claude": null,
+   "codex": null,
+   "result": "kept_notext"
+  },
+  "2240893": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  },
+  "2242174": {
+   "title": -1,
+   "claude": -1,
+   "codex": -1,
+   "result": "kept"
+  }
+ }
+}

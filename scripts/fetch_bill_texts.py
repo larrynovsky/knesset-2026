@@ -239,6 +239,27 @@ def load_docs(refresh: bool) -> list[dict]:
     return docs
 
 
+def load_docs_for(bills: list[int], cache: Path) -> list[dict]:
+    """Документы ровно этих законопроектов: фильтр BillID eq … or …, по 15 в запросе.
+
+    Полная выгрузка от BILLID_FLOOR не покрывает законопроекты 20-го Кнессета (id ниже порога),
+    а выгрузка всего архива — ~час. Каждый кусок идёт через guarded fetch_all (§23 счётчик).
+    """
+    if cache.exists():
+        c = json.loads(cache.read_text(encoding="utf-8"))
+        if sorted(c["bills"]) == sorted(bills):
+            print(f"⚠ КЭШ {cache.name}: {len(c['docs'])} документов, снят {c['fetched_at']}")
+            return c["docs"]
+    docs = []
+    for i in range(0, len(bills), 15):
+        part = bills[i:i + 15]
+        docs += fetch_all("KNS_DocumentBill", flt="(" + " or ".join(f"BillID eq {b}" for b in part) + ")",
+                          select="Id,BillID,GroupTypeDesc,ApplicationDesc,FilePath")
+    cache.write_text(json.dumps({"fetched_at": datetime.now(timezone.utc).isoformat(), "bills": bills,
+                                 "docs": docs}, ensure_ascii=False), encoding="utf-8")
+    return docs
+
+
 def selftest() -> int:
     """Оракул RTL. Красное здесь = тексты принятых актов снова читаются задом наперёд."""
     # Вход взят из реального файла data/bill_texts/2207472.txt (акт об отмене
@@ -311,6 +332,8 @@ def main() -> int:
                          "голосованиями оказалось 3 акта из 55 — классификация "
                          "шла по актам, за которые никто из наблюдаемых не "
                          "голосовал.")
+    ap.add_argument("--bills", type=Path, default=None,
+                    help="JSON-список bill_id: брать ровно их; индекс — <файл>.index.json, кэш документов — <файл>.docs.json")
     a = ap.parse_args()
 
     if a.selftest:
@@ -318,8 +341,14 @@ def main() -> int:
     if a.fix_existing:
         return fix_existing()
 
-    scan = json.loads(SCAN.read_text(encoding="utf-8"))
-    core = set(scan["core_ids"])
+    index = INDEX
+    if a.bills:
+        core = set(json.loads(a.bills.read_text(encoding="utf-8")))
+        index = a.bills.with_suffix(".index.json")
+        have = sum((TEXTDIR / f"{b}.txt").exists() for b in core)
+        print(f"ОЖИДАНИЕ (§23): законопроектов в списке {len(core)}, текст уже есть у {have}")
+    else:
+        core = set(json.loads(SCAN.read_text(encoding="utf-8"))["core_ids"])
     if a.from_selection:
         sel = json.loads((ROOT / "data" / "pilot_selection.json").read_text(encoding="utf-8"))
         core = set(sel["selected"])
@@ -334,7 +363,7 @@ def main() -> int:
         print(f"ОЖИДАНИЕ (§23): актов с голосованиями {len(core)}, "
               f"текст уже есть у {have}, значит цель — {len(core) - have}. "
               f"Сколько из них имеют документ нормы, неизвестно: это и меряем.")
-    docs = load_docs(a.refresh)
+    docs = load_docs_for(sorted(core), a.bills.with_suffix(".docs.json")) if a.bills else load_docs(a.refresh)
 
     best: dict[int, dict] = {}
     for d in docs:
@@ -401,13 +430,13 @@ def main() -> int:
         print("\n⚠ Разница между «файл есть» и «текст извлёкся» — это НЕ дыра покрытия,")
         print("  пока не выяснено, отсутствует конвертер или отсутствует норма.")
 
-    INDEX.write_text(json.dumps(
+    index.write_text(json.dumps(
         {"core_total": len(core), "with_bill_text": len(best),
          "attempted": len(targets), "extracted": ok,
          "stats": dict(stats), "preference": PREFERENCE,
          "min_chars": MIN_CHARS, "min_heb_ratio": MIN_HEB_RATIO,
          "rows": rows}, ensure_ascii=False, indent=1), encoding="utf-8")
-    print(f"\n{INDEX.relative_to(ROOT)} · тексты в {TEXTDIR.relative_to(ROOT)}/")
+    print(f"\n{index.resolve().relative_to(ROOT)} · тексты в {TEXTDIR.relative_to(ROOT)}/")
     return 0
 
 

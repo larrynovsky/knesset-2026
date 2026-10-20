@@ -115,7 +115,10 @@ def full_signs(k: str) -> dict:
         return {}
     d = json.loads(p.read_text(encoding="utf-8"))["signs"]
     old = old_signs_any()
-    return {th: {int(b): old[th].get(int(b), int(v)) for b, v in d.get(th, {}).items()} for th in THEMES4}
+    out = {th: {int(b): old[th].get(int(b), int(v)) for b, v in d.get(th, {}).items()} for th in THEMES4}
+    from theme_arrows import econ2_filter          # второе прочтение экономики (criteria d750f6d)
+    out["economy"] = econ2_filter(out["economy"])
+    return out
 
 
 def merge_signs(old: dict, new: dict) -> dict:

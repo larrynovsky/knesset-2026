@@ -85,7 +85,7 @@
     "expected": 7557,
     "got": 7557,
     "pages": 76,
-    "at": "2026-10-20T10:42:55",
+    "at": "2026-10-20T13:16:56",
     "host": "MacBook-Pro-14-Alexander.local"
   },
   "KNS_PlmSessionItem|PlenumSessionID ge 2196130 and PlenumSessionID le 2245272": {
@@ -99,14 +99,14 @@
     "expected": 2180,
     "got": 2180,
     "pages": 22,
-    "at": "2026-10-20T10:43:22",
+    "at": "2026-10-20T13:17:24",
     "host": "MacBook-Pro-14-Alexander.local"
   },
   "KNS_Person|": {
     "expected": 1189,
     "got": 1189,
     "pages": 12,
-    "at": "2026-10-20T10:43:58",
+    "at": "2026-10-20T13:18:13",
     "host": "MacBook-Pro-14-Alexander.local"
   },
   "KNS_PlenumVoteResult|VoteID eq 37683": {
@@ -59145,6 +59145,272 @@
     "got": 3404,
     "pages": 35,
     "at": "2026-10-20T10:34:27",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 543184 or BillID eq 550456 or BillID eq 550666 or BillID eq 550668 or BillID eq 556162 or BillID eq 558219 or BillID eq 558321 or BillID eq 558326 or BillID eq 559336 or BillID eq 562224 or BillID eq 562302 or BillID eq 562432 or BillID eq 562459 or BillID eq 562513 or BillID eq 562597)": {
+    "expected": 35,
+    "got": 35,
+    "pages": 1,
+    "at": "2026-10-20T14:48:06",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 562734 or BillID eq 562806 or BillID eq 562815 or BillID eq 562831 or BillID eq 562850 or BillID eq 562928 or BillID eq 562935 or BillID eq 563046 or BillID eq 563061 or BillID eq 563062 or BillID eq 563069 or BillID eq 563096 or BillID eq 563123 or BillID eq 563141 or BillID eq 563208)": {
+    "expected": 16,
+    "got": 16,
+    "pages": 1,
+    "at": "2026-10-20T14:48:08",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 563327 or BillID eq 563340 or BillID eq 563468 or BillID eq 563489 or BillID eq 563491 or BillID eq 563569 or BillID eq 563572 or BillID eq 563579 or BillID eq 563655 or BillID eq 563675 or BillID eq 563748 or BillID eq 563806 or BillID eq 563871 or BillID eq 563951 or BillID eq 563955)": {
+    "expected": 26,
+    "got": 26,
+    "pages": 1,
+    "at": "2026-10-20T14:48:10",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 563976 or BillID eq 564042 or BillID eq 564050 or BillID eq 564055 or BillID eq 564069 or BillID eq 564083 or BillID eq 564177 or BillID eq 564257 or BillID eq 564309 or BillID eq 564381 or BillID eq 564416 or BillID eq 564783 or BillID eq 564982 or BillID eq 564985 or BillID eq 565149)": {
+    "expected": 18,
+    "got": 18,
+    "pages": 1,
+    "at": "2026-10-20T14:48:12",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 565262 or BillID eq 565367 or BillID eq 565679 or BillID eq 565738 or BillID eq 565764 or BillID eq 565834 or BillID eq 566000 or BillID eq 566037 or BillID eq 566120 or BillID eq 566181 or BillID eq 566459 or BillID eq 566482 or BillID eq 566582 or BillID eq 567007 or BillID eq 567031)": {
+    "expected": 25,
+    "got": 25,
+    "pages": 1,
+    "at": "2026-10-20T14:48:13",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 567171 or BillID eq 567670 or BillID eq 567814 or BillID eq 567956 or BillID eq 568132 or BillID eq 568136 or BillID eq 568141 or BillID eq 568284 or BillID eq 568297 or BillID eq 568352 or BillID eq 568435 or BillID eq 568446 or BillID eq 568552 or BillID eq 568817 or BillID eq 568883)": {
+    "expected": 26,
+    "got": 26,
+    "pages": 1,
+    "at": "2026-10-20T14:48:15",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 569394 or BillID eq 569400 or BillID eq 569793 or BillID eq 569864 or BillID eq 570024 or BillID eq 570028 or BillID eq 570555 or BillID eq 570723 or BillID eq 570918 or BillID eq 571313 or BillID eq 571496 or BillID eq 572171 or BillID eq 572233 or BillID eq 572594 or BillID eq 572903)": {
+    "expected": 30,
+    "got": 30,
+    "pages": 1,
+    "at": "2026-10-20T14:48:17",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 573335 or BillID eq 573610 or BillID eq 573676 or BillID eq 574728 or BillID eq 574791 or BillID eq 574799 or BillID eq 575158 or BillID eq 575278 or BillID eq 575754 or BillID eq 575986 or BillID eq 576454 or BillID eq 576668 or BillID eq 576941 or BillID eq 577147 or BillID eq 577511)": {
+    "expected": 34,
+    "got": 34,
+    "pages": 1,
+    "at": "2026-10-20T14:48:19",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 577623 or BillID eq 577875 or BillID eq 578057 or BillID eq 578498 or BillID eq 579103 or BillID eq 579299 or BillID eq 1042100 or BillID eq 1043724 or BillID eq 1045865 or BillID eq 1046091 or BillID eq 1046189 or BillID eq 1056937 or BillID eq 1056982 or BillID eq 2003234 or BillID eq 2003942)": {
+    "expected": 180,
+    "got": 180,
+    "pages": 2,
+    "at": "2026-10-20T14:48:22",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2004367 or BillID eq 2004519 or BillID eq 2004682 or BillID eq 2004737 or BillID eq 2005775 or BillID eq 2005780 or BillID eq 2005876 or BillID eq 2006317 or BillID eq 2006578 or BillID eq 2006828 or BillID eq 2006948 or BillID eq 2007017 or BillID eq 2007272 or BillID eq 2007273 or BillID eq 2007474)": {
+    "expected": 36,
+    "got": 36,
+    "pages": 1,
+    "at": "2026-10-20T14:48:25",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2007766 or BillID eq 2008461 or BillID eq 2008869 or BillID eq 2009220 or BillID eq 2009615 or BillID eq 2009673 or BillID eq 2009828 or BillID eq 2009960 or BillID eq 2010032 or BillID eq 2010635 or BillID eq 2011061 or BillID eq 2011126 or BillID eq 2011838 or BillID eq 2013189 or BillID eq 2013379)": {
+    "expected": 15,
+    "got": 15,
+    "pages": 1,
+    "at": "2026-10-20T14:48:27",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2013552 or BillID eq 2013582 or BillID eq 2013755 or BillID eq 2013878 or BillID eq 2013888 or BillID eq 2013942 or BillID eq 2014255 or BillID eq 2014259 or BillID eq 2014624 or BillID eq 2014720 or BillID eq 2014757 or BillID eq 2014915 or BillID eq 2014983 or BillID eq 2015115 or BillID eq 2015304)": {
+    "expected": 35,
+    "got": 35,
+    "pages": 1,
+    "at": "2026-10-20T14:48:29",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2015817 or BillID eq 2015885 or BillID eq 2016679 or BillID eq 2016774 or BillID eq 2017029 or BillID eq 2017242 or BillID eq 2017411 or BillID eq 2017706 or BillID eq 2017726 or BillID eq 2018034 or BillID eq 2018208 or BillID eq 2018609 or BillID eq 2018801 or BillID eq 2019053 or BillID eq 2019135)": {
+    "expected": 29,
+    "got": 29,
+    "pages": 1,
+    "at": "2026-10-20T14:48:31",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2019445 or BillID eq 2019564 or BillID eq 2019787 or BillID eq 2020098 or BillID eq 2020521 or BillID eq 2020642 or BillID eq 2020668 or BillID eq 2020715 or BillID eq 2021476 or BillID eq 2021558 or BillID eq 2021837 or BillID eq 2022000 or BillID eq 2022302 or BillID eq 2022438 or BillID eq 2023149)": {
+    "expected": 16,
+    "got": 16,
+    "pages": 1,
+    "at": "2026-10-20T14:48:33",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2023326 or BillID eq 2023921 or BillID eq 2024342 or BillID eq 2024528 or BillID eq 2024789 or BillID eq 2024852 or BillID eq 2024855 or BillID eq 2024932 or BillID eq 2063289 or BillID eq 2063688 or BillID eq 2064129 or BillID eq 2064301 or BillID eq 2064411 or BillID eq 2064728 or BillID eq 2065188)": {
+    "expected": 23,
+    "got": 23,
+    "pages": 1,
+    "at": "2026-10-20T14:48:35",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2065621 or BillID eq 2066183 or BillID eq 2066442 or BillID eq 2066602 or BillID eq 2066722 or BillID eq 2066791 or BillID eq 2066792 or BillID eq 2066876 or BillID eq 2068873 or BillID eq 2069733 or BillID eq 2069825 or BillID eq 2070566 or BillID eq 2070799 or BillID eq 2071197 or BillID eq 2071267)": {
+    "expected": 15,
+    "got": 15,
+    "pages": 1,
+    "at": "2026-10-20T14:48:36",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2072241 or BillID eq 2073178 or BillID eq 2073208 or BillID eq 2073416 or BillID eq 2073723 or BillID eq 2073729 or BillID eq 2073823 or BillID eq 2073841 or BillID eq 2074552 or BillID eq 2075455 or BillID eq 2085644 or BillID eq 2085677 or BillID eq 2085747 or BillID eq 2086006 or BillID eq 2086292)": {
+    "expected": 24,
+    "got": 24,
+    "pages": 1,
+    "at": "2026-10-20T14:48:38",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2086315 or BillID eq 2086329 or BillID eq 2086624 or BillID eq 2086669 or BillID eq 2087051 or BillID eq 2087212 or BillID eq 2087842 or BillID eq 2088300 or BillID eq 2140118 or BillID eq 2140134 or BillID eq 2140184 or BillID eq 2140634 or BillID eq 2141099 or BillID eq 2141149 or BillID eq 2141252)": {
+    "expected": 41,
+    "got": 41,
+    "pages": 1,
+    "at": "2026-10-20T14:48:40",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2141255 or BillID eq 2141583 or BillID eq 2142529 or BillID eq 2142569 or BillID eq 2142766 or BillID eq 2142987 or BillID eq 2143727 or BillID eq 2143782 or BillID eq 2143784 or BillID eq 2144079 or BillID eq 2147677 or BillID eq 2149085 or BillID eq 2151842 or BillID eq 2151997 or BillID eq 2152001)": {
+    "expected": 46,
+    "got": 46,
+    "pages": 1,
+    "at": "2026-10-20T14:48:42",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2156071 or BillID eq 2156075 or BillID eq 2156102 or BillID eq 2156141 or BillID eq 2156148 or BillID eq 2156172 or BillID eq 2156238 or BillID eq 2156240 or BillID eq 2156361 or BillID eq 2156392 or BillID eq 2156714 or BillID eq 2156865 or BillID eq 2156970 or BillID eq 2157023 or BillID eq 2157056)": {
+    "expected": 23,
+    "got": 23,
+    "pages": 1,
+    "at": "2026-10-20T14:48:43",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2157155 or BillID eq 2157307 or BillID eq 2157317 or BillID eq 2157511 or BillID eq 2157661 or BillID eq 2157667 or BillID eq 2157697 or BillID eq 2157929 or BillID eq 2158713 or BillID eq 2158863 or BillID eq 2158881 or BillID eq 2158950 or BillID eq 2158997 or BillID eq 2159023 or BillID eq 2159045)": {
+    "expected": 17,
+    "got": 17,
+    "pages": 1,
+    "at": "2026-10-20T14:48:45",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2159079 or BillID eq 2159156 or BillID eq 2159487 or BillID eq 2159554 or BillID eq 2159721 or BillID eq 2159996 or BillID eq 2160157 or BillID eq 2160538 or BillID eq 2160646 or BillID eq 2160845 or BillID eq 2160969 or BillID eq 2160997 or BillID eq 2160998 or BillID eq 2160999 or BillID eq 2161001)": {
+    "expected": 18,
+    "got": 18,
+    "pages": 1,
+    "at": "2026-10-20T14:48:47",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2161100 or BillID eq 2161143 or BillID eq 2161145 or BillID eq 2161234 or BillID eq 2161876 or BillID eq 2161900 or BillID eq 2162000 or BillID eq 2162440 or BillID eq 2162550 or BillID eq 2162970 or BillID eq 2163235 or BillID eq 2163568 or BillID eq 2163680 or BillID eq 2163904 or BillID eq 2164463)": {
+    "expected": 17,
+    "got": 17,
+    "pages": 1,
+    "at": "2026-10-20T14:48:49",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2164492 or BillID eq 2164591 or BillID eq 2164596 or BillID eq 2164664 or BillID eq 2164943 or BillID eq 2165107 or BillID eq 2166124 or BillID eq 2166444 or BillID eq 2166531 or BillID eq 2166693 or BillID eq 2166720 or BillID eq 2166734 or BillID eq 2166736 or BillID eq 2166987 or BillID eq 2167470)": {
+    "expected": 17,
+    "got": 17,
+    "pages": 1,
+    "at": "2026-10-20T14:48:51",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2167562 or BillID eq 2167622 or BillID eq 2167842 or BillID eq 2168048 or BillID eq 2168605 or BillID eq 2168606 or BillID eq 2168847 or BillID eq 2169513 or BillID eq 2169567 or BillID eq 2169640 or BillID eq 2169967 or BillID eq 2189517 or BillID eq 2189756 or BillID eq 2189890 or BillID eq 2190689)": {
+    "expected": 19,
+    "got": 19,
+    "pages": 1,
+    "at": "2026-10-20T14:48:53",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2191855 or BillID eq 2193180 or BillID eq 2195286 or BillID eq 2195287 or BillID eq 2195309 or BillID eq 2195837 or BillID eq 2195963 or BillID eq 2196065 or BillID eq 2196116 or BillID eq 2196356 or BillID eq 2196539 or BillID eq 2196672 or BillID eq 2196689 or BillID eq 2196694 or BillID eq 2196781)": {
+    "expected": 40,
+    "got": 40,
+    "pages": 1,
+    "at": "2026-10-20T14:48:54",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2196821 or BillID eq 2196835 or BillID eq 2196887 or BillID eq 2197036 or BillID eq 2197069 or BillID eq 2197084 or BillID eq 2197190 or BillID eq 2197195 or BillID eq 2197232 or BillID eq 2197259 or BillID eq 2197419 or BillID eq 2197441 or BillID eq 2197442 or BillID eq 2197659 or BillID eq 2197660)": {
+    "expected": 33,
+    "got": 33,
+    "pages": 1,
+    "at": "2026-10-20T14:48:56",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2197669 or BillID eq 2197680 or BillID eq 2197704 or BillID eq 2197743 or BillID eq 2197882 or BillID eq 2197974 or BillID eq 2197997 or BillID eq 2198049 or BillID eq 2198143 or BillID eq 2198168 or BillID eq 2198381 or BillID eq 2198601 or BillID eq 2198712 or BillID eq 2198721 or BillID eq 2198747)": {
+    "expected": 38,
+    "got": 38,
+    "pages": 1,
+    "at": "2026-10-20T14:48:58",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2198753 or BillID eq 2198763 or BillID eq 2198769 or BillID eq 2198770 or BillID eq 2198794 or BillID eq 2198805 or BillID eq 2198814 or BillID eq 2198838 or BillID eq 2198893 or BillID eq 2198898 or BillID eq 2198903 or BillID eq 2198977 or BillID eq 2199030 or BillID eq 2199054 or BillID eq 2199055)": {
+    "expected": 31,
+    "got": 31,
+    "pages": 1,
+    "at": "2026-10-20T14:49:00",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2199056 or BillID eq 2199169 or BillID eq 2199215 or BillID eq 2199323 or BillID eq 2199540 or BillID eq 2199807 or BillID eq 2200251 or BillID eq 2200261 or BillID eq 2200327 or BillID eq 2200332 or BillID eq 2200336 or BillID eq 2200510 or BillID eq 2200722 or BillID eq 2200794 or BillID eq 2200841)": {
+    "expected": 45,
+    "got": 45,
+    "pages": 1,
+    "at": "2026-10-20T14:49:02",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2201190 or BillID eq 2201411 or BillID eq 2201610 or BillID eq 2201638 or BillID eq 2201735 or BillID eq 2202462 or BillID eq 2202485 or BillID eq 2202517 or BillID eq 2202787 or BillID eq 2202827 or BillID eq 2202866 or BillID eq 2202905 or BillID eq 2203203 or BillID eq 2203246 or BillID eq 2203292)": {
+    "expected": 30,
+    "got": 30,
+    "pages": 1,
+    "at": "2026-10-20T14:49:03",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2203427 or BillID eq 2203688 or BillID eq 2203717 or BillID eq 2203727 or BillID eq 2203809 or BillID eq 2203915 or BillID eq 2203951 or BillID eq 2204149 or BillID eq 2204190 or BillID eq 2204920 or BillID eq 2205642 or BillID eq 2205959 or BillID eq 2207037 or BillID eq 2207234 or BillID eq 2207260)": {
+    "expected": 38,
+    "got": 38,
+    "pages": 1,
+    "at": "2026-10-20T14:49:05",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2207881 or BillID eq 2208263 or BillID eq 2208312 or BillID eq 2209258 or BillID eq 2209485 or BillID eq 2209493 or BillID eq 2210752 or BillID eq 2211110 or BillID eq 2211470 or BillID eq 2211746 or BillID eq 2212785 or BillID eq 2213094 or BillID eq 2213122 or BillID eq 2213142 or BillID eq 2213308)": {
+    "expected": 43,
+    "got": 43,
+    "pages": 1,
+    "at": "2026-10-20T14:49:07",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2213335 or BillID eq 2213778 or BillID eq 2213797 or BillID eq 2213836 or BillID eq 2213956 or BillID eq 2214049 or BillID eq 2214303 or BillID eq 2214308 or BillID eq 2214872 or BillID eq 2215899 or BillID eq 2216043 or BillID eq 2216747 or BillID eq 2216839 or BillID eq 2217079 or BillID eq 2217187)": {
+    "expected": 35,
+    "got": 35,
+    "pages": 1,
+    "at": "2026-10-20T14:49:09",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2218572 or BillID eq 2218999 or BillID eq 2219672 or BillID eq 2220281 or BillID eq 2220831 or BillID eq 2220950 or BillID eq 2221505 or BillID eq 2221538 or BillID eq 2222111 or BillID eq 2223234 or BillID eq 2223566 or BillID eq 2223787 or BillID eq 2223834 or BillID eq 2223948 or BillID eq 2224160)": {
+    "expected": 51,
+    "got": 51,
+    "pages": 1,
+    "at": "2026-10-20T14:49:11",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2224224 or BillID eq 2224644 or BillID eq 2224774 or BillID eq 2225065 or BillID eq 2225121 or BillID eq 2225556 or BillID eq 2225783 or BillID eq 2226063 or BillID eq 2226372 or BillID eq 2226689 or BillID eq 2227059 or BillID eq 2227427 or BillID eq 2227682 or BillID eq 2227993 or BillID eq 2228371)": {
+    "expected": 31,
+    "got": 31,
+    "pages": 1,
+    "at": "2026-10-20T14:49:13",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2229858 or BillID eq 2229916 or BillID eq 2230441 or BillID eq 2230549 or BillID eq 2230601 or BillID eq 2230841 or BillID eq 2231205 or BillID eq 2231913 or BillID eq 2232198 or BillID eq 2232225 or BillID eq 2232274 or BillID eq 2234065 or BillID eq 2235479 or BillID eq 2235850 or BillID eq 2237182)": {
+    "expected": 34,
+    "got": 34,
+    "pages": 1,
+    "at": "2026-10-20T14:49:14",
+    "host": "MacBook-Pro-14-Alexander.local"
+  },
+  "KNS_DocumentBill|(BillID eq 2237452 or BillID eq 2238654 or BillID eq 2240463 or BillID eq 2240506 or BillID eq 2240893 or BillID eq 2242174)": {
+    "expected": 13,
+    "got": 13,
+    "pages": 1,
+    "at": "2026-10-20T14:49:16",
     "host": "MacBook-Pro-14-Alexander.local"
   }
 }
