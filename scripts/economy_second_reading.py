@@ -39,7 +39,8 @@ def main() -> int:
     title = {}
     for f in sorted(glob.glob(str(ROOT / "criteria" / "full_signs_K*.json"))):
         for b, v in json.loads(Path(f).read_text(encoding="utf-8"))["signs"].get("economy", {}).items():
-            title.setdefault(int(b), int(v))
+            if int(v):                           # знак по названию — ненулевой, как в определении universe (v96: 2195309 — 0 в K24, −1 в K25)
+                title.setdefault(int(b), int(v))
     cl, cx = readings("claude"), readings("codex")
     missing = [b for b in universe if b not in cl or b not in cx]
     if missing:                                  # §23: неполное чтение — отказ, а не тихий «kept»
