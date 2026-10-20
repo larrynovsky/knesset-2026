@@ -2626,7 +2626,9 @@ def demo_block() -> str:
     hx = lambda s: X0 + (X1 - X0) * s
     parties = [("Партия А", [(20, .15, 1), (23, .2, 1), (24, .22, 0), (25, .1, 1)], "системно", "ослабляла и в коалиции, и в оппозиции"),
                ("Партия Б", [(20, .82, 0), (23, .75, 0), (24, .28, 1), (25, .86, 0)], "по роли", "в оппозиции укрепляла, в коалиции ослабляла")]
-    o = [f'<svg viewBox="0 0 560 {34 + len(parties) * 92}" role="img" aria-label="пример: одна тема, две выдуманные партии">',
+    key = lambda x, y: (f'<circle class=g cx="{x}" cy="{y}" r="6"/><text x="{x + 10}" y="{y + 4}" font-size="10" class=w>в коалиции</text>'
+                        f'<circle class=o cx="{x + 90}" cy="{y}" r="6"/><text x="{x + 100}" y="{y + 4}" font-size="10" class=w>в оппозиции</text>')
+    o = [f'<svg viewBox="0 0 560 {34 + len(parties) * 92 + 22}" role="img" aria-label="пример: одна тема, две выдуманные партии">',
          f'<text x="{X0}" y="14" font-size="10" class=w>← ослабляла суд</text><text x="{X1}" y="14" font-size="10" class=w text-anchor="end">укрепляла суд →</text>']
     for i, (nm, pts, vd, why) in enumerate(parties):
         y0 = 34 + i * 92
@@ -2635,14 +2637,15 @@ def demo_block() -> str:
         P = [(hx(s), y0 + 18 + j * 15, k, c) for j, (k, s, c) in enumerate(pts)]
         o += [arrow(a[0], a[1], b[0], b[1]) for a, b in zip(P, P[1:])] + [pt(*p) for p in P]
         o.append(f'<text x="{X1 + 12}" y="{y0 + 40}" font-size="10.5">{vd}</text><text x="{X0}" y="{y0 + 84}" font-size="9.5" class=w>{vd}: {why}</text>')
+    o.append(key(X0, 34 + len(parties) * 92 + 10))
     svg1 = "".join(o) + "</svg>"
     cols = [("Суд и права", "укрепляла", "ослабляла", [(20, .2, 1), (23, .15, 1), (24, .25, 0), (25, .12, 1)], "системно"),
             ("Религия", "больше", "меньше", [(20, .8, 1), (23, .85, 1), (24, .78, 0), (25, .9, 1)], "системно"),
-            ("Экономика", "легче бизнесу", "строже", [(20, .55, 1), (23, .45, 1), (24, .5, 0), (25, .48, 1)], "ясной линии нет"),
+            ("Экономика", "легче бизнесу", "строже", [(20, .55, 1), (23, .45, 1), (24, .5, 0), (25, .48, 1)], "и так, и так"),
             ("Безопасность", "шире силовикам", "уже", [(20, .3, 1), (23, .35, 1), (24, .6, 0), (25, .82, 1)], "меняется")]
     Y0, Y1 = 48, 218
     vy = lambda s: Y1 - (Y1 - Y0) * s
-    o = ['<svg class=vc viewBox="0 0 440 262" role="img" aria-label="пример: одна выдуманная партия, четыре темы">']
+    o = ['<svg class=vc viewBox="0 0 440 284" role="img" aria-label="пример: одна выдуманная партия, четыре темы">']
     for ci, (t, up, dn, pts, vd) in enumerate(cols):
         cx = 55 + ci * 110
         o.append(f'<text x="{cx}" y="12" font-size="11" text-anchor="middle" font-weight="bold">{t}</text>'
@@ -2651,6 +2654,7 @@ def demo_block() -> str:
         P = [(cx - 33 + j * 22, vy(s), k, c) for j, (k, s, c) in enumerate(pts)]
         o += [arrow(a[0], a[1], b[0], b[1]) for a, b in zip(P, P[1:])] + [pt(*p) for p in P]
         o.append(f'<text x="{cx}" y="256" font-size="10" text-anchor="middle" font-weight="bold">{vd}</text>')
+    o.append(key(20, 274))
     svg2 = "".join(o) + "</svg>"
     return ('<section class="tj demo"><h2>Пример, что можно увидеть на странице каждого избирательного блока</h2>'
             f'<div class=sc>{svg1}</div><div class=sc>{svg2}</div></section>')
@@ -2686,7 +2690,7 @@ def lean_split(doc: str) -> tuple[str, str]:
            ".menu li{margin:.35rem 0}.intent{font-size:1.25rem;line-height:1.35;margin:.2rem 0 .6rem}"
            ".byline{color:var(--dim);font-size:.78rem;margin-top:2rem}.demo{margin:.4rem 0 1.2rem}"
            ".demo .sc{border:1px solid var(--rule);border-radius:6px;padding:.9rem .8rem .6rem;margin:1.1rem 0 1.6rem}"
-           "@media(min-width:601px){.ballot thead th:nth-child(1){width:28%}.ballot thead th:nth-child(n+2){width:14.4%}}\n"
+           "@media(min-width:601px){.ballot thead th:nth-child(1){width:28%}.ballot thead th:nth-child(n+2){width:14.4%;font-size:11px;padding-left:1px;padding-right:1px}}\n"
            + render_trajectory.CSS)
     lead_head = head.replace("<title>Что фракции делали — 25-й Кнессет</title>", "<title>Выборы в Кнессет 2026</title>").replace("</style>", css + "</style>", 1)
     items = "".join(f'<li><a href="{u}">{esc(t)}</a></li>' for u, t in MENU)
@@ -2694,7 +2698,8 @@ def lean_split(doc: str) -> tuple[str, str]:
              f'<header class=top><h1>Выборы в Кнессет 2026</h1><details class=menu><summary>Меню ☰</summary><ul>{items}</ul></details></header>\n'
              '<p class=intent>Слова ничего не стоят. Здесь оцениваются только поступки.</p>\n'
              + "".join(f"<p>{esc(p)}</p>\n" for p in OWNER_TEXT)
-             + demo_block() + '\n<h2 id="ballot">Сводная таблица</h2>\n' + table
+             + demo_block() + '\n<h2 id="ballot">Сводная таблица</h2>\n'
+             '<p class=n>В таблице — куда список голосовал в нынешнем Кнессете. Держит ли он эту линию с 2015 года — по клику на название.</p>\n' + table
              + f'\n<section class=menuopen><h2>Ещё на сайте</h2><ul>{items}</ul></section>\n'
              f'<footer><p class=byline>{esc(BYLINE)}</p></footer>\n</body></html>')
     read_head = head.replace("<title>Что фракции делали — 25-й Кнессет</title>", "<title>Как читать — выборы в Кнессет 2026</title>")
