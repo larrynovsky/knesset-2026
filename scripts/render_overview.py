@@ -1186,6 +1186,11 @@ def selftest() -> int:
         if r["anchor_id"] in leaders:
             r["b"]["status"] = "observed"
     leader_doc = build(leader_matrix, live_cards, leader_texts)[0]
+    # 20.10: короткая главная — таблица на главной, пояснения и фракции в read.html, ничего не теряется.
+    idx, rd = lean_split(leader_doc)
+    assert '<table class="ballot">' in idx and 'class="ballot-reading"' not in idx and idx.count("<footer>") == 1
+    assert all(k in rd for k in ('class="ballot-reading"', 'class="faction-details"', "Ещё 24 списка", "data-frame=full"))
+    assert '<table class="ballot">' not in rd and idx.index("Пример, что можно увидеть") < idx.index('<table class="ballot">')
     leader_lists = ballot_pages(leader_matrix, live_cards, leader_texts, laws, leaders=leaders)
     for fid, list_name in ((1096, "l-1.html"), (1102, "l-2.html")):
         r = next(r for r in leader_matrix["lines"] if r["anchor_id"] == fid)
@@ -2581,6 +2586,116 @@ def state_page(row: dict, brief: str = "") -> str:
 </body></html>'''
 
 
+
+# ── 20.10, владелец: короткая главная (шапка-замысел → пример динамики → сводная таблица → меню открыто → автор внизу).
+# Полный документ build() остаётся источником для всех проверок денег; режется ПОСЛЕ них.
+OWNER_TEXT = (
+    "Поступок — это голосование за законы: слова можно подделать, голос в Кнессете — нет.",
+    "Ещё поступок — деньги: какие обещания из коалиционных соглашений партия довела до бюджета.",
+    "Мы разобрали все законы, за которые голосовал Кнессет с 2015 года, и про каждый закон решили, усиливает он "
+    "или ослабляет одну из четырёх осей: независимость ветвей власти, свобода экономической деятельности, "
+    "религия в государстве, безопасность.",
+    "Одна строка таблицы — один список бюллетеня 27 октября и то, как голосовали его депутаты.",
+    "Мы смотрим на шесть Кнессетов подряд, с 2015 года, и спрашиваем простую вещь: держит ли партия одно "
+    "направление и в коалиции, и в оппозиции — или меняет его вместе с ролью.",
+    "Нажмите на название списка в таблице, чтобы увидеть, насколько последователен каждый блок.")
+MENU = (("read.html#how", "Как читать таблицу"), ("read.html#cols", "Что значат колонки тем и денег"),
+        ("trajectory.html", "Как менялись списки: по темам"), ("trajectory_parties.html", "Как менялись списки: по партиям"),
+        ("read.html#more24", "Ещё 24 списка без мест в Кнессете"), ("read.html#factions", "Подробно по фракциям 25-го Кнессета"),
+        ("method.html", "Методика: что меряем и почему"), ("read.html#frame", "Кто сделал и на каких данных"),
+        ("cheatsheet.html", "Шпаргалка для печати · A4"))
+BYLINE = ("Сайт сделан частным образом, без финансирования; оси выбрал автор. "
+          "Это сводка поступков, а не совет, за кого голосовать.")
+
+
+def demo_block() -> str:
+    """Две картинки на ВЫДУМАННЫХ партиях: как читать динамику по каденциям (данные не трогает)."""
+    import math
+    R = 9
+    def pt(x, y, k, coal):
+        c, l = ("g", "lg") if coal else ("o", "lo")
+        return (f'<circle class={c} cx="{x:.1f}" cy="{y:.1f}" r="{R}"/><text class={l} x="{x:.1f}" y="{y + 3.3:.1f}" '
+                f'font-size="9.5" text-anchor="middle">{k}</text>')
+    def arrow(x1, y1, x2, y2):
+        dx, dy = x2 - x1, y2 - y1; L = math.hypot(dx, dy) or 1; ux, uy = dx / L, dy / L
+        a = (x1 + ux * (R + 1), y1 + uy * (R + 1)); b = (x2 - ux * (R + 6), y2 - uy * (R + 6)); t = (x2 - ux * (R + 1), y2 - uy * (R + 1))
+        px, py = -uy * 3.5, ux * 3.5
+        return (f'<line class=ar x1="{a[0]:.1f}" y1="{a[1]:.1f}" x2="{b[0]:.1f}" y2="{b[1]:.1f}"/>'
+                f'<path class=ah d="M{t[0]:.1f} {t[1]:.1f}L{b[0] + px:.1f} {b[1] + py:.1f}L{b[0] - px:.1f} {b[1] - py:.1f}z"/>')
+    X0, X1 = 70, 470
+    hx = lambda s: X0 + (X1 - X0) * s
+    parties = [("Партия А", [(20, .15, 1), (23, .2, 1), (24, .22, 0), (25, .1, 1)], "системно", "ослабляла и в коалиции, и в оппозиции"),
+               ("Партия Б", [(20, .82, 0), (23, .75, 0), (24, .28, 1), (25, .86, 0)], "по роли", "в оппозиции укрепляла, в коалиции ослабляла")]
+    o = [f'<svg viewBox="0 0 560 {34 + len(parties) * 92}" role="img" aria-label="пример: одна тема, две выдуманные партии">',
+         f'<text x="{X0}" y="14" font-size="10" class=w>← ослабляла суд</text><text x="{X1}" y="14" font-size="10" class=w text-anchor="end">укрепляла суд →</text>']
+    for i, (nm, pts, vd, why) in enumerate(parties):
+        y0 = 34 + i * 92
+        o.append(f'<text x="{X0 - 8}" y="{y0 + 8}" font-size="11.5" font-weight="bold" text-anchor="end">{nm}</text>'
+                 f'<line class=ax x1="{X0}" x2="{X1}" y1="{y0 + 4}" y2="{y0 + 4}"/><line class=mid x1="{hx(.5)}" x2="{hx(.5)}" y1="{y0 - 4}" y2="{y0 + 70}"/>')
+        P = [(hx(s), y0 + 18 + j * 15, k, c) for j, (k, s, c) in enumerate(pts)]
+        o += [arrow(a[0], a[1], b[0], b[1]) for a, b in zip(P, P[1:])] + [pt(*p) for p in P]
+        o.append(f'<text x="{X1 + 12}" y="{y0 + 40}" font-size="10.5">{vd}</text><text x="{X0}" y="{y0 + 84}" font-size="9.5" class=w>{vd}: {why}</text>')
+    svg1 = "".join(o) + "</svg>"
+    cols = [("Суд и права", "укрепляла", "ослабляла", [(20, .2, 1), (23, .15, 1), (24, .25, 0), (25, .12, 1)], "системно"),
+            ("Религия", "больше", "меньше", [(20, .8, 1), (23, .85, 1), (24, .78, 0), (25, .9, 1)], "системно"),
+            ("Экономика", "легче бизнесу", "строже", [(20, .55, 1), (23, .45, 1), (24, .5, 0), (25, .48, 1)], "ясной линии нет"),
+            ("Безопасность", "шире силовикам", "уже", [(20, .3, 1), (23, .35, 1), (24, .6, 0), (25, .82, 1)], "меняется")]
+    Y0, Y1 = 48, 218
+    vy = lambda s: Y1 - (Y1 - Y0) * s
+    o = ['<svg class=vc viewBox="0 0 440 262" role="img" aria-label="пример: одна выдуманная партия, четыре темы">']
+    for ci, (t, up, dn, pts, vd) in enumerate(cols):
+        cx = 55 + ci * 110
+        o.append(f'<text x="{cx}" y="12" font-size="11" text-anchor="middle" font-weight="bold">{t}</text>'
+                 f'<text class=w x="{cx}" y="26" font-size="9" text-anchor="middle">{up}</text><text class=w x="{cx}" y="240" font-size="9" text-anchor="middle">{dn}</text>'
+                 f'<line class=ax x1="{cx}" x2="{cx}" y1="{Y0 - 12}" y2="{Y1 + 12}"/><line class=mid x1="{cx - 46}" x2="{cx + 46}" y1="{vy(.5)}" y2="{vy(.5)}"/>')
+        P = [(cx - 33 + j * 22, vy(s), k, c) for j, (k, s, c) in enumerate(pts)]
+        o += [arrow(a[0], a[1], b[0], b[1]) for a, b in zip(P, P[1:])] + [pt(*p) for p in P]
+        o.append(f'<text x="{cx}" y="256" font-size="10" text-anchor="middle" font-weight="bold">{vd}</text>')
+    svg2 = "".join(o) + "</svg>"
+    return ('<section class="tj demo"><h2>Пример, что можно увидеть на странице каждого избирательного блока</h2>'
+            f'<div class=sc>{svg1}</div><div class=sc>{svg2}</div></section>')
+
+
+def lean_split(doc: str) -> tuple[str, str]:
+    """Полный документ → (короткая главная, read.html). Ничего не теряется: всё, кроме таблицы и шапки, уходит в read.html."""
+    import render_trajectory
+    head, body = doc.split("<body>", 1)
+    body = body.rsplit("</body>", 1)[0]
+    t0 = body.index('<table class="ballot">'); t1 = body.index("</table>", t0) + len("</table>")
+    table, rest = body[t0:t1], body[:t0] + body[t1:]
+    top = rest.index('<h2 id="ballot">')
+    rest = rest[top:]
+    for old, new in (('<h2 id="ballot">Списки бюллетеня 27.10</h2>', ''),
+                     ('<section class="ballot-reading"', '<a id=how></a><section class="ballot-reading"'),
+                     ('<h4>Что значат колонки тем и денег</h4>', '<a id=cols></a><h4>Что значат колонки тем и денег</h4>'),
+                     ('<details><summary>Ещё 24 списка', '<a id=more24></a><details><summary>Ещё 24 списка'),
+                     ('<details class="faction-details">', '<a id=factions></a><details class="faction-details">'),
+                     ('<footer><details><summary>Кто сделал и на каких данных</summary>', '<a id=frame></a><footer><details><summary>Кто сделал и на каких данных</summary>')):
+        if old not in rest:
+            raise Refuse(f"lean_split: якорь не найден: {old[:40]}")
+        rest = rest.replace(old, new, 1)
+    css = ("\n.top{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap;"
+           "border-bottom:1px solid currentColor;padding-bottom:.4rem;margin-bottom:1rem}.top h1{margin:0}"
+           ".menu{position:relative}.menu summary{cursor:pointer;list-style:none;border:1px solid currentColor;padding:.2rem .7rem;border-radius:4px}"
+           ".menu ul{position:absolute;right:0;z-index:5;background:var(--bg);border:1px solid currentColor;padding:.6rem 1rem;margin:.3rem 0;min-width:17rem;list-style:none}"
+           ".menu li{margin:.35rem 0}.intent{font-size:1.25rem;line-height:1.35;margin:.2rem 0 .6rem}"
+           ".byline{color:var(--dim);font-size:.78rem;margin-top:2rem}.demo{margin:.4rem 0 1.2rem}"
+           ".demo .sc{border:1px solid var(--rule);border-radius:6px;padding:.9rem .8rem .6rem;margin:1.1rem 0 1.6rem}\n"
+           + render_trajectory.CSS)
+    lead_head = head.replace("<title>Что фракции делали — 25-й Кнессет</title>", "<title>Выборы в Кнессет 2026</title>").replace("</style>", css + "</style>", 1)
+    items = "".join(f'<li><a href="{u}">{esc(t)}</a></li>' for u, t in MENU)
+    index = (lead_head + "<body>\n"
+             f'<header class=top><h1>Выборы в Кнессет 2026</h1><details class=menu><summary>Меню ☰</summary><ul>{items}</ul></details></header>\n'
+             '<p class=intent>Слова ничего не стоят. Здесь оцениваются только поступки.</p>\n'
+             + "".join(f"<p>{esc(p)}</p>\n" for p in OWNER_TEXT)
+             + demo_block() + '\n<h2 id="ballot">Сводная таблица</h2>\n' + table
+             + f'\n<section class=menuopen><h2>Ещё на сайте</h2><ul>{items}</ul></section>\n'
+             f'<footer><p class=byline>{esc(BYLINE)}</p></footer>\n</body></html>')
+    read_head = head.replace("<title>Что фракции делали — 25-й Кнессет</title>", "<title>Как читать — выборы в Кнессет 2026</title>")
+    read = (read_head + '<body>\n<p><a href="index.html">← к сводной таблице</a></p>\n'
+            '<h1>Как читать таблицу и что ещё на сайте</h1>\n' + rest + "\n</body></html>")
+    return index, read
+
 def main() -> int:
     if "--selftest" in sys.argv:
         return selftest()
@@ -2642,7 +2757,9 @@ def main() -> int:
         print(f"ОТКАЗ: внутренний язык в обзоре: {bad}")
         return 1
     OUT.parent.mkdir(exist_ok=True)
-    OUT.write_text(doc, encoding="utf-8")
+    index, read = lean_split(doc)
+    OUT.write_text(index, encoding="utf-8")
+    (OUT.parent / "read.html").write_text(read, encoding="utf-8")
     import render_cheatsheet
     sheet = render_cheatsheet.build(m, cards)
     render_cheatsheet.selftest(sheet)

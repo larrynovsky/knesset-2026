@@ -1191,9 +1191,25 @@ def build_site(root, destination):
     check_outputs(destination, root / "design/mockup_v5")
     src = {p.relative_to(destination).as_posix(): p.read_text(encoding="utf-8")
            for p in destination.rglob("*.html")}
-    if report(run(src)):
+    if report(run(merged_index(src))):
         raise ValueError("ОТКАЗ: сборка нарушает канон")
 
+
+
+def merged_index(src):
+    """20.10, владелец: главная короткая, пояснения и таблица фракций — в read.html.
+    Канон судит их как один документ (главная, затем read.html): разделение — вёрстка, не содержание."""
+    if "read.html" not in src:
+        return src
+    src = dict(src); i, r = src["index.html"], src.pop("read.html")
+    fi = re.search(r"<footer>(.*?)</footer>", i, re.S); fr = re.search(r"<footer>(.*?)</footer>", r, re.S)
+    if not fi or not fr:
+        raise ValueError("merged_index: нет подвала у index.html или read.html")
+    periods = "".join(re.findall(r'<p class="data-period"[^>]*>[^<]*</p>\n?', fi[1]))
+    rest = re.sub(r'<p class="data-period"[^>]*>[^<]*</p>\n?', "", fr[1])
+    src["index.html"] = (i[:fi.start()] + r[r.index("<body>") + 6:fr.start()]
+                         + "<footer>" + periods + rest + "</footer>\n</body></html>")
+    return src
 
 def hashes(directory):
     return {p.relative_to(directory).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
@@ -1342,7 +1358,7 @@ if __name__ == "__main__":
                 build_site(ROOT, output)
                 # Решение владельца 19.10 (вопрос 2, А): подложенные нарушения на
                 # СВЕЖЕЙ сборке, до замены site/ — красное оставляет прежний сайт.
-                fresh = {f.name: f.read_text(encoding="utf-8") for f in sorted(output.glob("*.html"))}
+                fresh = merged_index({f.name: f.read_text(encoding="utf-8") for f in sorted(output.glob("*.html"))})
                 if selftest(fresh):
                     raise ValueError("самопроверка канона на свежей сборке красная — site/ НЕ заменён")
                 target = ROOT / "site"
@@ -1373,4 +1389,5 @@ if __name__ == "__main__":
         print(e, file=sys.stderr)
         sys.exit(1)
     src = {f.name: f.read_text(encoding="utf-8") for f in files}
+    src = merged_index(src)
     sys.exit(selftest(src) if "--selftest" in sys.argv else (1 if report(run(src)) else 0))

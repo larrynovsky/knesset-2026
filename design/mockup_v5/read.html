@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang=ru><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Как читать — выборы в Кнессет 2026</title>
+<style>
+/* Палитра «Ваиро» (японские традиционные цвета). Прогнана validate_palette.js
+   из скилла dataviz в обеих темах: худшая соседняя пара ΔE 20.2 при дальтонизме,
+   21.8 при нормальном зрении. Цвет кодирует ОСЬ, а не оценку: «ослабляла» и
+   «усиливала» внутри оси набраны одной краской. Ранг оси — вес, а не цвет. */
+:root{color-scheme:light dark;
+ --f0:.78rem;--f1:.9rem;--f2:1rem;--f3:1.25rem;--f4:1.65rem;
+ --bg:#F2EADA;--ink:#1B1710;--dim:#6E6353;--rule:#DBD0B8;--panel:#E8DEC7;--acc:#B24A22;
+ --ax-inst:#B24A22;--ax-eq:#7A6BC4;--ax-econ:#69821B;--ax-rel:#00699C;--ax-sec:#8A7410}
+@media(prefers-color-scheme:dark){:root{
+ --bg:#1B1710;--ink:#E9E1D2;--dim:#9B9080;--rule:#38322A;--panel:#241E17;--acc:#D9805A}}
+*{box-sizing:border-box}
+/* overflow-x:hidden здесь НЕ стоит намеренно: он не устраняет вылет, а прячет
+   его, обрезая контент молча — и заодно ослепляет проверку scripts/check_layout.py */
+body{max-width:48rem;margin:0 auto;padding:0 1.1rem 6rem;background:var(--bg);color:var(--ink);
+ font:var(--f2)/1.65 Georgia,'Times New Roman',serif;overflow-wrap:anywhere;
+ background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/><feColorMatrix type='saturate' values='0'/></filter><rect width='120' height='120' filter='url(%23n)' opacity='0.055'/></svg>");background-blend-mode:multiply;background-attachment:fixed}
+
+/* Общие ограничения для всех генерируемых страниц. */
+th,td{overflow-wrap:anywhere}
+pre{white-space:pre-wrap;overflow-wrap:anywhere}
+.table-scroll{max-width:100%;overflow-x:auto}
+.table-scroll:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+/* ── описательные оси: тот же вес данных, ранг ниже ── */
+.axes{display:grid;gap:.9rem;margin:1.2rem 0}
+.ax{border-left:3px solid var(--rule);padding:.5rem 0 .5rem .9rem}
+.ax h3{margin:0;font:var(--f2)/1.4 Georgia,serif}
+.ax.econ{border-left-color:var(--ax-econ)} .ax.econ h3{color:var(--ax-econ)}
+.ax.rel{border-left-color:var(--ax-rel)}   .ax.rel h3{color:var(--ax-rel)}
+.ax.sec{border-left-color:var(--ax-sec)}   .ax.sec h3{color:var(--ax-sec)}
+.ax .rank{display:inline-block;font:var(--f0)/1.5 system-ui,sans-serif;border:1px solid currentColor;
+ padding:0 .35rem;vertical-align:.15em;margin-left:.4rem;letter-spacing:.02em}
+.ax .rank.warn{border-style:dashed}
+.ax .body{font:var(--f1)/1.6 system-ui,sans-serif;margin-top:.3rem}
+.ax .body b{color:var(--ink)}
+.ax .val{font:var(--f2)/1.5 system-ui,sans-serif;margin:.25rem 0}
+.ax ul{margin:.3rem 0;padding-left:1.1rem;font:var(--f1)/1.6 system-ui,sans-serif}
+.ax .prz{background:var(--panel);padding:.5rem .7rem;margin:.5rem 0;
+ font:var(--f1)/1.6 system-ui,sans-serif}
+table.ov td.c-inst{border-left:3px solid var(--ax-inst);padding-left:.55rem}
+table.ov td.c-eq{border-left:3px solid var(--ax-eq);padding-left:.55rem}
+table.ov thead th.c-inst{color:var(--ax-inst)}
+table.ov thead th.c-eq{color:var(--ax-eq)}
+#fake{position:sticky;top:0;z-index:9;margin:0 -1.1rem 1.6rem;padding:.5rem 1.1rem;
+ background:var(--acc);color:#fff;font:var(--f0)/1.45 system-ui,sans-serif}
+@media(prefers-color-scheme:dark){#fake{background:#4a1818;color:#fff}}
+nav.crumbs{font:var(--f0)/1.6 system-ui,sans-serif;color:var(--dim);margin:0 0 1rem}
+nav.crumbs a{color:var(--dim)}
+h1{font:var(--f4)/1.25 Georgia,serif;margin:.8rem 0 .6rem}
+h2{font:var(--f3)/1.3 Georgia,serif;margin:2.6rem 0 .5rem;border-top:1px solid var(--rule);padding-top:1.2rem}
+h3{font:var(--f2)/1.4 Georgia,serif;margin:1.8rem 0 .35rem}
+p{margin:.55rem 0}
+.dim{color:var(--dim);font-size:var(--f1)}
+.lead{font-size:1.08rem;line-height:1.6}
+.note{border-left:2px solid var(--rule);padding-left:.9rem;margin:1.2rem 0}
+.he{direction:rtl}
+.big{font:2.6rem/1 Georgia,serif;font-variant-numeric:tabular-nums;display:block;margin:.3rem 0 0}
+code{font:var(--f0) ui-monospace,monospace;background:var(--panel);padding:0 .25em}
+
+/* ── обзор: строка на фракцию, без горизонтальной прокрутки ── */
+table.ov{border-collapse:collapse;width:100%;table-layout:fixed;
+ font:var(--f1)/1.45 system-ui,sans-serif;margin:1rem 0}
+table.ov th,table.ov td{padding:.5rem .5rem .5rem 0;text-align:left;vertical-align:top;
+ border-bottom:1px dotted var(--rule)}
+table.ov thead th{font:var(--f0)/1.35 system-ui,sans-serif;font-weight:600;color:var(--dim);
+ border-bottom:1px solid var(--dim);padding-bottom:.35rem}
+table.ov tbody tr:hover{background:var(--panel)}
+table.ov .who{width:34%}
+table.ov .who a{font-weight:600;text-decoration:none;color:var(--ink);border-bottom:1px solid var(--rule)}
+table.ov .who .he{display:block;color:var(--dim);font-size:.9em;font-family:Georgia,serif}
+.v{display:block;margin:.05rem 0}
+.v .a{font-size:1.05em}
+.v .lb{color:var(--dim);font-size:.85em}
+.nd{color:var(--dim);font-style:italic}
+.norec{display:inline-block;font:var(--f0)/1.5 system-ui,sans-serif;color:var(--dim);
+ border:1px dotted var(--dim);padding:0 .3rem;margin-top:.2rem}
+@media(max-width:46rem){
+ table.ov,table.ov tbody,table.ov tr,table.ov td{display:block;width:auto}
+ table.ov thead{display:none}
+ table.ov tr{border-bottom:1px solid var(--rule);padding:.9rem 0}
+ table.ov td{border:0;padding:.25rem 0}
+ table.ov td:before{content:attr(data-l);display:block;color:var(--dim);
+  font-size:var(--f0);letter-spacing:.03em}
+ table.ov td.who:before{content:none}
+ table.ov .who{width:auto;margin-bottom:.3rem}
+}
+/* ── клетка с уверенностью (05) ── */
+details.cell{border-left:3px solid var(--rule);padding:.3rem 0 .3rem .9rem;margin:1rem 0}
+details.cell[open]{border-left-color:var(--acc)}
+details.cell>summary{cursor:pointer;list-style:none;font:var(--f2)/1.5 system-ui,sans-serif}
+details.cell>summary::-webkit-details-marker{display:none}
+details.cell>summary:before{content:"▸ ";color:var(--dim)}
+details.cell[open]>summary:before{content:"▾ "}
+.cert{font:var(--f0)/1.5 system-ui,sans-serif;color:var(--dim);display:block;margin-top:.1rem}
+.inner{font:var(--f1)/1.65 system-ui,sans-serif;padding:.6rem 0 .2rem;color:var(--dim)}
+.inner b{color:var(--ink)}
+.inner p{margin:.5rem 0}
+.quote{border-left:2px solid var(--rule);padding-left:.7rem;margin:.6rem 0}
+.quote .he{display:block;color:var(--ink);font-family:Georgia,serif;font-size:1.05em}
+table.acts{border-collapse:collapse;width:100%;table-layout:fixed;
+ font:var(--f1)/1.45 system-ui,sans-serif;margin:.8rem 0}
+table.acts th,table.acts td{padding:.45rem .5rem .45rem 0;text-align:left;vertical-align:top;
+ border-bottom:1px dotted var(--rule)}
+table.acts thead th{font:var(--f0)/1.3 system-ui,sans-serif;color:var(--dim);font-weight:600;
+ border-bottom:1px solid var(--dim)}
+@media(max-width:46rem){
+ table.acts,table.acts tbody,table.acts tr,table.acts td,table.acts tbody th{display:block;width:auto}
+ table.acts thead{display:none}
+ table.acts tr{border-bottom:1px solid var(--rule);padding:.7rem 0}
+ table.acts td{border:0;padding:.2rem 0}
+ table.acts td:before{content:attr(data-l);display:block;color:var(--dim);font-size:var(--f0)}
+}
+.rev{border:1px solid var(--dim);padding:.5rem .7rem;font:var(--f1)/1.6 system-ui,sans-serif;margin:.8rem 0}
+.foot{margin-top:3.5rem;font-size:var(--f1);color:var(--dim);border-top:1px solid var(--rule);padding-top:1rem}
+
+/* ── редакция 5 ── */
+a:focus-visible,summary:focus-visible{outline:2px solid var(--acc);outline-offset:2px;border-radius:1px}
+details.cell>summary:hover{color:var(--acc)}
+.frame{font:var(--f0)/1.55 system-ui,sans-serif;color:var(--dim);border-bottom:1px solid var(--rule);padding:0 0 .6rem;margin:0 0 1.4rem}
+.frame a{color:var(--dim)}
+/* фактуры зарезервированы под смысл: растр = «искали, не нашли», штриховка = «мы сюда не дошли» */
+.tx-none{background:radial-gradient(color-mix(in srgb,var(--dim) 38%,transparent) .8px,transparent .95px);background-size:5px 5px;padding:.05rem .35rem .05rem .15rem;border-radius:2px}
+.tx-miss{background:repeating-linear-gradient(45deg,transparent 0 4px,color-mix(in srgb,var(--dim) 22%,transparent) 4px 5px);padding:.05rem .35rem .05rem .15rem;border-radius:2px}
+
+/* воздух между блоками */
+details.cell{margin:1.8rem 0;padding-top:.45rem;padding-bottom:.45rem}
+.axes{gap:1.5rem}
+.ax{padding-top:.65rem;padding-bottom:.65rem}
+.inner{padding-top:.8rem}
+h2{margin-top:3.2rem}
+
+/* лёгкая зебра: читаемость строк без mouseover */
+table.ov tbody tr:nth-child(odd){background:color-mix(in srgb,var(--panel) 55%,transparent)}
+table.ov tbody tr:hover{background:var(--panel)}
+
+/* аккуратность: одна система ссылок, подписи клеток единым стилем */
+a{color:inherit;text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--acc) 55%,transparent);text-decoration-thickness:1px;text-underline-offset:3px}
+a:hover{color:var(--acc);text-decoration-color:var(--acc)}
+.inner{color:var(--ink)}
+.inner b{display:block;margin:.9rem 0 .1rem;font:600 var(--f0)/1.5 system-ui,sans-serif;letter-spacing:.07em;text-transform:uppercase;color:var(--dim)}
+.inner p{margin:.35rem 0}
+.inner p:first-child b:first-child{margin-top:0}
+details.cell{margin:1.6rem 0}
+details.cell>summary:before{font-size:var(--f0)}
+
+/* меньше голосов: заголовок клетки одним весом, служебные строки одним стилем */
+details.cell>summary:before{content:none}
+details.cell[open]>summary:before{content:none}
+details.cell>summary{font:600 var(--f2)/1.5 system-ui,sans-serif}
+details.cell>summary b{font-weight:600}
+.cert{font:600 var(--f0)/1.6 system-ui,sans-serif;letter-spacing:.07em;text-transform:uppercase;color:var(--dim);margin-top:.25rem}
+.cert,.inner b{font-feature-settings:"case"}
+
+/* названия партий читаются как ссылки */
+table.ov .who a{border-bottom:0;text-decoration:underline;text-decoration-color:var(--acc);text-decoration-thickness:1.5px;text-underline-offset:3px}
+table.ov .who a:hover{color:var(--acc)}
+.ballot-letters{display:inline-block;border:2px solid currentColor;padding:.1em .3em;font:700 var(--f4)/1.2 system-ui,sans-serif;white-space:nowrap;vertical-align:middle}
+h1 .ballot-letters{font-size:2.6rem}
+.letters-source{font:var(--f0)/1.5 system-ui,sans-serif;color:var(--dim);overflow-wrap:anywhere}
+
+footer{font-size:12px;color:#666;margin-top:2rem}
+footer .data-period,footer .frame{display:inline;margin:0;padding:0;border:0;font:inherit}
+footer .data-period::after{content: ' · '}
+.owner-laws{width:100%;table-layout:fixed} .owner-laws th,.owner-laws td{padding:9px 6px;overflow-wrap:anywhere} .owner-laws th{font-size:13px} .owner-laws td{font-size:14px}
+.law-short{display:none}
+@media screen and (max-width:600px){
+.owner-laws .law-full{display:none} .owner-laws .law-short{display:inline}
+.owner-laws th:first-child{width:30%}
+.owner-laws th,.owner-laws td{overflow-wrap:break-word;word-break:normal;hyphens:auto}
+}
+.ballot{width:100%;table-layout:auto;border-collapse:collapse;font:13px/1.4 system-ui,sans-serif}
+.ballot th,.ballot td{padding:8px 4px;text-align:left;vertical-align:top;border-bottom:1px dotted var(--rule)}
+.ballot,.ballot *{overflow-wrap:normal;word-break:normal;hyphens:manual}
+.ballot thead th{white-space:nowrap}
+.ballot-reading{margin:1rem 0}
+.faction-details>summary{cursor:pointer;font:14px/1.5 system-ui,sans-serif;overflow-wrap:normal}
+.robustness{font-size:.75em;white-space:nowrap}
+.ballot th:first-child{width:28%}
+.ballot-laws{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;align-items:start}
+.ballot-laws>span{white-space:normal;hyphens:none;border:1px solid var(--rule);padding:2px;text-align:center;font-weight:400}
+.ballot .norec{display:block;font-size:12px;color:var(--dim)}
+/* 19.10, владелец: при прокрутке шапка уезжала и колонки становились безымянными */
+.ballot thead th{position:sticky;top:0;z-index:2;background:var(--bg);box-shadow:0 2px 0 var(--rule)}
+.ballot .norec{border:0;padding:0;margin:1px 0;font-size:11px;line-height:1.35}
+.ballot tbody tr:nth-child(even){background:var(--panel)}
+.ballot td.ballot-axis .robustness{display:block;font-size:9px;white-space:normal}
+.ballot td.ballot-axis{white-space:normal}
+.ballot-laws{counter-reset:law}
+.ballot-laws>span::before{display:block;font-size:9px;line-height:1.2;color:var(--dim);font-weight:400;white-space:normal}
+.ballot-laws>span:nth-child(1)::before{content:"Выбор судей"}
+.ballot-laws>span:nth-child(2)::before{content:"Отмена «неразумности»"}
+.ballot-laws>span:nth-child(3)::before{content:"Закон о судах (105)"}
+.ballot-laws>span:nth-child(4)::before{content:"Разделить юрсоветника"}
+@media(min-width:601px){
+ .ballot td.ballot-axis::before,.ballot td[data-l="Деньги"]::before{content:attr(data-l);display:block;font-size:9px;color:var(--dim);text-transform:lowercase}
+ .ballot td.ballot-axis,.ballot td[data-l="Деньги"]{font-size:14px;text-align:center}
+ /* 19.10: при auto-раскладке слова в темах сжимали законы до «не / голос.» в столбик */
+ .ballot{table-layout:fixed} .ballot thead th:nth-child(1){width:20%} .ballot thead th:nth-child(2){width:29%} .ballot thead th:nth-child(n+3){font-size:11px;padding-left:1px;padding-right:1px} .ballot thead th:nth-child(3){width:9%} .ballot thead th:nth-child(4),.ballot thead th:nth-child(5){width:10.5%} .ballot thead th:nth-child(6){width:12%} .ballot thead th:nth-child(7){width:9%}
+}
+@media(max-width:600px){
+ .ballot,.ballot tbody,.ballot tr{display:block;width:100%}
+ .ballot thead{display:none} .ballot tr{margin:1rem 0}
+ .ballot th:first-child,.ballot td{display:block;width:100%}
+ .ballot td[data-l]::before{content:attr(data-l) " · ";font-weight:600}
+ .ballot td.ballot-axis{display:inline;width:auto;padding:0;border:0}
+ .ballot td.ballot-axis::before{content:attr(data-l) " ";font-weight:400}
+ .ballot td.ballot-axis + td.ballot-axis::before{content:" · " attr(data-l) " "}
+}
+</style></head><body>
+<p><a href="index.html">← к сводной таблице</a></p>
+<h1>Как читать таблицу и что ещё на сайте</h1>
+<section id=how class="ballot-reading" aria-label="Как читать эту таблицу"><h3>Как читать эту таблицу</h3><p><b>Одна строка — один список в бюллетене.</b> Слева буквы — те же, что на бумажке на участке. Дальше — как голосовали связанные с ним фракции нынешнего Кнессета; по ссылке на список видно, чьи это голоса.</p><p><b>Колонка «4 закона»</b> — законы о судах, которые ты сам 10.10 пометил «недопустимо», ещё не зная, кто за них голосовал. <b>за</b> — проголосовали ЗА такой закон; «против» — против; «не голос.» — не голосовали: у оппозиции это обычно бойкот (не поддержали, но и не нажали «против»). Если голосовала меньше трети фракции, здесь тоже «не голос.»; отдельные голоса указаны в скобках, полный счёт — в подсказке. Причины каждого неучастия мы не установили. фракции не было — в день голосования такой фракции в Кнессете не было (раскол, переименование). Юрсоветник — пока законопроект: голосовали на ранней стадии. Через « · » показаны разные позиции фракций одного списка.</p><p><b>Колонка «Суд»</b> — около 130 законов о суде, контроле Кнессета над правительством и правах граждан (смысл каждого закона определили три модели ИИ и перепроверили по тексту). <b>ослаблял</b> — список чаще голосовал за ослабление; <b>укреплял</b> — наоборот. <b>не уверены</b> (в этой и во всех колонках тем) — если смысл части законов прочитан с ошибкой, вывод может смениться.</p><p>Пример: Ликуд голосовал «за» по 4 из 4 законов, а по суду и правам в целом ослаблял: 232 раза голосовал за ослабление и 41 раз — за укрепление.</p><p>Где не работает: новые списки сами в этом Кнессете не голосовали. У «Резервистов» нет данных; у «Яшар» показаны личные голоса Айзенкота и Тропера. Список — не фракция; после выборов люди и союзы меняются. Это сводка голосований, а не совет, за кого голосовать.</p><p>«Со всеми» и число в скобках — сколько законопроектов голосовали почти единогласно; эти случаи не определяют направление. «Нет законов» — ни одного закона для направления; «Мало законов (N)» — данных для направления мало; прочерк в теме — направление не установлено.</p><h4 id=cols>Что значат колонки тем и денег</h4><p><b>Религия:</b> «за больше религии» — голосовал за больше места религии в государстве; «за меньше религии» — за меньше. «за больше религии» выделено: ты 19.10 сказал, что для тебя это довод исключить список.</p><p class="theme-example" data-theme="religion_state" data-sign="+1" data-bill-id="2229723">«за больше религии», например: Закон о подсудности раввинских судов (брак и развод) (поправка № 6 — временное предписание), 2025 — Расширяет и закрепляет ведение раввинских судов по детским алиментам в связке с разводом, включая жильё, образование, лечение и возмещение расходов.</p><p class="theme-example" data-theme="religion_state" data-sign="-1" data-bill-id="2219982">«за меньше религии», например: Законопроект о статусе проходящего срочную или гражданскую службу, 2024 — Статья 3 запрещает прямую и косвенную государственную субсидию послешкольному учебному заведению за неслужившего учащегося; ст. 4 сохраняет исключения по здоровью и для новых репатриантов старше 24 лет, но не по религиозной учёбе.</p><p class="theme-example-n">В расчёте этой темы 20 законов.</p><p><b>Экономика:</b> «легче бизнесу» — меньше налогов, поборов, барьеров и обязанностей работодателя; «строже к бизнесу» — больше (чаще всего это защита работников: запреты увольнения, сроки исков).</p><p class="theme-example" data-theme="economy" data-sign="+1" data-bill-id="2196837">«легче бизнесу», например: Законопроект о приватизации израильской корпорации общественного вещания, 2022 — Передаёт вещание частному победителю конкурса и прямо допускает облегчение его лицензионных обязательств на срок до трёх лет.</p><p class="theme-example" data-theme="economy" data-sign="-1" data-bill-id="2198458">«строже к бизнесу», например: Закон о равенстве возможностей в труде (поправка № 27), 2024 — Продлевает до пяти лет срок исков работников о дискриминации к работодателю; для соискателей оставляет три года.</p><p class="theme-example-n">В расчёте этой темы 4 закона — слабый сигнал.</p><p><b>Безопасность:</b> «шире силовикам» — расширял полномочия армии, полиции и силовых структур; «уже силовикам» — сужал.</p><p class="theme-example" data-theme="security" data-sign="+1" data-bill-id="2214085">«шире силовикам», например: Закон об изменении и продлении действия чрезвычайных постановлений («Железные мечи») (продление срока задержания подозреваемого в преступлении против безопасности), 2024 — Закрепляет и продлевает увеличенные сроки задержания и содержания под стражей подозреваемых по связанным с войной делам безопасности.</p><p class="theme-example" data-theme="security" data-sign="-1" data-bill-id="2226911">«уже силовикам», например: Законопроект о создании государственной следственной комиссии по событиям 7 октября, 2025 — Создаёт государственную комиссию с назначением состава председателем Верховного суда и сроком начала работы 30 дней.</p><p class="theme-example-n">В расчёте этой темы 68 законов.</p><p>«И так, и так» во всех четырёх темах — голосовал в обе стороны, без преобладающего направления.</p><p><b>Деньги</b> — что партия выбила в бюджет, когда была в правительстве: 2021–2022 (Беннет — Лапид) и нынешнем, с конца 2022 года. Входя в коалицию, партия подписывает соглашение: «на такое-то дело выделить столько-то». <b>3/5</b> — из пяти таких обещаний под три в бюджете нашлась своя статья, хотя бы частично. Статья может быть почти пустой: сколько денег дошло, число не показывает. Само по себе число не хорошо и не плохо — всё зависит от того, на что деньги; суммы — на странице партии. При меньше чем пяти обещаниях (1/1, 2/3) число почти ничего не говорит. <b>«вторая сторона»</b> — у Ликуда и Еш Атида своих денежных обещаний нет: они возглавляли правительство и сами раздавали обещания партнёрам; число — сколько розданного попало в бюджет. <b>—</b> — в правительстве не был, сверять нечего (не плюс и не минус). <b>не разбирали</b> — был в правительстве, но обещания мы ещё не разобрали.</p></section><details id=more24 open><summary>Ещё 24 списка без мест в Кнессете</summary><ul><li>Amcha Yisrael</li><li>Achi Movement</li><li>Ani VeAta – Israel&#x27;s People Party</li><li>Betach</li><li>Biblical Bloc Party</li><li>Black Color</li><li>Brit Olam</li><li>Electoral System Reform</li><li>Gan Eden</li><li>HaKahal</li><li>Israel First</li><li>Kol HaNashim</li><li>Lights of Dawn</li><li>Mishpat Tzedek</li><li>Partnership to All</li><li>Personal Safety</li><li>Seder Chadash</li><li>Sharshar for Love &amp; Unity</li><li>Shma</li><li>Tekuma</li><li>The Haredi Public</li><li>The Pirates</li><li>Together We&#x27;ll Make It</li><li>Tsomet</li></ul></details><p class=dim>Идан Роль ушёл из Кнессета и из политики — в бюллетене его нет</p>
+<details id=factions class="faction-details"><summary>Подробно по 16 записям о фракциях 25-го Кнессета (включая прежние составы)</summary>
+<h2 id="grounds">Фракции и четыре закона владельца</h2><p>Четыре акта, помеченные владельцем «недопустимо». Позиция на последней стадии; <a href="grounds.html">все стадии и основания</a>. — — нет позиции, фракция не голосовала или голосовала меньше трети; причины неучастия здесь не установлены. Доля участия оценена по депутатам фракции, отмеченным в голосованиях того же дня; ≥ — нижняя оценка неучастия.</p><div class="table-scroll" tabindex="0" role="region" aria-label="Фракции и четыре закона"><table class="owner-laws"><thead><tr><th scope=col>Фракция</th><th scope=col><a href="grounds.html#a2201200" title="Основной закон: Судебная власть (поправка № 4)"><span class="law-full">Основной закон: Судебная власть (поправка № 4)</span><span class="law-short">Выбор судей</span></a><span class=norec>2025-03-27</span></th><th scope=col><a href="grounds.html#a2207472" title="Основной закон: Судебная власть (поправка № 3)"><span class="law-full">Основной закон: Судебная власть (поправка № 3)</span><span class="law-short">Отмена «неразумности»</span></a><span class=norec>2023-07-24</span></th><th scope=col><a href="grounds.html#a2201202" title="Закон о судах (поправка № 105), 2025"><span class="law-full">Закон о судах (поправка № 105), 2025</span><span class="law-short">Закон о судах</span></a><span class=norec>2025-03-27</span></th><th scope=col><a href="grounds.html#a2226047" title="Законопроект о разделении должности юридического советника правительства, 2024"><span class="law-full">Законопроект о разделении должности юридического советника правительства, 2024</span><span class="law-short">Разделить юрсоветника</span></a><span class=norec>2025-10-29</span></th></tr></thead><tbody><tr data-owner-fid="1096"><th scope=row><a href="f-1096.html">Ликуд — Биньямин Нетаньяху</a> <span class=he lang=he dir=rtl><bdi>הליכוד</bdi></span></th><td title="за 32, против 0, воздержались 0; не голосовали ≥0">за</td><td title="за 32, против 0, воздержались 0; не голосовали ≥0">за</td><td title="за 31, против 0, воздержались 0; не голосовали ≥1">за</td><td title="за 28, против 0, воздержались 0; не голосовали ≥2">за</td></tr><tr data-owner-fid="1102"><th scope=row><a href="f-1102.html">Еш Атид — Яир Лапид</a> <span class=he lang=he dir=rtl><bdi>יש עתיד</bdi></span></th><td title="за 0, против 1, воздержались 0; не голосовали ≥22">— (1 против)</td><td title="за 0, против 0, воздержались 0; не голосовали ≥24">—</td><td title="за 0, против 0, воздержались 0; не голосовали ≥23">—</td><td title="за 0, против 24, воздержались 0; не голосовали ≥0">против</td></tr><tr data-owner-fid="1095"><th scope=row><a href="f-1095.html">ШАС — Арье Дери</a> <span class=he lang=he dir=rtl><bdi>התאחדות הספרדים שומרי תורה תנועתו של מרן הרב עובדיה יוסף זצ&quot;ל</bdi></span></th><td title="за 11, против 0, воздержались 0; не голосовали ≥0">за</td><td title="за 11, против 0, воздержались 0; не голосовали ≥0">за</td><td title="за 10, против 0, воздержались 0; не голосовали ≥1">за</td><td title="за 9, против 0, воздержались 0; не голосовали ≥1">за</td></tr><tr data-owner-fid="1097"><th scope=row><a href="f-1097.html">Религиозный сионизм (фракция 1097; голоса — как у фракции Смотрича)</a> <span class=he lang=he dir=rtl><bdi>הציונות הדתית</bdi></span></th><td title="за 6, против 0, воздержались 0; не голосовали ≥0">за</td><td title="за 7, против 0, воздержались 0; не голосовали ≥0">за</td><td title="за 6, против 0, воздержались 0; не голосовали ≥0">за</td><td title="за 6, против 0, воздержались 0; не голосовали ≥0">за</td></tr><tr data-owner-fid="1098"><th scope=row><a href="f-1098.html">Государственный лагерь — Бени Ганц</a> <span class=he lang=he dir=rtl><bdi>המחנה הממלכתי</bdi></span></th><td title="за 0, против 0, воздержались 0; не голосовали ≥8">—</td><td title="за 0, против 0, воздержались 0; не голосовали ≥12">—</td><td title="за 0, против 0, воздержались 0; не голосовали ≥8">—</td><td title="за 0, против 0, воздержались 0; не голосовали ≥0">фракции не было</td></tr><tr data-owner-fid="1101"><th scope=row><a href="f-1101.html">Яадут ха-Тора — Моше Гафни, Ицхак Гольдкнопф</a> <span class=he lang=he dir=rtl><bdi>יהדות התורה</bdi></span></th><td title="за 6, против 0, воздержались 0; не голосовали ≥0">за</td><td title="за 7, против 0, воздержались 0; не голосовали ≥0">за</td><td title="за 6, против 0, воздержались 0; не голосовали ≥0">за</td><td title="за 7, против 0, воздержались 0; не голосовали ≥0">за</td></tr><tr data-owner-fid="1105"><th scope=row><a href="f-1105.html">Религиозный сионизм (Смотрич)</a> <span class=he lang=he dir=rtl><bdi>הציונות הדתית בראשות בצלאל סמוטריץ&#x27;</bdi></span></th><td title="за 6, против 0, воздержались 0; не голосовали ≥0">за</td><td title="за 7, против 0, воздержались 0; не голосовали ≥0">за</td><td title="за 6, против 0, воздержались 0; не голосовали ≥0">за</td><td title="за 6, против 0, воздержались 0; не голосовали ≥0">за</td></tr><tr data-owner-fid="1110"><th scope=row><a href="f-1110.html">Кахоль-лаван — Гос. лагерь — Бени Ганц</a> <span class=he lang=he dir=rtl><bdi>כחול לבן - המחנה הממלכתי</bdi></span></th><td title="за 0, против 0, воздержались 0; не голосовали ≥0">фракции не было</td><td title="за 0, против 0, воздержались 0; не голосовали ≥0">фракции не было</td><td title="за 0, против 0, воздержались 0; не голосовали ≥0">фракции не было</td><td title="за 0, против 7, воздержались 0; не голосовали ≥0">против</td></tr><tr data-owner-fid="1106"><th scope=row><a href="f-1106.html">Оцма Йегудит (Бен-Гвир)</a> <span class=he lang=he dir=rtl><bdi>עוצמה יהודית בראשות איתמר בן גביר</bdi></span></th><td title="за 7, против 0, воздержались 0; не голосовали ≥0">за</td><td title="за 6, против 0, воздержались 0; не голосовали ≥0">за</td><td title="за 7, против 0, воздержались 0; не голосовали ≥0">за</td><td title="за 5, против 0, воздержались 0; не голосовали ≥1">за</td></tr><tr data-owner-fid="1103"><th scope=row><a href="f-1103.html">ХАДАШ-ТААЛ — Айман Уде, Ахмад Тиби</a> <span class=he lang=he dir=rtl><bdi>חד&quot;ש-תע&quot;ל</bdi></span></th><td title="за 0, против 0, воздержались 0; не голосовали ≥5">—</td><td title="за 0, против 0, воздержались 0; не голосовали ≥5">—</td><td title="за 0, против 0, воздержались 0; не голосовали ≥5">—</td><td title="за 0, против 3, воздержались 0; не голосовали ≥2">против</td></tr><tr data-owner-fid="1104"><th scope=row><a href="f-1104.html">Наш дом Израиль — Авигдор Либерман</a> <span class=he lang=he dir=rtl><bdi>ישראל ביתנו</bdi></span></th><td title="за 0, против 0, воздержались 0; не голосовали ≥6">—</td><td title="за 0, против 0, воздержались 0; не голосовали ≥6">—</td><td title="за 0, против 0, воздержались 0; не голосовали ≥6">—</td><td title="за 0, против 5, воздержались 0; не голосовали ≥0">против</td></tr><tr data-owner-fid="1108"><th scope=row><a href="f-1108.html">Государственный правый — Гидеон Саар</a> <span class=he lang=he dir=rtl><bdi>הימין הממלכתי</bdi></span></th><td title="за 4, против 0, воздержались 0; не голосовали ≥0">за</td><td title="за 0, против 0, воздержались 0; не голосовали ≥0">фракции не было</td><td title="за 4, против 0, воздержались 0; не голосовали ≥0">за</td><td title="за 4, против 0, воздержались 0; не голосовали ≥0">за</td></tr><tr data-owner-fid="1099"><th scope=row><a href="f-1099.html">РААМ — Мансур Аббас</a> <span class=he lang=he dir=rtl><bdi>רע&quot;ם</bdi></span></th><td title="за 0, против 0, воздержались 0; не голосовали ≥4">—</td><td title="за 0, против 0, воздержались 0; не голосовали ≥5">—</td><td title="за 0, против 0, воздержались 0; не голосовали ≥4">—</td><td title="за 0, против 4, воздержались 0; не голосовали ≥0">против</td></tr><tr data-owner-fid="1100"><th scope=row><a href="f-1100.html">Авода — Мерав Михаэли, затем Яир Голан</a> <span class=he lang=he dir=rtl><bdi>העבודה</bdi></span></th><td title="за 0, против 0, воздержались 0; не голосовали ≥4">—</td><td title="за 0, против 0, воздержались 0; не голосовали ≥4">—</td><td title="за 0, против 0, воздержались 0; не голосовали ≥4">—</td><td title="за 0, против 4, воздержались 0; не голосовали ≥0">против</td></tr><tr data-owner-fid="1107"><th scope=row><a href="f-1107.html">Ноам (Маоз)</a> <span class=he lang=he dir=rtl><bdi>נעם - בראשות אבי מעוז</bdi></span></th><td title="за 1, против 0, воздержались 0; не голосовали ≥0">за</td><td title="за 1, против 0, воздержались 0; не голосовали ≥0">за</td><td title="за 0, против 0, воздержались 0; не голосовали ≥1">—</td><td title="за 1, против 0, воздержались 0; не голосовали ≥0">за</td></tr><tr data-owner-fid="1109"><th scope=row><a href="f-1109.html">депутат Идан Роль</a> <span class=he lang=he dir=rtl><bdi>חה&quot;כ עידן רול</bdi></span></th><td title="за 0, против 0, воздержались 0; не голосовали ≥0">нет позиции</td><td title="за 0, против 0, воздержались 0; не голосовали ≥0">фракции не было</td><td title="за 0, против 0, воздержались 0; не голосовали ≥0">нет позиции</td><td title="за 0, против 0, воздержались 0; не голосовали ≥0">фракции не было</td></tr></tbody></table></div>
+<h2>Сначала о том, чего мы не знаем</h2>
+<p>Клеток в таблице ниже — <b class=big>32</b>. С итоговым выводом — 16;
+в 13 показано покрытие обещаний бюджетными строками; в остальных 3 нужный разбор не
+проведён или искомого не нашли — что именно, сказано на странице фракции.</p>
+<p>Это разные вещи, и подписаны они по-разному.
+<b class=tx-miss>«Не дошли»</b> значит, что нужный разбор ещё не проведён.
+Предмет указан в подписи клетки; подробности — на странице фракции.
+<b class=tx-none>«Искали, не нашли»</b> — что не найдено то, что названо в
+подписи (например, соглашение или денежные обещания в нём), а не «нарушений
+не нашли».
+В денежных клетках указано, под сколько самостоятельных обещаний нашлась
+строка бюджета. Разбор каждого обещания — на странице фракции.
+Ни одно из этих состояний не значит «к этой партии вопросов нет». Пустая клетка
+рассказывает про нас, а не про партию.</p>
+<h2>Шестнадцать записей о фракциях 25-го Кнессета, включая прежние составы</h2>
+<p>Стрелка показывает, в какую сторону фракция двигала то, что написано в
+заголовке колонки, — а не «хорошо это или плохо». <b>↑</b> укрепляла,
+<b>↓</b> ослабляла, <b>↕</b> ходила и туда и обратно. Направление —
+по голосам фракции и оценкам законов с последующей проверкой расхождений.</p>
+<table class=ov><thead><tr>
+<th scope=col class=who>фракция</th>
+<th scope=col class=c-inst>суд, парламент, свободы</th>
+<th scope=col class=c-eq>деньги</th></tr></thead><tbody>
+<tr><td class=who><a href="f-1096.html">Ликуд — Биньямин Нетаньяху</a><span class=norec lang=he dir=rtl><bdi>הליכוד</bdi></span></td>
+<td class=c-inst data-l="суд, парламент, свободы"><span class="v"><span class=a>↓</span>&#8201;ослабляла<span class=lb> · голосования по теме правового государства</span></span></td>
+<td class=c-eq data-l="деньги"><span class="v nd tx-rev">подписала как вторая сторона 79 денежных обещаний партнёрам в соглашениях правительства 37; самостоятельных обещаний после разбора: 71; в бюджете нашлась строка под 46<span class=lb> · обязательства против бюджета — по записям на странице фракции</span></span></td>
+</tr>
+<tr><td class=who><a href="f-1102.html">Еш Атид — Яир Лапид</a><span class=norec lang=he dir=rtl><bdi>יש עתיד</bdi></span></td>
+<td class=c-inst data-l="суд, парламент, свободы"><span class="v"><span class=a>↑</span>&#8201;укрепляла<span class=lb> · голосования по теме правового государства</span></span></td>
+<td class=c-eq data-l="деньги"><span class="v nd tx-rev">подписала как вторая сторона 16 денежных обещаний партнёрам в соглашениях правительства 36 (2021 год); разобрано вручную: Кахоль-Лаван, Авода, Новая надежда, РААМ, НДИ — строка бюджета нашлась под 12 из 16; у остальных сопоставление требует проверки<span class=lb> · обязательства против бюджета — по записям на странице фракции</span></span></td>
+</tr>
+<tr><td class=who><a href="f-1095.html">ШАС — Арье Дери</a><span class=norec lang=he dir=rtl><bdi>התאחדות הספרדים שומרי תורה תנועתו של מרן הרב עובדיה יוסף זצ&quot;ל</bdi></span></td>
+<td class=c-inst data-l="суд, парламент, свободы"><span class="v"><span class=a>↓</span>&#8201;ослабляла<span class=lb> · голосования по теме правового государства</span></span></td>
+<td class=c-eq data-l="деньги"><span class="v nd tx-rev">в бюджете нашлась строка под 19 из 24 обещаний<span class=lb> · обязательства против бюджета — по записям на странице фракции</span></span></td>
+</tr>
+<tr><td class=who><a href="f-1097.html">Религиозный сионизм (фракция 1097; голоса — как у фракции Смотрича)</a><span class=norec lang=he dir=rtl><bdi>הציונות הדתית</bdi></span></td>
+<td class=c-inst data-l="суд, парламент, свободы"><span class="v"><span class=a>↓</span>&#8201;ослабляла<span class=lb> · голосования по теме правового государства</span></span></td>
+<td class=c-eq data-l="деньги"><span class="v nd tx-rev">в бюджете нашлась строка под 11 из 22 обещаний<span class=lb> · обязательства против бюджета — по записям на странице фракции</span></span></td>
+</tr>
+<tr><td class=who><a href="f-1098.html">Государственный лагерь — Бени Ганц</a><span class=norec lang=he dir=rtl><bdi>המחנה הממלכתי</bdi></span></td>
+<td class=c-inst data-l="суд, парламент, свободы"><span class="v"><span class=a>↕</span>&#8201;и туда и обратно<span class=lb> · голосования по теме правового государства</span></span></td>
+<td class=c-eq data-l="деньги"><span class="v nd tx-none">искали, не нашли<span class=lb> · денежных обещаний в соглашении не найдено</span></span></td>
+</tr>
+<tr><td class=who><a href="f-1101.html">Яадут ха-Тора — Моше Гафни, Ицхак Гольдкнопф</a><span class=norec lang=he dir=rtl><bdi>יהדות התורה</bdi></span></td>
+<td class=c-inst data-l="суд, парламент, свободы"><span class="v"><span class=a>↓</span>&#8201;ослабляла<span class=lb> · голосования по теме правового государства</span></span></td>
+<td class=c-eq data-l="деньги"><span class="v nd tx-rev">в бюджете нашлась строка под 10 из 17 обещаний<span class=lb> · обязательства против бюджета — по записям на странице фракции</span></span></td>
+</tr>
+<tr><td class=who><a href="f-1105.html">Религиозный сионизм (Смотрич)</a><span class=norec lang=he dir=rtl><bdi>הציונות הדתית בראשות בצלאל סמוטריץ&#x27;</bdi></span></td>
+<td class=c-inst data-l="суд, парламент, свободы"><span class="v"><span class=a>↓</span>&#8201;ослабляла<span class=lb> · голосования по теме правового государства</span></span></td>
+<td class=c-eq data-l="деньги"><span class="v nd tx-rev">в бюджете нашлась строка под 11 из 22 обещаний<span class=lb> · обязательства против бюджета — по записям на странице фракции</span></span></td>
+</tr>
+<tr><td class=who><a href="f-1110.html">Кахоль-лаван — Гос. лагерь — Бени Ганц</a><span class=norec lang=he dir=rtl><bdi>כחול לבן - המחנה הממלכתי</bdi></span></td>
+<td class=c-inst data-l="суд, парламент, свободы"><span class="v"><span class=a>↑</span>&#8201;укрепляла<span class=lb> · голосования по теме правового государства</span></span></td>
+<td class=c-eq data-l="деньги"><span class="v nd tx-rev">в бюджете нашлась строка под 4 из 4 обещаний<span class=lb> · обязательства против бюджета — по записям на странице фракции</span></span></td>
+</tr>
+<tr><td class=who><a href="f-1106.html">Оцма Йегудит (Бен-Гвир)</a><span class=norec lang=he dir=rtl><bdi>עוצמה יהודית בראשות איתמר בן גביר</bdi></span></td>
+<td class=c-inst data-l="суд, парламент, свободы"><span class="v"><span class=a>↓</span>&#8201;ослабляла<span class=lb> · голосования по теме правового государства</span></span></td>
+<td class=c-eq data-l="деньги"><span class="v nd tx-rev">в бюджете нашлась строка под 3 из 4 обещаний<span class=lb> · обязательства против бюджета — по записям на странице фракции</span></span></td>
+</tr>
+<tr><td class=who><a href="f-1103.html">ХАДАШ-ТААЛ — Айман Уде, Ахмад Тиби</a><span class=norec lang=he dir=rtl><bdi>חד&quot;ש-תע&quot;ל</bdi></span><span class=norec>в 25-м Кнессете в правительстве не была</span></td>
+<td class=c-inst data-l="суд, парламент, свободы"><span class="v"><span class=a>↑</span>&#8201;укрепляла<span class=lb> · голосования по теме правового государства</span></span></td>
+<td class=c-eq data-l="деньги"><span class="v nd tx-none">искали, не нашли<span class=lb> · коалиционного соглашения не подписывала</span></span></td>
+</tr>
+<tr><td class=who><a href="f-1104.html">Наш дом Израиль — Авигдор Либерман</a><span class=norec lang=he dir=rtl><bdi>ישראל ביתנו</bdi></span></td>
+<td class=c-inst data-l="суд, парламент, свободы"><span class="v"><span class=a>↕</span>&#8201;и туда и обратно<span class=lb> · голосования по теме правового государства</span></span></td>
+<td class=c-eq data-l="деньги"><span class="v nd tx-rev">в бюджете нашлась строка под 1 из 1 обещания<span class=lb> · обязательства против бюджета — по записям на странице фракции</span></span></td>
+</tr>
+<tr><td class=who><a href="f-1108.html">Государственный правый — Гидеон Саар</a><span class=norec lang=he dir=rtl><bdi>הימין הממלכתי</bdi></span></td>
+<td class=c-inst data-l="суд, парламент, свободы"><span class="v"><span class=a>↓</span>&#8201;ослабляла<span class=lb> · голосования по теме правового государства</span></span></td>
+<td class=c-eq data-l="деньги"><span class="v nd tx-rev">в бюджете нашлась строка под 3 из 4 обещаний<span class=lb> · обязательства против бюджета — по записям на странице фракции</span></span></td>
+</tr>
+<tr><td class=who><a href="f-1099.html">РААМ — Мансур Аббас</a><span class=norec lang=he dir=rtl><bdi>רע&quot;ם</bdi></span></td>
+<td class=c-inst data-l="суд, парламент, свободы"><span class="v"><span class=a>↑</span>&#8201;укрепляла<span class=lb> · голосования по теме правового государства</span></span></td>
+<td class=c-eq data-l="деньги"><span class="v nd tx-rev">в бюджете нашлась строка под 3 из 5 обещаний<span class=lb> · обязательства против бюджета — по записям на странице фракции</span></span></td>
+</tr>
+<tr><td class=who><a href="f-1100.html">Авода — Мерав Михаэли, затем Яир Голан</a><span class=norec lang=he dir=rtl><bdi>העבודה</bdi></span></td>
+<td class=c-inst data-l="суд, парламент, свободы"><span class="v"><span class=a>↑</span>&#8201;укрепляла<span class=lb> · голосования по теме правового государства</span></span></td>
+<td class=c-eq data-l="деньги"><span class="v nd tx-rev">в бюджете нашлась строка под 2 из 3 обещаний<span class=lb> · обязательства против бюджета — по записям на странице фракции</span></span></td>
+</tr>
+<tr><td class=who><a href="f-1107.html">Ноам (Маоз)</a><span class=norec lang=he dir=rtl><bdi>נעם - בראשות אבי מעוז</bdi></span></td>
+<td class=c-inst data-l="суд, парламент, свободы"><span class="v"><span class=a>↓</span>&#8201;ослабляла<span class=lb> · голосования по теме правового государства</span></span></td>
+<td class=c-eq data-l="деньги"><span class="v nd tx-rev">в бюджете нашлась строка под 2 из 3 обещаний<span class=lb> · обязательства против бюджета — по записям на странице фракции</span></span></td>
+</tr>
+<tr><td class=who><a href="f-1109.html">депутат Идан Роль</a><span class=norec lang=he dir=rtl><bdi>חה&quot;כ עידן רול</bdi></span></td>
+<td class=c-inst data-l="суд, парламент, свободы"><span class="v"><span class=a>↑</span>&#8201;укрепляла<span class=lb> · голосования по теме правового государства</span></span></td>
+<td class=c-eq data-l="деньги"><span class="v nd tx-miss">денежных обещаний пока не разбирали<span class=lb> · обязательства против бюджета</span></span></td>
+</tr>
+</tbody></table>
+<h2>Другие темы — первая грубая итерация</h2><p>Стрелка по голосам фракции и знаку закона по теме; рядом — сколько законов в сторону плюса / минуса. Экономика: плюс — на стороне производителя; государство и религия: ↑ — больше места религии в государстве, ↓ — меньше; безопасность: ↑ — норма расширяет полномочия армии и силовых структур, ↓ — сужает. Если нет стрелки и менее трёх законов с почти единогласными голосованиями — «мало законов (N)». Со всеми (N) — по N законопроектам были почти единогласные голосования; эти случаи не определяют направление стрелки.</p><table class=acts><thead><tr><th scope=col>Фракция</th><th scope=col>Экономика</th><th scope=col>Государство и религия</th><th scope=col>Безопасность и конфликт</th></tr></thead><tbody><tr><th scope=row><a href="f-1096.html">Ликуд — Биньямин Нетаньяху</a> <span class=he lang=he dir=rtl><bdi>הליכוד</bdi></span></th><td>↕ 42/26</td><td>↑ 35/7</td><td>↑ 141/40</td></tr><tr><th scope=row><a href="f-1102.html">Еш Атид — Яир Лапид</a> <span class=he lang=he dir=rtl><bdi>יש עתיד</bdi></span></th><td>↕ 26/41</td><td>↓ 6/35</td><td>↕ 81/45</td></tr><tr><th scope=row><a href="f-1095.html">ШАС — Арье Дери</a> <span class=he lang=he dir=rtl><bdi>התאחדות הספרדים שומרי תורה תנועתו של מרן הרב עובדיה יוסף זצ&quot;ל</bdi></span></th><td>↕ 39/27</td><td>↑ 36/6</td><td>↑ 131/41</td></tr><tr><th scope=row><a href="f-1097.html">Религиозный сионизм (фракция 1097; голоса — как у фракции Смотрича)</a> <span class=he lang=he dir=rtl><bdi>הציונות הדתית</bdi></span></th><td>↕ 40/24</td><td>↑ 35/6</td><td>↑ 129/39</td></tr><tr><th scope=row><a href="f-1098.html">Государственный лагерь — Бени Ганц</a> <span class=he lang=he dir=rtl><bdi>המחנה הממלכתי</bdi></span></th><td>↕ 14/25</td><td>↓ 5/18</td><td>↑ 73/10</td></tr><tr><th scope=row><a href="f-1101.html">Яадут ха-Тора — Моше Гафни, Ицхак Гольдкнопф</a> <span class=he lang=he dir=rtl><bdi>יהדות התורה</bdi></span></th><td>↕ 37/25</td><td>↑ 36/6</td><td>↑ 117/41</td></tr><tr><th scope=row><a href="f-1105.html">Религиозный сионизм (Смотрич)</a> <span class=he lang=he dir=rtl><bdi>הציונות הדתית בראשות בצלאל סמוטריץ&#x27;</bdi></span></th><td>↕ 40/24</td><td>↑ 35/6</td><td>↑ 129/39</td></tr><tr><th scope=row><a href="f-1110.html">Кахоль-лаван — Гос. лагерь — Бени Ганц</a> <span class=he lang=he dir=rtl><bdi>כחול לבן - המחנה הממלכתי</bdi></span></th><td>↕ 9/11</td><td>↓ 3/19</td><td>↕ 17/17</td></tr><tr><th scope=row><a href="f-1106.html">Оцма Йегудит (Бен-Гвир)</a> <span class=he lang=he dir=rtl><bdi>עוצמה יהודית בראשות איתמר בן גביר</bdi></span></th><td>↕ 39/22</td><td>↑ 33/6</td><td>↑ 131/37</td></tr><tr><th scope=row><a href="f-1103.html">ХАДАШ-ТААЛ — Айман Уде, Ахмад Тиби</a> <span class=he lang=he dir=rtl><bdi>חד&quot;ש-תע&quot;ל</bdi></span></th><td>↓ 15/34</td><td>↕ 9/15</td><td>↓ 11/151</td></tr><tr><th scope=row><a href="f-1104.html">Наш дом Израиль — Авигдор Либерман</a> <span class=he lang=he dir=rtl><bdi>ישראל ביתנו</bdi></span></th><td>↕ 20/33</td><td>↓ 5/34</td><td>↑ 110/21</td></tr><tr><th scope=row><a href="f-1108.html">Государственный правый — Гидеон Саар</a> <span class=he lang=he dir=rtl><bdi>הימין הממלכתי</bdi></span></th><td>↕ 26/18</td><td>↑ 20/8</td><td>↑ 67/28</td></tr><tr><th scope=row><a href="f-1099.html">РААМ — Мансур Аббас</a> <span class=he lang=he dir=rtl><bdi>רע&quot;ם</bdi></span></th><td>↓ 13/28</td><td>↕ 7/12</td><td>↓ 12/143</td></tr><tr><th scope=row><a href="f-1100.html">Авода — Мерав Михаэли, затем Яир Голан</a> <span class=he lang=he dir=rtl><bdi>העבודה</bdi></span></th><td>↓ 15/34</td><td>↓ 7/34</td><td>↕ 29/56</td></tr><tr><th scope=row><a href="f-1107.html">Ноам (Маоз)</a> <span class=he lang=he dir=rtl><bdi>נעם - בראשות אבי מעוז</bdi></span></th><td>↑ 10/5</td><td>↑ 21/1</td><td>↑ 36/8</td></tr><tr><th scope=row><a href="f-1109.html">депутат Идан Роль</a> <span class=he lang=he dir=rtl><bdi>חה&quot;כ עידן רול</bdi></span></th><td>↑ 2/1</td><td>мало законов (2)</td><td>мало законов (1)</td></tr></tbody></table>
+</details>
+<p><a href="axes.html">Что мы меряем и почему именно это</a>. <a href="time.html">Как менялась доля расхождений с залом</a>. <a href="method.html">Как мы считаем</a>.</p>
+<div class=foot><p>Первая грубая итерация, 19.10.2026.
+Форма принята 01.08.2026. Снимок голосований:
+2026-10-20.</p></div>
+<footer><details open><summary>Кто сделал и на каких данных</summary><div class=note id=frame data-frame=full>
+<p class=dim style="margin-top:0"><b>Темы выбрал автор.</b> Не данные подсказали,
+о чём говорить, — человек решил. Здесь четыре темы: суд, парламент и свободы;
+государство и религия; экономика; безопасность.</p>
+<p class=dim><b>Общего балла и рейтинга нет.</b> Здесь нет ярлыков «лучшая-худшая». Оценки направлений и их основания
+показаны отдельно. Порядок строк не означает предпочтения. Мы рассказываем, что
+произошло; вывод — ваш.</p>
+<p class=dim><b>Это первая, грубая итерация.</b> Направление посчитано по
+голосам фракций и знаку каждого закона; точность
+будем повышать следующим шагом. Что известно про каждую фракцию — на её
+странице.</p>
+<p class=dim style="margin-bottom:0"><b>Автор — частное лицо,</b> проект никто
+не финансирует и ни с кем не согласовывал. Ошибки тут авторские.</p>
+</div></details></footer>
+
+</body></html>
