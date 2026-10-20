@@ -16,10 +16,19 @@ THEMES = {"economy": "Экономика", "religion_state": "Государст
           "security": "Безопасность и конфликт"}
 
 
+USE_FULL = True   # trajectory.old_signs_any выключает: ему нужны прежние знаки
+
+
 def load_signs(theme: str) -> dict:
     p = ROOT / "criteria" / f"theme_signs_{theme}.json"
     d = json.loads(p.read_text(encoding="utf-8"))["signs"]
-    return {int(k): int(v["sign"] if isinstance(v, dict) else v) for k, v in d.items()}
+    out = {int(k): int(v["sign"] if isinstance(v, dict) else v) for k, v in d.items()}
+    # Владелец 20.10 (вопрос 6): законы вне прежней разметки — знак полной разметки (setdefault).
+    full = ROOT / "criteria" / "full_signs_K25.json"
+    if USE_FULL and full.exists():
+        for k, v in json.loads(full.read_text(encoding="utf-8"))["signs"].get(theme, {}).items():
+            out.setdefault(int(k), int(v))
+    return out
 
 
 def arrow_of(up: int, down: int, min_acts: int = 3) -> str | None:

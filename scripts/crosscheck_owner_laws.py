@@ -74,6 +74,8 @@ def recount(root):
     marks=[int(x) for x in re.findall(r'^  (\d+):\n    mark: недопустимо$',read('criteria/owner_marks_2026-10-10.yaml'),re.M)]
     assert len(marks)==4
     vdata=get('data/votes_25.json');votes=vdata['rows']
+    full=get('data/votes_full_25.json')
+    assert vdata==full and len(votes)==full['matched_votes'], 'site votes differ from declared full K25 export'
     # One vote may link to several bills; require consistent vote metadata.
     headers={}
     for r in votes:
@@ -197,6 +199,26 @@ def compare(ballot, expected, unknown, pages):
 
 
 def selftest():
+    import tempfile
+    # Fail at the full-export boundary before requiring other production inputs.
+    with tempfile.TemporaryDirectory(prefix='crosscheck-owner-full-') as folder:
+        root = Path(folder)
+        for rel, text in (
+            ('criteria/ballot_2026.json', json.dumps({'lists': [{}] * 14})),
+            ('criteria/owner_marks_2026-10-10.yaml', ''.join(f'  {i}:\n    mark: недопустимо\n' for i in range(4))),
+            ('data/votes_25.json', json.dumps({'rows': []})),
+            ('data/votes_full_25.json', json.dumps({'rows': [{'vote_id': 1}], 'matched_votes': 1})),
+        ):
+            path = root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding='utf-8')
+        try:
+            recount(root)
+        except AssertionError as exc:
+            assert str(exc) == 'site votes differ from declared full K25 export'
+        else:
+            raise AssertionError('stale sample accepted')
+    print('REJECTED site sample differing from full K25 export')
     c = collections.Counter({'против': 1})
     assert position(c, 3) == 'против' and position(c, 4) == 'не голос.'
     assert position(c, 2) == 'против'

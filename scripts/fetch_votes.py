@@ -378,16 +378,24 @@ def fetch_headers() -> list[dict]:
         # Источник сам отдаёт дубли строк (замер 19.10: голосование 37161 трижды в окне 2016;
         # в 25-м — 1809 строк на 1806 голосований), и $count считает их тоже. Дубль — не
         # перекрытие окон: окна смыкаются по WINDOWS и cuts. Сворачиваем по Id и называем число.
-        seen, uniq = set(), []
-        for h in out:
-            if h["Id"] not in seen:
-                seen.add(h["Id"]); uniq.append(h)
-        print(f"   дублей строк источника свёрнуто: {len(out) - len(uniq)}")
-        return uniq
-    return fetch_all(
+        return _dedup(out)
+    # v92: в полной выгрузке 25-го те же дубли (6773 строки на 6762 голосования) — сворачиваем всегда.
+    return _dedup(fetch_all(
         "KNS_PlenumVote", flt=flt,
         select="Id,VoteDateTime,ItemID,SessionID,VoteTitle,VoteSubject,"
-               "IsNoConfidenceInGov,ForOptionDesc,AgainstOptionDesc,VoteStatusDesc")
+               "IsNoConfidenceInGov,ForOptionDesc,AgainstOptionDesc,VoteStatusDesc"))
+
+
+def _dedup(out: list[dict]) -> list[dict]:
+    """Источник отдаёт дубли строк голосования; дубль обязан быть той же строкой, иначе отказ."""
+    first = {}
+    for h in out:
+        if h["Id"] in first:
+            assert first[h["Id"]] == h, f"голосование {h['Id']}: дубли строк источника различаются"
+        else:
+            first[h["Id"]] = h
+    print(f"   дублей строк источника свёрнуто: {len(out) - len(first)}")
+    return list(first.values())
 
 
 def _nm(s) -> str:

@@ -30,7 +30,7 @@ def inputs_sha(root: Path = ROOT) -> str:
         "fetch_votes.py", "render_landmark_table.py"))
     for pattern in ("data/named_votes_cache/*.json", "criteria/theme_signs_*.json", "criteria/claude_tiebreak_signs_*.json",
                     "criteria/axis_second_reading_*.json", "criteria/declared_before_arrow_*.yaml",
-                    "docs/reference/for_option_sign_*.json"):
+                    "docs/reference/for_option_sign_*.json", "criteria/full_signs_K25.json"):
         paths.update(root.glob(pattern))
     digest = hashlib.sha256(json.dumps([ALGORITHM, RUNS, SEED, PS]).encode())
     for path in sorted(paths):
@@ -118,13 +118,21 @@ def build() -> dict:
     rule = dict(arrow_rule(), split_below=float(_arrow_split()))
     table = sign_table()
     topics = {}
-    for topic in TITLES:
-        topics[topic] = simulate(votes["rows"], axis if topic == "rule_of_law" else load_signs(topic),
-                                 table, rule, min_acts=1 if topic == "rule_of_law" else 3)
-        topics[topic]["factions"].update(simulate(
-            personal["rows"], axis if topic == "rule_of_law" else load_signs(topic),
-            table, rule, min_acts=1 if topic == "rule_of_law" else 3)["factions"])
-        print(f"{topic}: {len(topics[topic]['factions'])} фракций", flush=True)
+    # Темы независимы (свой генератор с тем же SEED внутри simulate) — считаются в отдельных
+    # процессах; результат тот же, что последовательно (20.10: на полной выгрузке 6773 строк
+    # последовательный расчёт шёл ~50 минут).
+    from concurrent.futures import ProcessPoolExecutor
+    jobs = {}
+    with ProcessPoolExecutor(max_workers=min(8, 2 * len(TITLES))) as ex:
+        for topic in TITLES:
+            sg = axis if topic == "rule_of_law" else load_signs(topic)
+            m = 1 if topic == "rule_of_law" else 3
+            jobs[topic] = (ex.submit(simulate, votes["rows"], sg, table, rule, m),
+                           ex.submit(simulate, personal["rows"], sg, table, rule, m))
+        for topic in TITLES:
+            topics[topic] = jobs[topic][0].result()
+            topics[topic]["factions"].update(jobs[topic][1].result()["factions"])
+            print(f"{topic}: {len(topics[topic]['factions'])} фракций", flush=True)
     return {"runs": RUNS, "seed": SEED, "probabilities": list(PS),
             "algorithm": ALGORITHM,
             "sampling": "independent Bernoulli(p) per signed law in votes; shared across factions/readings",

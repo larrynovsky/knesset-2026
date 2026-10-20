@@ -24,7 +24,7 @@ CSS = """
 .tj .ar{stroke:var(--dim);stroke-width:1.4;fill:none}.tj .ah{fill:var(--dim)}.tj text{fill:var(--ink)}.tj .nm{paint-order:stroke;stroke:var(--bg);stroke-width:3px}.tj .w{fill:var(--dim)}
 .tj .how{border:1px solid var(--rule);background:var(--panel);padding:.6rem .8rem;font-size:.9rem}
 .tj ul.v{list-style:none;padding:0;margin:.3rem 0}.tj ul.v li{margin:.15rem 0}.tj .n{color:var(--dim);font-size:.78rem}
-.tj table{width:100%;border-collapse:collapse;font-size:.78rem}.tj th,.tj td{padding:.25rem .3rem;border-bottom:1px solid var(--rule);text-align:left;vertical-align:top}
+.tj table{width:100%;border-collapse:collapse;font-size:.78rem}.tj table.why{table-layout:fixed}.tj table.why th:first-child{width:2.6rem}.tj th,.tj td{padding:.25rem .3rem;border-bottom:1px solid var(--rule);text-align:left;vertical-align:top}
 """
 VERD = {"steady": "одна линия — «{d}» — и в коалиции, и в оппозиции",
         "holds_gov": "в коалиции одна линия — «{d}»; в оппозиции — и так, и так",
@@ -33,6 +33,7 @@ VERD = {"steady": "одна линия — «{d}» — и в коалиции, �
         "one_role_opp": "одна линия — «{d}», но только в оппозиции: позицию от обязательства не отличить",
         "by_role": "меняется вместе с ролью",
         "shifts": "меняется, и не только вместе с ролью",
+        "mixed": "ясной линии нет — чаще голосовал и так, и так",
         "few": "мало данных"}
 
 
@@ -193,7 +194,7 @@ def how_h(d) -> str:
     """Пример в подсказке считается из данных, а не вписан руками."""
     p = next(p for p in d["lines"]["מחל"][0]["points"] if p["k"] == "25" and p["role"] == "gov")
     x = p["themes"]["rule_of_law"]
-    return HOW_H.replace("{EX}", f'Например, Ликуд в 25-м в коалиции по суду: {x["up"]} законов «укреплял» из {x["up"] + x["down"]} — точка почти у левого края. ')
+    return HOW_H.replace("{EX}", f'Например, Ликуд в 25-м в коалиции по суду: {x["up"]} {plural(x["up"], "закон", "закона", "законов")} «укреплял» из {x["up"] + x["down"]} — точка почти у левого края. ')
 
 
 HOW_H = ('<div class=how><b>Как читать.</b> Дорожка — список (имя над ней), точка — кусок Кнессета, когда фракция была в одной роли. '
@@ -202,6 +203,13 @@ HOW_H = ('<div class=how><b>Как читать.</b> Дорожка — спис
          'Залитая точка — в коалиции, пустая — в оппозиции, серая с пунктиром — переход: Кнессет уже присягнул, правительство ещё нет '
          '(такие точки в вывод не входят). Стрелка ведёт к следующему куску в коалиции или оппозиции; каждый следующий чуть ниже. Совпавшие — одной меткой «20·23». '
          'Наведи на точку — даты и числа.</div>')
+EMPTY_LEGEND = ('<p class=n>Пустота бывает разной. «Фракции не было» — партия в этот Кнессет не прошла. '
+                '«Поимённых голосований нет» — фракция была, но голосований с её участием в источнике нет. '
+                '«По теме не голосовали» — голосования были, но ни одного закона этой темы. '
+                '«Со всеми» — законы темы были, но почти все голосовали одинаково, и такие голосования прибор не считает: это сигнал «тут не спорили». '
+                '«Мало законов» — меньше трёх. «Переход» — правительство ещё не присягнуло, в вывод не входит. '
+                'Голосований без привязки к законопроекту (процедура, повестка) в расчёте нет — их тему узнать нельзя.</p>')
+
 HOW_V = ('<div class=how><b>Как читать.</b> Колонка — тема. Чем выше точка, тем чаще фракция голосовала «вверх» по теме '
          '(укреплял суд, больше религии, легче бизнесу, шире силовикам); внизу — только «вниз», на пунктире — поровну. '
          'Точка — кусок Кнессета в одной роли, слева направо по времени. Залитая — в коалиции, пустая — в оппозиции, '
@@ -213,9 +221,57 @@ def plural(n: int, one: str, few: str, many: str) -> str:
     return one if n10 == 1 and n100 != 11 else few if 2 <= n10 <= 4 and not 12 <= n100 <= 14 else many
 
 
+KN6 = ("20", "21", "22", "23", "24", "25")
+ROLE_SHORT = {"gov": "коал.", "opp": "опп.", "trans": "переход"}
+
+
+def piece_word(x: dict, up: str, dn: str) -> str:
+    """Состояние одного куска срока по теме — словами сайта (theme_arrows): направление или причина пустоты."""
+    a = x.get("arrow")
+    if a in ("up", "down", "both"):
+        return {"up": up, "down": dn, "both": "и так, и так"}[a]
+    n = (x.get("up") or 0) + (x.get("down") or 0)
+    c = x.get("consensus") or 0
+    if x.get("up") is None or (n == 0 and c == 0):
+        return "по теме не голосовали"
+    if c >= 3:
+        return f"со всеми ({c})"
+    return f"мало законов ({n})"
+
+
+def knesset_cell(line: dict, k: str, th: str, up: str, dn: str) -> str:
+    if not line.get("links", {}).get(k):
+        return "<span class=n>фракции не было</span>"
+    pts = [p for p in line["points"] if p["k"] == k]
+    if not pts:
+        return "<span class=n>фракция была, поимённых голосований нет</span>"
+    sig = lambda p: (p["themes"].get(th) or {}).get("arrow") in ("up", "down", "both")
+    shown = [p for p in pts if p["role"] != "trans" or sig(p)] or pts[:1]   # пустой переход не повторяем (край v92: только переходы — первый)
+    has = lambda p: (p["themes"].get(th) or {}).get("up") is not None
+    if any(has(p) for p in shown):          # кусок без голосов по теме не дублирует соседний кусок с голосами
+        shown = [p for p in shown if has(p)]
+    parts = []
+    for p in shown:
+        w = piece_word(p["themes"].get(th) or {}, up, dn)
+        cls = "" if (p["themes"].get(th) or {}).get("arrow") in ("up", "down", "both") else " class=n"
+        lab = "" if len(shown) == 1 and p["role"] == "trans" and not sig(p) else f"{ROLE_SHORT[p['role']]}: "
+        parts.append(f"<span{cls}>{lab}{esc(w)}</span>")
+    return "<br>".join(parts)
+
+
+def why_table(line: dict) -> str:
+    """Тема × Кнессет: где сигнал, а где — какая именно пустота (владелец 20.10)."""
+    rows = "".join(f"<tr><th scope=row>{k}-й</th>" + "".join(f"<td>{knesset_cell(line, k, th, up, dn)}</td>" for th, t, up, dn in TH) + "</tr>"
+                   for k in KN6)
+    short = {"rule_of_law": "Суд", "religion_state": "Религия", "economy": "Эконом.", "security": "Безоп."}
+    return ('<table class=why><thead><tr><th scope=col>Кн.</th>' + "".join(f"<th scope=col>{short[th]}</th>" for th, *_ in TH)
+            + f'</tr></thead><tbody>{rows}</tbody></table>')
+
+
 def line_section(line, heading="h3"):
     vs = "".join(f"<li><b>{t}:</b> {verdict_text(line, th, up, dn)}</li>" for th, t, up, dn in TH)
     return (f'<{heading}>{esc(line["name"])}</{heading}>{vchart(line)}<ul class=v>{vs}</ul>'
+            f'<details><summary>Где сигнал, а где пусто — и почему</summary>{why_table(line)}{EMPTY_LEGEND}</details>'
             f'<details><summary>Подробно: {len(line["points"])} {plural(len(line["points"]), "кусок", "куска", "кусков")} срока</summary>{details_table(line)}</details>')
 
 

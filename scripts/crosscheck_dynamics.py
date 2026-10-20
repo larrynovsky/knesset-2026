@@ -129,6 +129,9 @@ def check(root):
     def load(relative):
         return json.loads(read(relative))
     votes = load('data/votes_25.json')
+    full = load('data/votes_full_25.json')
+    if votes != full or len(votes['rows']) != full['matched_votes']:
+        raise ValueError('site votes differ from declared full K25 export')
     bins = halves(votes['window'])
     signs = {'rule_of_law': {}}
     axis = signs['rule_of_law']
@@ -138,12 +141,20 @@ def check(root):
             axis[row['bill']] = signed(q['value'])
     for bill, value in load('criteria/claude_tiebreak_signs_2026-10-19.json')['signs'].items():
         axis.setdefault(int(bill), signed(value))
-    for bill, value in load('criteria/axis_second_reading_2026-10-19.json')['signs'].items():
-        if value is not None and int(bill) in axis and signed(value) != axis[int(bill)]:
-            axis[int(bill)] = 0
     for theme in THEMES[1:]:
         signs[theme] = {int(b): signed(v['sign'] if isinstance(v, dict) else v)
                        for b, v in load(f'criteria/theme_signs_{theme}.json')['signs'].items()}
+    # declared_before_site_full_2026-10-20: legacy signs, including 0, win.
+    additions = load('criteria/full_signs_K25.json')['signs']
+    if set(additions) != set(THEMES):
+        raise ValueError('full K25 signs must contain all four themes')
+    for theme in THEMES:
+        for bill, value in additions[theme].items():
+            signs[theme].setdefault(int(bill), signed(value))
+    # v93 amendment: full-text disagreement also removes a new title-only sign.
+    for bill, value in load('criteria/axis_second_reading_2026-10-19.json')['signs'].items():
+        if value is not None and int(bill) in axis and signed(value) != axis[int(bill)]:
+            axis[int(bill)] = 0
     options_path = sorted(root.glob('docs/reference/for_option_sign_*.json'))[-1]
     options = load(options_path.relative_to(root))['options']
     if any(v.get('sign') not in ('carries', 'inverts', 'none') for v in options.values()):
@@ -206,8 +217,10 @@ def selftest():
         rows = [dict(vote_id=i, bill_id=1, date=day, for_option_desc='yes', named_total=2,
                      by_faction={'1|a': {'for': 2}, '2|b': {'against': 2}})
                 for i, day in enumerate(('2023-06-30', '2023-06-29', '2023-07-01'), 1)]
-        votes = dict(window=['2023-01-01', '2024-01-01'], rows=rows)
+        rows[-1]['bill_id'] = 2  # New full-export law, absent from legacy signs.
+        votes = dict(window=['2023-01-01', '2024-01-01'], rows=rows, matched_votes=3)
         put('data/votes_25.json', votes)
+        put('data/votes_full_25.json', votes)
         for r in rows:
             put(f'data/named_votes_cache/{r["vote_id"]}.json', dict(vote_id=r['vote_id'], rows=[
                 dict(VoteID=r['vote_id'], MkId=mid, LastName=name, ResultCode=7)
@@ -217,6 +230,8 @@ def selftest():
             put(f'criteria/{name}_2026-10-19.json', {'signs': {}})
         for th in THEMES[1:]:
             put(f'criteria/theme_signs_{th}.json', {'signs': {'1': 1}})
+        full_signs = {'signs': {th: {'1': -1, '2': 1} for th in THEMES}}
+        put('criteria/full_signs_K25.json', full_signs)
         put('criteria/declared_before_arrow_2026-10-07.yaml', 'cleaning:\n  drop_lopsided_below: 0.025\nfaction_position:\n  split_below: 0.5\n')
         put('docs/reference/for_option_sign_test.json', {'options': {'yes': {'sign': 'carries'}}})
         actual = {'bins': [['2023-01-01', '2023-07-01'], ['2023-07-01', '2024-01-01']],
@@ -226,18 +241,46 @@ def selftest():
         def run(label, wanted):
             result = subprocess.run([sys.executable, str(Path(__file__).resolve()), '--root', str(root)],
                                     capture_output=True, text=True)
-            if result.returncode != wanted or (wanted and 'FAIL' not in result.stdout):
+            if result.returncode != wanted or (wanted and 'FAIL' not in result.stdout + result.stderr):
                 raise AssertionError(label + '\n' + result.stdout + result.stderr)
             print(f'PASS selftest {label}: CLI exit {result.returncode}')
         run('baseline (duplicate law counted once per half)', 0)
+        put('criteria/axis_second_reading_2026-10-19.json', {'signs': {'2': -1}})
+        run('new axis sign conflicting with full text cannot survive', 1)
+        filtered = deepcopy(actual)
+        for series in filtered['series'].values():
+            series['rule_of_law'][1] = [0, 0]
+        put('data/dynamics_25.json', filtered)
+        run('second reading after full signs removes conflict', 0)
+        put('data/dynamics_25.json', actual)
+        for value in (None, 1):
+            put('criteria/axis_second_reading_2026-10-19.json', {'signs': {'2': value}})
+            run(f'second reading {value} preserves new sign', 0)
+        put('criteria/axis_second_reading_2026-10-19.json', {'signs': {}})
+        changed_signs = deepcopy(full_signs)
+        changed_signs['signs']['economy']['2'] = -1
+        put('criteria/full_signs_K25.json', changed_signs)
+        run('new full-export sign flipped', 1)
+        put('criteria/full_signs_K25.json', full_signs)
+        put('criteria/theme_signs_economy.json', {'signs': {'1': 1, '2': 0}})
+        zero = deepcopy(actual)
+        for series in zero['series'].values():
+            series['economy'][1] = [0, 0]
+        put('data/dynamics_25.json', zero)
+        run('legacy zero outranks new full-export sign', 0)
+        put('data/dynamics_25.json', actual)
+        put('criteria/theme_signs_economy.json', {'signs': {'1': 1}})
         put('criteria/theme_signs_economy.json', {'signs': {'1': -1}})
         run('law sign flipped', 1)
         put('criteria/theme_signs_economy.json', {'signs': {'1': 1}})
         moved = deepcopy(votes)
         moved['rows'][2]['date'] = '2023-06-30'
         put('data/votes_25.json', moved)
+        run('site export diverges from full export', 1)
+        put('data/votes_full_25.json', moved)
         run('date crossed half-year boundary', 1)
         put('data/votes_25.json', votes)
+        put('data/votes_full_25.json', votes)
         broken = deepcopy(actual)
         broken['series']['1']['security'][0][0] += 1
         put('data/dynamics_25.json', broken)
@@ -248,6 +291,7 @@ def selftest():
         mixed['rows'][1]['by_faction']['1|a'] = {'against': 2}
         mixed['rows'][1]['by_faction']['2|b'] = {'for': 2}
         put('data/votes_25.json', mixed)
+        put('data/votes_full_25.json', mixed)
         mixed_output = deepcopy(actual)
         for fid in ('1', '2'):
             for th in THEMES:

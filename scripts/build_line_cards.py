@@ -27,7 +27,7 @@ from classify_direction import n_asserts   # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
-CAV = "по вопросам правового государства"
+CAV = "по законопроектам, которые голосовались в пленуме"  # 20.10: полная выгрузка — не только отбор по теме суда
 THEME = "rule_of_law"
 
 
@@ -266,6 +266,9 @@ def carry_history(body: str, old: str | None, snap: str, name: str = "?") -> str
 COVERAGE_FIRST = True   # решение владельца 19.10: покрытие вместо точности
 
 
+USE_FULL = True   # trajectory.old_signs_any выключает, чтобы получить ПРЕЖНИЕ знаки без полной разметки
+
+
 def axis_directions(directions_path: Path) -> tuple[dict, list]:
     """Единый набор знаков оси, включая решающий голос Claude."""
     from direction_confidence import load_directions
@@ -275,6 +278,12 @@ def axis_directions(directions_path: Path) -> tuple[dict, list]:
         tb = ROOT / "criteria" / "claude_tiebreak_signs_2026-10-19.json"
         if tb.exists():
             for bill, sg in json.loads(tb.read_text(encoding="utf-8"))["signs"].items():
+                dirs.setdefault(int(bill), int(sg))
+        # Владелец 20.10 (вопрос 6): весь сайт на полной выгрузке — законы, которых нет в прежнем
+        # конвейере, получают знак полной разметки по названиям (criteria/declared_before_site_full_2026-10-20.yaml).
+        full = ROOT / "criteria" / "full_signs_K25.json"
+        if USE_FULL and full.exists():
+            for bill, sg in json.loads(full.read_text(encoding="utf-8"))["signs"]["rule_of_law"].items():
                 dirs.setdefault(int(bill), int(sg))
     # Фаза точности 19.10: второе независимое прочтение по полному тексту
     # (Codex v32/v39). Где оно прямо расходится со знаком большинства — знак снят

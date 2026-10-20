@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Independent read-only v88 oracle. Contract/disposability: reviews/REPORT_v88.md.
+"""Independent read-only v91 oracle. Contract/disposability: reviews/REPORT_v90.md.
 
 Only theme_arrows.theme_arrows is reused as a calculator; fetch_votes.WINDOWS
 is the declared calendar. No trajectory/slice generator imports. §20–24:
@@ -11,6 +11,7 @@ from collections import Counter, defaultdict
 import copy
 from datetime import date
 import hashlib
+from html.parser import HTMLParser
 import json
 from pathlib import Path
 import re
@@ -88,7 +89,7 @@ def verdict(points, theme):
     directions = {a for _, a in clear}
     label = 'shifts'
     if len(clear) < 2:
-        label = 'few'
+        label = 'mixed' if sum(a == 'both' for _, a in obs) >= 2 else 'few'
     elif len(directions) == 1:
         if all(by_role.values()):
             label = 'steady'
@@ -106,7 +107,7 @@ def personal(rows, load, data):
     people = {30836: 'איזנקוט', 30683: 'טרופר'}
     observed = set()
     for row in rows:
-        cached = load(data / 'named_votes_cache' / f"{row['vote_id']}.json")
+        cached = load(data / 'named_votes_cache_full' / f"{row['vote_id']}.json")
         named = cached['rows']
         if (cached['vote_id'] != row['vote_id'] or len(named) != row['named_total']
                 or any(r['VoteID'] != row['vote_id'] for r in named)
@@ -139,9 +140,9 @@ def differences(expected, actual, path='$'):
     if isinstance(expected, dict):
         for key in sorted(expected.keys() | actual.keys()):
             if key not in expected or key not in actual:
-                out.append((path + '/' + key, expected.get(key, '<missing>'), actual.get(key, '<missing>')))
+                out.append((path + '/' + str(key), expected.get(key, '<missing>'), actual.get(key, '<missing>')))
             else:
-                out.extend(differences(expected[key], actual[key], path + '/' + key))
+                out.extend(differences(expected[key], actual[key], path + '/' + str(key)))
     elif isinstance(expected, list):
         if len(expected) != len(actual):
             out.append((path + '/length', len(expected), len(actual)))
@@ -187,14 +188,111 @@ def lineage_checks(tracks, lineage, factions):
     return errors
 
 
-def check(root, data):
+def merge_signs(old, new, second=None):
+    """A legacy sign from ANY Knesset outranks a new one, including zero."""
+    legacy = {th: {} for th in THEMES}
+    for k in sorted(old):
+        for th in THEMES:
+            for bid, sign in old[k][th].items():
+                legacy[th].setdefault(bid, sign)
+    merged = {k: {th: {**new[k][th], **legacy[th], **old[k][th]}
+                  for th in THEMES} for k in old}
+    # v93 amendment for K25: merge full signs before the full-text filter.
+    axis = merged[25]['rule_of_law']
+    for bid, sign in (second or {}).items():
+        if sign is not None:
+            if type(sign) is not int or sign not in (-1, 0, 1):
+                raise ValueError(f'invalid second-reading sign: {sign!r}')
+            if int(bid) in axis and sign != axis[int(bid)]:
+                axis[int(bid)] = 0
+    return merged
+
+
+class Cells(HTMLParser):
+    """Visible cells of why tables; also handles a standalone rendered cell."""
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.tables, self.current, self.cell = [], None, None
+        self.text = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == 'table' and 'why' in dict(attrs).get('class', '').split():
+            self.current = []
+            self.tables.append(self.current)
+        if self.current is not None and tag in ('td', 'th'):
+            self.cell = []
+        if tag == 'br':
+            self.handle_data(' | ')
+
+    def handle_data(self, text):
+        self.text.append(text)
+        if self.cell is not None:
+            self.cell.append(text)
+
+    def handle_endtag(self, tag):
+        if tag in ('td', 'th') and self.cell is not None:
+            self.current.append(' '.join(''.join(self.cell).split()))
+            self.cell = None
+        if tag == 'table':
+            self.current = None
+
+
+def visible(markup):
+    parser = Cells()
+    parser.feed(markup)
+    return ' '.join(''.join(parser.text).split())
+
+
+def expected_cell(line, k, th, up, down):
+    if not line['links'].get(k):
+        return 'фракции не было'
+    points = [p for p in line['points'] if p['k'] == k]
+    if not points:
+        return 'фракция была, поимённых голосований нет'
+    # rules.empty_states: suppress an unclear transition beside another piece.
+    # If all pieces are unclear transitions, retain one reason for the cell.
+    retained = [p for p in points if p['role'] != 'trans'
+                or p['themes'].get(th, {}).get('arrow') in ('up', 'down', 'both')]
+    points = retained or points[:1]
+    with_votes = [p for p in points if any(p['themes'].get(th, {}).get(key)
+                                         for key in ('up', 'down', 'consensus'))]
+    points = with_votes or points
+    words = []
+    for p in points:
+        x = p['themes'].get(th, {})
+        n = (x.get('up') or 0) + (x.get('down') or 0)
+        consensus = x.get('consensus') or 0
+        if x.get('arrow') in ('up', 'down', 'both'):
+            word = {'up': up, 'down': down, 'both': 'и так, и так'}[x['arrow']]
+        elif consensus >= 3:
+            word = f'со всеми ({consensus})'
+        elif n or consensus:
+            word = f'мало законов ({n})'
+        else:
+            word = 'по теме не голосовали'
+        prefix = {'gov': 'коал.', 'opp': 'опп.', 'trans': 'переход'}[p['role']] + ': '
+        if len(points) == 1 and p['role'] == 'trans' and x.get('arrow') not in ('up', 'down', 'both'):
+            prefix = ''
+        words.append(prefix + word)
+    return ' | '.join(words)
+
+
+def check(root, data, allow_partial=False):
     hashes = {}
+    input_errors = []
     def read(path):
         raw = path.read_bytes()
         hashes[path] = hashlib.sha256(raw).hexdigest()
         return raw.decode('utf-8')
     def load(path):
         return json.loads(read(path))
+    required = [data / f'votes_full_{k}.json' for k in range(20, 26)]
+    required += [root / f'criteria/full_signs_K{k}.json' for k in range(20, 26)]
+    missing = [str(p) for p in required if not p.exists()]
+    if missing and not allow_partial:
+        raise ValueError('full export not ready: ' + ', '.join(missing))
+    if missing:
+        print('PREPARATION ONLY; missing:', ', '.join(missing))
     sys.path.insert(0, str(root / 'scripts'))
     from fetch_votes import WINDOWS
     from theme_arrows import theme_arrows
@@ -210,19 +308,35 @@ def check(root, data):
             raise ValueError('missing calculator input: ' + pattern)
         read(paths[-1])
     rules = load(root / 'criteria/trajectory_2026-10-20.json')
+    read(root / 'criteria/declared_before_fullsigns_2026-10-20.yaml')
     lineage = load(root / 'criteria/slice_lineage_2026-10-19.json')
     factions = {r['Id']: r for r in load(data / 'KNS_Faction.json')}
     factions.update({r['Id']: r for r in load(data / 'kns_faction_20_24.json')})
-    records, transitions, votes, signs = {}, {}, {}, {}
+    records, transitions, votes, signs, dumps = {}, {}, {}, {}, {}
     for k in range(20, 26):
         records[k] = periods(read(root / 'criteria/periods.yaml' if k == 25 else data / f'periods_{k}.yaml'))
         transitions[str(k)] = transition(WINDOWS[k], records[k])
-        dump = load(data / f'votes_{k}.json')
+        full = data / f'votes_full_{k}.json'
+        dump = load(full if full.exists() else data / f'votes_{k}.json')
+        dumps[str(k)] = dump
         votes[k] = dump['rows']
         if len(votes[k]) != dump['matched_votes']:
             raise ValueError(f'K{k}: matched_votes/rows mismatch')
         if any(not WINDOWS[k][0][:10] <= r['date'][:10] < WINDOWS[k][1][:10] for r in votes[k]):
             raise ValueError(f'K{k}: vote outside window')
+        if len({r['vote_id'] for r in votes[k]}) != len(votes[k]):
+            input_errors.append((f'input/K{k}/vote_id', 'unique', 'duplicate votes'))
+        if full.exists():
+            if (sum(dump['link_classes'].values()) != dump['headers_total']
+                    or dump['link_classes'].get('сшито прямым ключом', 0) != len(votes[k])
+                    or len({r['bill_id'] for r in votes[k]}) != dump['matched_bills']):
+                raise ValueError(f'K{k}: full export accounting mismatch')
+            probe = load(data / f'voted_bills_{k}.json')
+            input_errors.extend(differences(
+                sorted((r['vote_id'], r['bill_id']) for r in probe['rows']),
+                sorted((r['vote_id'], r['bill_id']) for r in votes[k]),
+                f'input/K{k}/probe_vote_bill_pairs'))
+            input_errors.extend(differences(probe['heads'], dump['headers_total'], f'input/K{k}/headers'))
         if k < 25:
             raw = load(root / f'criteria/slice_signs_K{k}.json')['signs']
         else:
@@ -231,6 +345,8 @@ def check(root, data):
                   if r.get('quorum', {}).get('value') is not None and r['quorum'].get('kind') != 'no_quorum'}
             for bid, val in load(root / 'criteria/claude_tiebreak_signs_2026-10-19.json')['signs'].items():
                 sg.setdefault(bid, val)
+            # Historical K20–24 reuse the filtered legacy K25 signs.
+            # The final K25 filter in merge_signs also covers new full signs.
             for bid, val in load(root / 'criteria/axis_second_reading_2026-10-19.json')['signs'].items():
                 if bid in sg and val is not None and val != sg[bid]:
                     sg[bid] = 0
@@ -241,8 +357,25 @@ def check(root, data):
             signs[k][th] = {int(b): s['sign'] if isinstance(s, dict) else s for b, s in raw[th].items()}
             if any(type(s) is not int or s not in (-1, 0, 1) for s in signs[k][th].values()):
                 raise ValueError(f'invalid signs K{k}/{th}')
+    additions = {}
+    for k in range(20, 26):
+        raw = load(root / f'criteria/full_signs_K{k}.json')['signs']
+        additions[k] = {th: {int(b): s for b, s in raw[th].items()} for th in THEMES}
+        if any(type(s) is not int or s not in (-1, 0, 1)
+               for entries in additions[k].values() for s in entries.values()):
+            raise ValueError(f'invalid full signs K{k}')
+    signs = merge_signs(signs, additions,
+                       load(root / 'criteria/axis_second_reading_2026-10-19.json')['signs'])
     person = personal(votes[25], load, data)
-    expected = {'rules_version': rules['version'], 'transition': transitions, 'lines': {}}
+    coverage = {}
+    for k, dump in dumps.items():
+        probe = load(data / f'voted_bills_{k}.json')
+        coverage[k] = dict(heads=probe['heads'], bill_votes=probe['bill_votes'],
+                           classes=probe['classes'], in_calc=len(dump['rows']),
+                           source=f'votes_full_{k}.json' if (data / f'votes_full_{k}.json').exists() else f'votes_{k}.json')
+        if sum(probe['classes'].values()) != probe['heads'] or probe['bill_votes'] != len(probe['rows']):
+            raise ValueError(f'K{k}: invalid universe probe')
+    expected = {'rules_version': rules['version'], 'transition': transitions, 'coverage': coverage, 'lines': {}}
     for ballot, tracks in rules['tracks'].items():
         result = []
         for track in tracks:
@@ -262,14 +395,41 @@ def check(root, data):
                             if not signs[k][th]:
                                 continue
                             value = theme_arrows(th, {'rows': selected}, signs=signs[k][th]).get(fid, {})
-                            themes[th] = {key: value.get(key) for key in ('arrow', 'up', 'down')}
+                            themes[th] = {key: value.get(key) for key in ('arrow', 'up', 'down', 'consensus')}
                         days = [r['date'][:10] for r in selected]
                         points.append(dict(k=kn, fid=str(fid), role=role, **{'from': min(days), 'to': max(days)}, votes=len(selected), themes=themes))
             points.sort(key=lambda p: (p['k'], p['from'], p['fid']))
-            result.append(dict(name=track['name'], points=points, verdict={th: verdict(points, th) for th in THEMES}))
+            result.append(dict(name=track['name'], links=track['links'], points=points, verdict={th: verdict(points, th) for th in THEMES}))
         expected['lines'][ballot] = result
     actual = load(data / 'trajectory.json')
-    errors = differences(expected, actual) + lineage_checks(rules['tracks'], lineage, factions)
+    errors = input_errors + differences(expected, actual) + lineage_checks(rules['tracks'], lineage, factions)
+    headings = [('rule_of_law', 'Суд и права', 'укреплял', 'ослаблял'),
+                ('religion_state', 'Религия', 'больше религии', 'меньше религии'),
+                ('economy', 'Экономика', 'легче бизнесу', 'строже к бизнесу'),
+                ('security', 'Безопасность', 'шире силовикам', 'уже силовикам')]
+    cells = 0
+    for index, ballot in enumerate(load(root / 'criteria/ballot_2026.json')['lists'], 1):
+        tracks = expected['lines'][ballot['letters']]
+        if not tracks:
+            continue
+        site_path = root / f'site/l-{index}.html'
+        parser = Cells()
+        parser.feed(read(site_path))
+        tables = []
+        for line in tracks:
+            table = ['Кн.', 'Суд', 'Религия', 'Эконом.', 'Безоп.']
+            for k in map(str, range(20, 26)):
+                table.append(k + '-й')
+                for th, _, up, down in headings:
+                    wanted = expected_cell(line, k, th, up, down)
+                    table.append(wanted)
+                    cells += 1
+            tables.append(table)
+        errors.extend(differences(tables, parser.tables, str(site_path) + '/why'))
+    print(f'CELLS checked={cells}; saved HTML independently compared; no renderer import')
+    for k, dump in dumps.items():
+        print('COVERAGE', k, json.dumps({key: dump.get(key) for key in
+              ('headers_total', 'matched_votes', 'matched_bills', 'link_classes')}, ensure_ascii=False))
     for path, digest in hashes.items():
         if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
             errors.append((str(path), digest, 'input changed during check'))
@@ -282,6 +442,65 @@ def check(root, data):
 
 
 def selftest():
+    old = {k: {th: {} for th in THEMES} for k in range(20, 26)}
+    new = copy.deepcopy(old)
+    old[20]['economy'] = {1: -1, 2: 0}
+    new[25]['economy'] = {1: 1, 2: 1, 3: 1}
+    merged = merge_signs(old, new)
+    assert merged[25]['economy'] == {1: -1, 2: 0, 3: 1}
+    forged = copy.deepcopy(merged)
+    forged[25]['economy'][1] = 1
+    assert differences(merged, forged)
+    print('REJECTED new sign overriding legacy from another Knesset (including zero)')
+    old[25]['rule_of_law'] = {1: 1, 2: 0}
+    new[25]['rule_of_law'] = {1: -1, 2: 1, 3: 1, 4: 1, 5: 1}
+    merged = merge_signs(old, new, {'1': -1, '2': 1, '3': -1, '4': None, '5': 1, '6': 1})
+    assert merged[25]['rule_of_law'] == {1: 0, 2: 0, 3: 0, 4: 1, 5: 1}
+    assert old[25]['rule_of_law'] == {1: 1, 2: 0}
+    print('PASS v93: full-text conflicts remove old and new signs; zero, null, agreement and absence preserved')
+    line = dict(links={'20': [1]}, points=[])
+    assert expected_cell(line, '21', 'economy', 'up', 'down') == 'фракции не было'
+    assert expected_cell(line, '20', 'economy', 'up', 'down') == 'фракция была, поимённых голосований нет'
+    x = dict(arrow=None, up=0, down=0, consensus=0)
+    line['points'] = [dict(k='20', role='opp', themes={'economy': x})]
+    assert expected_cell(line, '20', 'economy', 'up', 'down') == 'опп.: по теме не голосовали'
+    x['consensus'] = 2
+    assert expected_cell(line, '20', 'economy', 'up', 'down') == 'опп.: мало законов (0)'
+    x['consensus'] = 3
+    assert expected_cell(line, '20', 'economy', 'up', 'down') == 'опп.: со всеми (3)'
+    forged = copy.deepcopy(line)
+    forged['points'][0]['themes']['economy']['consensus'] = 0
+    assert differences(line, forged)
+    assert expected_cell(line, '20', 'economy', 'up', 'down') != expected_cell(forged, '20', 'economy', 'up', 'down')
+    print('REJECTED consensus forgery: 3 -> 0 changes empty reason')
+    line['points'][0]['role'] = 'trans'
+    assert expected_cell(line, '20', 'economy', 'up', 'down') == 'со всеми (3)'
+    unclear = copy.deepcopy(line['points'][0])
+    line['points'].append(copy.deepcopy(unclear))
+    assert expected_cell(line, '20', 'economy', 'up', 'down') == 'со всеми (3)'
+    line['points'].pop()
+    x.update(arrow='up', up=3)
+    assert expected_cell(line, '20', 'economy', 'up', 'down') == 'переход: up'
+    directed = copy.deepcopy(line['points'][0])
+    directed['role'] = 'opp'
+    line['points'] = [unclear, directed]
+    assert expected_cell(line, '20', 'economy', 'up', 'down') == 'опп.: up'
+    empty = dict(k='20', role='gov', themes={'economy': dict(arrow=None, up=0, down=0, consensus=0)})
+    line['points'] = [empty, directed]
+    assert expected_cell(line, '20', 'economy', 'up', 'down') == 'опп.: up'
+    # Consensus is thematic participation too; it must not disappear as empty.
+    unclear['role'] = 'gov'
+    line['points'] = [empty, unclear]
+    assert expected_cell(line, '20', 'economy', 'up', 'down') == 'коал.: со всеми (3)'
+    line['points'] = [empty, dict(empty, role='opp')]
+    assert expected_cell(line, '20', 'economy', 'up', 'down') == 'коал.: по теме не голосовали | опп.: по теме не голосовали'
+    print('PASS v91 display boundaries: transition, empty piece, consensus, all empty')
+    parser = Cells()
+    parser.feed('<table class="why"><tr><th>Кн.</th><td><span>А &amp; Б</span><br>В</td></tr></table>')
+    assert parser.tables == [['Кн.', 'А & Б | В']]
+    assert differences(parser.tables, [])
+    assert differences(parser.tables, [['Кн.', 'подлог']])
+    print('REJECTED missing HTML table and altered cell')
     def point(role, arrow):
         return dict(k='20', fid='1', role=role, **{'from': '2016-01-01', 'to': '2016-02-01'}, votes=3,
                     themes={'economy': dict(arrow=arrow, up=3, down=0)})
@@ -289,7 +508,11 @@ def selftest():
              ([('gov','up'),('opp','down')], 'by_role'), ([('gov','up'),('gov','up'),('opp','both')], 'holds_gov'),
              ([('opp','up'),('opp','up'),('gov','both')], 'holds_opp'),
              ([('gov','up'),('gov','up')], 'one_role_gov'), ([('opp','down'),('opp','down')], 'one_role_opp'),
-             ([('gov','up'),('gov','down'),('opp','down')], 'shifts')]
+             ([('gov','up'),('gov','down'),('opp','down')], 'shifts'),
+             ([('gov','both'),('opp','both')], 'mixed'),
+             ([('gov','up'),('gov','both'),('opp','both')], 'mixed'),
+             ([('gov','both'),('trans','both')], 'few'),
+             ([('gov','up'),('opp','up'),('gov','both'),('opp','both')], 'steady')]
     for args, label in cases:
         ps = [point(*a) for a in args]
         assert verdict(ps + [point('trans','down')], 'economy') == {'label': label, 'clear': sum(a in ('up','down') for _,a in args)}
@@ -366,7 +589,7 @@ def selftest():
             raise AssertionError(label)
     bad = copy.deepcopy(cache); bad['rows'][0]['ResultCode'] = 8
     assert personal(rows,lambda _: bad,Path('/unused'))[0]['by_faction'] == {'yashar|ישר!':{}}
-    print(f'PASS {len(mutants)+5} in-memory forgeries; 9 verdict cases; transition/interval/personal boundaries; v88 personal role and joint-list controls')
+    print(f'PASS {len(mutants)+9} in-memory forgeries; {len(cases)} verdict cases; transition/interval/personal boundaries; v90 signs, consensus and HTML controls')
     return 0
 
 
@@ -375,9 +598,10 @@ if __name__ == '__main__':
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parent.parent)
     parser.add_argument('--data', type=Path, default=Path(__file__).resolve().parent.parent / 'data')
     parser.add_argument('--selftest', action='store_true')
+    parser.add_argument('--allow-partial', action='store_true', help='preparation only: allow incomplete export')
     args = parser.parse_args()
     try:
-        sys.exit(selftest() if args.selftest else int(bool(check(args.root, args.data)[0])))
+        sys.exit(selftest() if args.selftest else int(bool(check(args.root, args.data, args.allow_partial)[0])))
     except (OSError, ValueError, KeyError, TypeError, IndexError, AttributeError) as exc:
         print('FAIL invalid input:', exc, file=sys.stderr)
         sys.exit(1)

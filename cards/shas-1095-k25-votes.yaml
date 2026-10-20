@@ -48,12 +48,12 @@ conclusion: >-
 
 axis_institutions:
   arrow: down
-  level: moderate
-  acts: 126
-  theme_total: 277
-  coverage: 0.455
-  down: 112
-  up: 14
+  level: very_low
+  acts: 264
+  theme_total: 1645
+  coverage: 0.16
+  down: 223
+  up: 41
   alpha: 0.667
   text: >-
     по голосам фракции и знаку закона по большинству трёх моделей
