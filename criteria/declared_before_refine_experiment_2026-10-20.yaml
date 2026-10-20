@@ -51,3 +51,8 @@ predictions:   # prediction_before_anchor — мои, Claude, до данных
   e2_error_rate: {rule_of_law: "3-6%", security: "3-6%", religion_state: "8-12%"}
   after_census_material_lines_per_theme: "<=2"
   e4_hidden_rate: "<=1% нулей на тему"
+
+e2_extension_revision_2026-10-20:   # criteria-revision: до построения и чтения расширения
+  why: "«расширить до 50 тем же зерном (первые 20 входят)» невыполнимо: random.sample(…, 50) при n=97 и n=223 выбирает другим алгоритмом, и пилот не входит в выборку 50 (проверено). Для rule_of_law (n=474) совпадает."
+  rule: "расширение темы = пилотные 20 + random.Random(2026102003).sample(sorted(frame - pilot), 30); отдельный Random на тему, темы в порядке e2_pilot.themes"
+  pilot_outcome_before_extension: "читатели согласны 56/60; с названием расходятся (согласные): rule_of_law 1 (снят), security 1 (перевёрнут); 4 пары у арбитра. При любом исходе арбитража ни одна тема не достигает 4/20; модель E1 отвергнута (факт 3 смены стрелок 25-го против ожидаемых 0,8) → по правилу все три темы расширяются до 50."
