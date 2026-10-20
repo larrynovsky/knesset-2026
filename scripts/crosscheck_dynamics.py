@@ -153,6 +153,9 @@ def check(root):
             signs[theme].setdefault(int(bill), signed(value))
     for bill in load('criteria/economy_second_reading_2026-10-20.json')['removed']:
         signs['economy'][int(bill)] = 0
+    for theme, bills in load('criteria/census_second_reading_2026-10-20.json')['removed'].items():
+        for bill in bills:
+            signs[theme][int(bill)] = 0
     # v93 amendment: full-text disagreement also removes a new title-only sign.
     for bill, value in load('criteria/axis_second_reading_2026-10-19.json')['signs'].items():
         if value is not None and int(bill) in axis and signed(value) != axis[int(bill)]:
@@ -235,6 +238,7 @@ def selftest():
         full_signs = {'signs': {th: {'1': -1, '2': 1} for th in THEMES}}
         put('criteria/full_signs_K25.json', full_signs)
         put('criteria/economy_second_reading_2026-10-20.json', {'removed': []})
+        put('criteria/census_second_reading_2026-10-20.json', {'removed': {}})
         put('criteria/declared_before_arrow_2026-10-07.yaml', 'cleaning:\n  drop_lopsided_below: 0.025\nfaction_position:\n  split_below: 0.5\n')
         put('docs/reference/for_option_sign_test.json', {'options': {'yes': {'sign': 'carries'}}})
         actual = {'bins': [['2023-01-01', '2023-07-01'], ['2023-07-01', '2024-01-01']],
@@ -248,6 +252,17 @@ def selftest():
                 raise AssertionError(label + '\n' + result.stdout + result.stderr)
             print(f'PASS selftest {label}: CLI exit {result.returncode}')
         run('baseline (duplicate law counted once per half)', 0)
+        for theme in ('rule_of_law', 'religion_state', 'security'):
+            put('criteria/census_second_reading_2026-10-20.json', {'removed': {theme: [1, 2]}})
+            run(f'v97 {theme}: removed legacy/full signs survive', 1)
+            filtered = deepcopy(actual)
+            for series in filtered['series'].values():
+                del series[theme]
+            put('data/dynamics_25.json', filtered)
+            run(f'v97 {theme}: census signs zeroed', 0)
+            put('data/dynamics_25.json', actual)
+        put('criteria/census_second_reading_2026-10-20.json', {'removed': {}})
+
         put('criteria/economy_second_reading_2026-10-20.json', {'removed': [2]})
         run('removed economy sign surviving full-sign merge', 1)
         economy_filtered = deepcopy(actual)

@@ -92,7 +92,9 @@ def verdict(points, theme):
         label = 'mixed' if sum(a == 'both' for _, a in obs) >= 2 else 'few'
     elif len(directions) == 1:
         if all(by_role.values()):
-            label = 'steady'
+            # criteria/declared_before_owner_decisions_2026-10-20b.yaml:
+            # mixed terms in either ordinary role rule out a steady line.
+            label = 'mixed_dir' if any(a == 'both' for _, a in obs) else 'steady'
         else:
             only = next(r for r in by_role if by_role[r])
             mixed_elsewhere = any(r != only and a == 'both' for r, a in obs)
@@ -155,6 +157,12 @@ def differences(expected, actual, path='$'):
 
 def lineage_checks(tracks, lineage, factions):
     errors = []
+    # Explicit owner decision, declared_before_owner_decisions_2026-10-20b.yaml.
+    saar = 'Государственный правый (Саар)'
+    if 'מחל' in tracks:
+        links = [t['links'] for t in tracks['מחל'] if t['name'] == saar]
+        if len(links) != 1 or links[0] != {'24': [972, 1085, 1088], '25': [1098, 1108]}:
+            errors.append(('tracks/מחל/Saar', 'declared K24/K25 predecessors', links))
     for ballot, lines in tracks.items():
         assigned = defaultdict(set)
         for track in lines:
@@ -167,7 +175,8 @@ def lineage_checks(tracks, lineage, factions):
                         continue
                     if fid not in factions or factions[fid]['KnessetNum'] != int(k):
                         errors.append((loc, f'KNS_Faction K{k}', factions.get(fid)))
-                    if int(k) < 25 and fid not in {l[0] for l in lineage['lines'][ballot].get(k, [])}:
+                    owner_link = ballot == 'מחל' and track['name'] == saar and k == '24' and fid in (972, 1085, 1088)
+                    if int(k) < 25 and not owner_link and fid not in {l[0] for l in lineage['lines'][ballot].get(k, [])}:
                         errors.append((loc, 'same ballot in slice_lineage', 'absent'))
                     assigned[k].add(fid)
         for k, links in lineage['lines'][ballot].items():
@@ -188,7 +197,7 @@ def lineage_checks(tracks, lineage, factions):
     return errors
 
 
-def merge_signs(old, new, second=None, economy_removed=()):
+def merge_signs(old, new, second=None, economy_removed=(), census_removed=None):
     """A legacy sign from ANY Knesset outranks a new one, including zero."""
     legacy = {th: {} for th in THEMES}
     for k in sorted(old):
@@ -208,6 +217,9 @@ def merge_signs(old, new, second=None, economy_removed=()):
     for k in merged:
         for bid in economy_removed:
             merged[k]['economy'][int(bid)] = 0
+        for theme, bills in (census_removed or {}).items():
+            for bid in bills:
+                merged[k][theme][int(bid)] = 0
     return merged
 
 
@@ -369,7 +381,8 @@ def check(root, data, allow_partial=False):
             raise ValueError(f'invalid full signs K{k}')
     signs = merge_signs(signs, additions,
                        load(root / 'criteria/axis_second_reading_2026-10-19.json')['signs'],
-                       load(root / 'criteria/economy_second_reading_2026-10-20.json')['removed'])
+                       load(root / 'criteria/economy_second_reading_2026-10-20.json')['removed'],
+                       load(root / 'criteria/census_second_reading_2026-10-20.json')['removed'])
     person = personal(votes[25], load, data)
     coverage = {}
     for k, dump in dumps.items():
@@ -457,6 +470,22 @@ def selftest():
     assert filtered[25]['economy'][2] == 0 and new[25]['economy'][3] == 1
     assert differences(filtered, merged)
     print('PASS v96: removed economy signs cannot survive in any Knesset after merge')
+    saved_old, saved_new = copy.deepcopy(old), copy.deepcopy(new)
+    for theme in ('rule_of_law', 'religion_state', 'security'):
+        for k in old:
+            old[k][theme][91] = -1
+            new[k][theme][92] = 1
+        filtered = merge_signs(old, new, census_removed={theme: [91, 92]})
+        for k in old:
+            assert filtered[k][theme][91] == filtered[k][theme][92] == 0
+            for bid in (91, 92):
+                forged = copy.deepcopy(filtered)
+                forged[k][theme][bid] = 1
+                assert differences(filtered, forged)
+        assert old[20][theme][91] == -1 and new[25][theme][92] == 1
+    old, new = saved_old, saved_new
+    print('PASS v97: census removals override legacy and full signs in K20–25; restored signs rejected')
+
     forged = copy.deepcopy(merged)
     forged[25]['economy'][1] = 1
     assert differences(merged, forged)
@@ -528,10 +557,16 @@ def selftest():
              ([('gov','both'),('opp','both')], 'mixed'),
              ([('gov','up'),('gov','both'),('opp','both')], 'mixed'),
              ([('gov','both'),('trans','both')], 'few'),
-             ([('gov','up'),('opp','up'),('gov','both'),('opp','both')], 'steady')]
+             ([('gov','up'),('opp','up'),('gov','both'),('opp','both')], 'mixed_dir'),
+             ([('gov','up'),('opp','up'),('gov','both')], 'mixed_dir'),
+             ([('gov','up'),('opp','up'),('opp','both')], 'mixed_dir'),
+             ([('gov','up'),('opp','up'),('trans','both')], 'steady')]
     for args, label in cases:
         ps = [point(*a) for a in args]
         assert verdict(ps + [point('trans','down')], 'economy') == {'label': label, 'clear': sum(a in ('up','down') for _,a in args)}
+    mixed = verdict([point('gov', 'up'), point('opp', 'up'), point('gov', 'both')], 'economy')
+    assert differences(mixed, {'label': 'steady', 'clear': mixed['clear']})
+    print('REJECTED mixed_dir replaced with steady; transition both does not change steady')
     window = ('2015-01-01', '2020-01-01')
     rec = [dict(government=33,start='2015-01-01',finish='2015-05-14'),dict(government=34,start='2015-05-14',finish='2020-01-01')]
     assert transition(window, rec) == ['2015-01-01','2015-05-14']
@@ -588,6 +623,20 @@ def selftest():
     for name, changed in [('swapped party', {1:{'Name':'אגודת ישראל','KnessetNum':20}}),
                           ('wrong knesset', {1:{'Name':'דגל התורה','KnessetNum':21}})]:
         assert lineage_checks(tracks,lin,changed); print('REJECTED',name)
+    saar = {'מחל': [{'name': 'Государственный правый (Саар)',
+                    'links': {'24': [972, 1085, 1088], '25': [1098, 1108]}}]}
+    lin = {'lines': {'מחל': {}}}
+    fac = {fid: {'KnessetNum': k} for k, fids in ((24, [972, 1085, 1088, 999]), (25, [1098, 1108])) for fid in fids}
+    assert not lineage_checks(saar, lin, fac)
+    for changed in ([972, 1085], [972, 1085, 999]):
+        bad = copy.deepcopy(saar)
+        bad['מחל'][0]['links']['24'] = changed
+        assert lineage_checks(bad, lin, fac)
+    bad = copy.deepcopy(saar)
+    bad['מחל'][0]['name'] = 'Ликуд'
+    assert lineage_checks(bad, lin, fac)
+    assert lineage_checks({'מחל': []}, lin, fac)
+    print('REJECTED missing/swapped Saar predecessor, transfer to Likud and missing Saar line')
     rows = [dict(vote_id=1,named_total=2,by_faction={'1098|Gantz':{'for':10},'2|B':{'against':10}})]
     cache = dict(vote_id=1,rows=[dict(MkId=30836,LastName='איזנקוט',VoteID=1,ResultCode=7),
                                 dict(MkId=30683,LastName='טרופר',VoteID=1,ResultCode=7)])

@@ -245,7 +245,9 @@ def c_theme_examples(src):
 
 
 @check("компактные клетки бюллетеня (v42)",
-       [("v66: подмена слова религии", lambda s: list_page_mutant(s,
+       [("v97: возвращена колонка 4 закона", lambda s: edit(s, "index.html",
+           '<table class="ballot"><thead><tr>', '<table class="ballot"><thead><tr><th scope=col>4 закона</th>')),
+        ("v66: подмена слова религии", lambda s: list_page_mutant(s,
            r'(data-l="Религия"><span title="[^"]*"><b>)за больше религии', r'\1за меньше религии', "index.html")),
         ("v66: возврат разделителя /", lambda s: list_page_mutant(s,
            r'(data-l="(?:Религия|Экономика|Безопасность)">(?:(?!</td>).)*?) · ', r'\1 / ', "index.html")),
@@ -254,7 +256,7 @@ def c_theme_examples(src):
            r'(<td class="ballot-axis"[^>]*>)', r'\1мало законов (0) · ', s["index.html"], count=1)})),
         ("v65: удалено объяснение выделения религии", lambda s: edit(s, "index.html",
            "«за больше религии» выделено: ты 19.10 сказал, что для тебя это довод исключить список", "подмена")),
-        ("удалено объяснение четырёх законов", lambda s: edit(s, "index.html", "ты сам 10.10 пометил «недопустимо», ещё не зная, кто за них голосовал", "выбраны четыре закона")),
+        ("удалено объяснение четырёх законов", lambda s: edit(s, "index.html", "автор 10.10 пометил «недопустимо», ещё не зная, кто за них голосовал", "выбраны четыре закона")),
         ("удалено пояснение направления", lambda s: edit(s, "index.html", 'title="ослаблял;', 'title="подмена;')),
         ("убран значок ненадёжной стрелки", lambda s: dict(s, **{"index.html": re.sub(
            r'(title="[^";]+; ненадёжна: [0-9.]+%">[^<]+<small class="robustness">) \(не уверены\)(</small>)', r'\1\2', s["index.html"], count=1)})),
@@ -270,9 +272,12 @@ def c_compact_ballot(src):
     entries = re.findall(r'<td class="ballot-axis"([^>]*)>(.*?)</td>', src["index.html"], re.S)
     cells = [cell for _, cell in entries]
     bad = []
+    table = re.search(r'<table class="ballot">.*?</table>', src["index.html"], re.S)
+    if not table or re.search(r'4 закона|ballot-laws|data-short-law', table[0]):
+        bad.append("v97: сводная таблица отсутствует или возвращена колонка четырёх законов")
     reading = re.search(r'<section class="ballot-reading".*?</section>', src["index.html"], re.S)
     if not reading or any(text not in reading[0] for text in (
-            "Одна строка — один список", "ты сам 10.10 пометил «недопустимо», ещё не зная, кто за них голосовал",
+            "Одна строка — один список", "автор 10.10 пометил «недопустимо», ещё не зная, кто за них голосовал",
             "у оппозиции это обычно бойкот", "Где не работает:",
             "Что значат колонки тем и денег", "Пример: Ликуд голосовал «за»",
             "«И так, и так» во всех четырёх темах",
@@ -320,9 +325,9 @@ def list_page_mutant(src, pattern, replacement, filename="l-1.html"):
     return dict(src, **{filename: changed})
 
 
-@check("страница списка = строка таблицы (v52)",
+@check("страница списка: темы = таблица, законы = данные (v97)",
        [("v66: разделитель законов /", lambda s: list_page_mutant(s,
-           r'(class="ballot-laws">.*?) · ', r'\1 / ', "index.html")),
+           r'(class="ballot-laws">.*?)<br>', r'\1 / ', "cheatsheet.html")),
         ("v66: разделитель в пояснении /", lambda s: edit(s, "index.html", 'в клетках через «·»', 'в клетках через «/»')),
         ("v66: мало законов (0) l-страницы", lambda s: list_page_mutant(s,
            r'(data-theme="[a-z_]+"><b>[^<]+</b> )[^<]+', r'\1мало законов (0)')),
@@ -333,8 +338,8 @@ def list_page_mutant(src, pattern, replacement, filename="l-1.html"):
         ("подмена стрелки l-1", lambda s: list_page_mutant(s,
            r'(<p data-theme="institutions"><b>[^<]+</b> )ослаблял', r'\1укреплял')),
         ("подмена позиции закона в таблице", lambda s: list_page_mutant(s,
-           r'(<span class="ballot-laws"><span title="[^"]*">)<b>за</b>',
-           r'\1против', "index.html")),
+           r'(<span class="ballot-laws"><span>)<b>за</b>',
+           r'\1против', "cheatsheet.html")),
         ("убраны буквы l-3", lambda s: list_page_mutant(s,
            r'<span class="ballot-letters"[^>]*>[^<]+</span>', '', "l-3.html")),
         ("подмена денег l-1", lambda s: edit(s, "l-1.html", '<b>Деньги:</b>', '<b>Деньги:</b> подмена')),
@@ -346,6 +351,12 @@ def list_page_mutant(src, pattern, replacement, filename="l-1.html"):
         ("потеря Коротко", lambda s: list_page_mutant(s, r'<section class="list-short">.*?</section>', '')),
         ("подмена счёта Коротко", lambda s: list_page_mutant(s, r'(data-short-theme="institutions" data-fid="1096">.*?: <small>)\d+ раз', r'\g<1>999 раз')),
         ("подмена закона Коротко", lambda s: list_page_mutant(s, r'(data-short-law="1" data-fid="1096">.*?)<b>за</b>', r'\1против')),
+        ("v97: подмена подробного закона", lambda s: list_page_mutant(s,
+           r'(<li><a href="grounds.html#a\d+">.*?</a>: <b>)за', r'\1против')),
+        ("v97: подмена личного закона", lambda s: list_page_mutant(s,
+           r'(<p>[^<]+: )против( \(\d{4}-)', r'\1за\2', "l-3.html")),
+        ("v97: снято выделение закона", lambda s: list_page_mutant(s,
+           r'(data-short-law="1" data-fid="1096">)<b>за</b>', r'\1за')),
         ("v65: подмена имени фракции l-1", lambda s: list_page_mutant(s,
            r'(<table class="list-short-table">.*?<th scope="col">)Ликуд', r'\1ШАС')),
         ("v70: подмена слова в новой таблице l-1", lambda s: list_page_mutant(s,
@@ -366,6 +377,14 @@ def c_list_table(src):
     # Ожидание 14 объявлено владельцем; пустые/дублированные поля — отказ.
     clean = lambda s: re.sub(r"\s+", " ", text_of(s)).strip()
     bad, seen = [], 0
+    # v97: reuse the independent raw-vote oracle, never renderer positions.
+    from crosscheck_owner_laws import recount, compare
+    ballot, law_expected, unknown = recount(ROOT)
+    try:
+        _, law_errors = compare(ballot, law_expected, unknown, src)
+        bad.extend(law_errors)
+    except (AssertionError, KeyError) as error:
+        bad.append(f"v97: законы не совпали с данными: {error}")
     rows = re.findall(r'(<tr data-ballot-list="[^"]*"[^>]*>.*?)</tr>', src.get("index.html", ""), re.S)
     pages = {f"l-{i}.html" for i in range(1, 15)}
     if len(rows) != 14:
@@ -400,40 +419,28 @@ def c_list_table(src):
         if fids != [fid for fid, _ in sections]:
             bad.append(f"{name} ({filename}): состав фракций расходится")
         personal = 'data-personal=1' in row
-        law_cell = re.search(r'<td data-l="4 закона владельца">(.*?)</td>', row, re.S)
-        table_laws = re.findall(r'<span title="[^"]*">(.*?)</span>', law_cell[1], re.S) if law_cell else []
-        page_laws = []
+        expected_laws = law_expected[ballot[int(filename[2:-5]) - 1]['he']]
+        if personal:
+            positions = re.findall(r'<p>[^<]+: (за|против|воздержались|не голосовали|нет позиции) \(\d{4}-', page)
+            if len(positions) != 4:
+                bad.append(f"{filename}: нет четырёх личных позиций")
+            for i, value in enumerate(positions, 1):
+                actual = "не голос." if value in ("не голосовали", "нет позиции") else value
+                if actual != expected_laws[i]["yashar"]:
+                    bad.append(f"{filename}, закон {i}: личные подробности не совпали с данными")
         for fid, section in sections:
             positions = re.findall(r'<li><a href="grounds.html#a\d+">.*?</a>: <b>(.*?)</b>', section)
             if len(positions) != 4:
-                bad.append(f"{name} ({filename}): 4 закона фракции {fid}: найдено {len(positions)}")
-            page_laws.append([clean(v).replace("нет позиции", "не голос.").replace("—", "не голос.").replace("не голосовали", "не голос.") for v in positions])
-        if personal:
-            positions = re.findall(r'<p>[^<]+: (за|против|воздержались|не голосовали|нет позиции) \(\d{4}-', page)
-            page_laws = [["не голос." if v in ("не голосовали", "нет позиции") else v for v in positions]]
-        if fids or personal:
-            from render_cheatsheet import _short
-            faction_names = [_short(clean(v)).split(" (")[0] for v in
-                             re.findall(r'<h2><a href="f-\d+.html">(.*?)</a>', page)]
-            expected = []
-            if page_laws and all(len(v) == 4 for v in page_laws):
-                for i in range(4):
-                    positions = list(dict.fromkeys(v[i] for v in page_laws))
-                    expected.append(" · ".join(v[i] + " (" + who + ")" for v, who in zip(page_laws, faction_names))
-                                    if len(positions) > 1 and not personal else " · ".join(positions))
-            same("4 закона", [clean(v) for v in table_laws], expected)
-            # Отдельные клетки фракций восстанавливают значения строки обзора.
-            list_laws = []
-            for i in range(1, 5):
-                cells = re.findall(r'<td data-short-law="' + str(i) + r'" data-fid="([^"]+)">(.*?)</td>', page, re.S)
-                same(f"колонки закона {i}", fids or ["yashar"], [fid for fid, _ in cells])
-                marks = [v for _, v in cells]
-                unique = list(dict.fromkeys(marks))
-                list_laws.append(" · ".join(v + " <small>(" + who + ")</small>" for v, who in zip(marks, faction_names))
-                                 if len(unique) > 1 and not personal else " · ".join(unique))
-            same("4 закона с именами и выделением", table_laws, list_laws)
-        else:
-            same("4 закона без голосов", clean(law_cell[1]) if law_cell else "", "нет данных" if 'голосов в этом Кнессете нет' in page else "")
+                bad.append(f"{filename}/{fid}: нет четырёх подробных позиций")
+            for i, value in enumerate(positions, 1):
+                want = expected_laws[i].get(fid)
+                actual = clean(value).split(" (")[0]
+                actual = {"—": "не голос.", "не голосовали": "не голос.", "нет позиции": "не голос."}.get(actual, actual)
+                if want != 'не установлено' and actual != want:
+                    bad.append(f"{filename}/{fid}, закон {i}: подробности {actual} != данные {want}")
+        for cell in re.findall(r'<td data-short-law="[1-4]" data-fid="[^"]+">(.*?)</td>', page):
+            if (clean(cell).split(" (")[0] == "за") != ('<b>за</b>' in cell):
+                bad.append(f"{filename}: потеряно или неверно выделение позиции закона")
         table_axes = re.findall(r'<td class="ballot-axis"[^>]*>(.*?)</td>', row, re.S)
         for i, topic in enumerate(("institutions", "religion_state", "economy", "security")):
             values = []
@@ -637,13 +644,15 @@ def c_digits(src):
     return len(tds), bad[:3], f"{len(tds)} клеток"
 
 @check("v45/v71: четыре закона — наличие фракции, участие и счёт депутатов",
-       [("бойкот в бюллетене подменён голосом одного", lambda s: edit(s, "index.html", "не голос. (1 против)", "против")),
+       [("бойкот в бюллетене подменён голосом одного", lambda s: edit(s, "l-2.html", "не голос. (1 против)", "против")),
         ("бойкот подменён голосом одного", lambda s: edit(s, "index.html", "— (1 против)", "против")),
         ("потерян счёт", lambda s: edit(s, "index.html", "не голосовали ≥22", "не голосовали неизвестно")),
         *[(f"v71 {name}: отсутствие подменено неучастием", lambda s, n=name: edit(s, n, ">фракции не было", ">не голос."))
-          for name in ("index.html", "cheatsheet.html", "l-1.html")],
+          for name in ("l-13.html", "cheatsheet.html", "l-1.html")],
         *[(f"v71 {name}: неучастие подменено отсутствием", lambda s, n=name: edit(s, n, ">не голос. (1 против)<", ">фракции не было<"))
-          for name in ("index.html", "l-2.html")],
+          for name in ("l-2.html",)],
+        ("v97 l-4: позиция подменена отсутствием", lambda s: list_page_mutant(s,
+            r'(data-short-law="1" data-fid="[^"]+">).*?</td>', r'\1фракции не было</td>', "l-4.html")),
         ("v71 шпаргалка: неучастие подменено отсутствием", lambda s: edit(s, "cheatsheet.html", ">не голос. <small>(1 против)</small>", ">фракции не было")),
         ("v71 шпаргалка: потерян отдельный голос", lambda s: edit(s, "cheatsheet.html", " <small>(1 против)</small>", "")),
         ("потерян счёт в списке", lambda s: edit(s, "l-2.html", "не голосовали ≥22", "не голосовали неизвестно"))])
@@ -668,16 +677,9 @@ def c_owner_votes(src):
             inspected += len(items)
             if any(not re.search(r"\(" + count + r"\)", item) for item in items):
                 bad.append(f"{name}: нет текстового счёта")
-    for row in re.findall(r'<tr data-ballot-list=.*?</tr>', src["index.html"]):
-        if re.search(r'data-fids="(?:[0-9]+,)*1102(?:,[0-9]+)*"', row):
-            cell = re.search(r'<span class="ballot-laws">(.*?)</span></td>', row)
-            if not cell or not re.search(r'<span title="[^"]*">не голос\. \(1 против\)</span>', cell[1]):
-                bad.append("Беяхад: бойкот Еш Атид потерян")
-    ballot = re.findall(r'<span class="ballot-laws">(.*?)</span></td>', src["index.html"])
-    for cell in ballot:
-        titles = re.findall(r'<span title="([^"]*)">', cell)
-        if len(titles) != 4 or any(not re.search(count, title) for title in titles):
-            bad.append("бюллетень: нет четырёх подсказок со счётом")
+    brief = re.findall(r'<td data-short-law="1" data-fid="1102">(.*?)</td>', src.get("l-2.html", ""))
+    if brief != ["не голос. (1 против)"]:
+        bad.append("Беяхад: бойкот Еш Атид потерян")
     if "— — нет позиции, фракция не голосовала или голосовала меньше трети; причины неучастия здесь не установлены" not in src["index.html"]:
         bad.append("нет легенды бойкота")
     # v71 / v68: ожидание из сохранённых данных, а не owner_law_positions или HTML.
@@ -703,7 +705,7 @@ def c_owner_votes(src):
         fids = entry.get("factions", [])
         if not fids:
             continue
-        for name in ("index.html", "cheatsheet.html", f"l-{number}.html"):
+        for name in ("cheatsheet.html", f"l-{number}.html"):
             page = src.get(name, "")
             if name.startswith("l-"):
                 for fid in fids:
@@ -885,6 +887,8 @@ def c_focus(src):
 @check("шпаргалка: 14 списков с буквами и четырьмя законами (v51)",
        [("пропала строка шпаргалки", lambda s: dict(s, **{"cheatsheet.html": re.sub(
            r'<tr data-ballot-list=.*?</tr>', '', s['cheatsheet.html'], count=1)})),
+        ("v97: удалён закон шпаргалки", lambda s: edit(s, "cheatsheet.html",
+           '<span class="ballot-laws"><span><b>за</b></span>', '<span class="ballot-laws">')),
         ("пропали буквы шпаргалки", lambda s: dict(s, **{"cheatsheet.html": re.sub(
            r'(<span class="ballot-letters"[^>]*>).*?(</span>)', r'\1\2', s['cheatsheet.html'], count=1)})),
         ("шпаргалка без noindex", lambda s: edit(s, "cheatsheet.html", "noindex", "index")),

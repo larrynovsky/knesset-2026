@@ -158,7 +158,7 @@ def compare(ballot, expected, unknown, pages):
     checked = 0
     if len(unknown) > 5:
         errors.append(f'неопределимо {len(unknown)} клеток; разрешено не более 5')
-    for name in ('index.html', 'cheatsheet.html'):
+    for name in ('cheatsheet.html',):
         rows = page_cells(pages[name])
         assert set(rows) == set(expected), (name, 'ballot rows differ')
         for b in ballot:
@@ -234,10 +234,10 @@ def selftest():
     expected = {b['he']: {i: {'1': 'за'} for i in range(1, 5)} for b in ballot}
     body = ''.join(f'<tr data-ballot-list="{b["he"]}"><td><span class="ballot-laws">'
                    + '<span><b>за</b></span>'*4 + '</span></td></tr>' for b in ballot)
-    pages = {name: body for name in ('index.html', 'cheatsheet.html')}
+    pages = {name: body for name in ('cheatsheet.html',)}
     pages.update({f'l-{n}.html': ''.join(f'<td data-short-law="{i}" data-fid="1"><b>за</b></td>'
                                       for i in range(1, 5)) for n in range(1, 15)})
-    assert compare(ballot, expected, set(), pages) == (168, [])
+    assert compare(ballot, expected, set(), pages) == (112, [])
     for name in pages:
         mutant = dict(pages)
         mutant[name] = pages[name].replace('<b>за</b>', '<b>против</b>', 1)
@@ -252,7 +252,7 @@ def selftest():
     unknown = {(str(n), 1) for n in range(6)}
     assert not compare(ballot, expected, set(list(unknown)[:5]), pages)[1]
     assert compare(ballot, expected, unknown, pages)[1]
-    print('OK selftest: clean HTML; flipped cell and missing cells on all 16 pages; unknown >5; threshold; raw cache')
+    print('OK selftest: clean HTML; flipped cell and missing cells on all 15 pages; unknown >5; threshold; raw cache')
 
 
 def main():
@@ -271,7 +271,7 @@ def main():
             return 0
         ballot, expected, unknown = recount(args.root)
         site = args.site or args.root/'site'
-        names = ['index.html', 'cheatsheet.html'] + [f'l-{n}.html' for n in range(1, len(ballot)+1)]
+        names = ['cheatsheet.html'] + [f'l-{n}.html' for n in range(1, len(ballot)+1)]
         pages = {name: (site/name).read_text(encoding='utf-8') for name in names}
         checked, errors = compare(ballot, expected, unknown, pages)
         print(f'Сверено отрисованных клеток: {checked}; неопределимо уникальных клеток списка × закона: {len(unknown)} (предел 5)')
