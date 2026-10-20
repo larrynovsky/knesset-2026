@@ -59,6 +59,7 @@ selftest-code:
 	$(PY) scripts/trajectory.py --selftest
 	$(PY) scripts/render_trajectory.py
 	$(PY) scripts/crosscheck_trajectory.py --selftest
+	$(PY) scripts/check_hosted.py --selftest
 
 robustness:
 	$(PY) scripts/arrow_robustness.py
@@ -113,3 +114,7 @@ reproduce:
 
 repro-selftest:
 	$(PY) scripts/check_report_canon.py --selftest-reproduce
+
+# §16/§21: внешняя проверка выкладки на Hetzner (pull). Только на Studio, где site/.
+hosted-check:
+	$(PY) scripts/check_hosted.py https://knesset.SITE_HOST site
